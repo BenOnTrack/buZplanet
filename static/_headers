@@ -1,0 +1,20 @@
+# Headers for OPFS support (Cloudflare Pages format)
+/*
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Opener-Policy: same-origin
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Service Worker needs to be served with correct MIME type
+/service-worker.js
+  Content-Type: application/javascript; charset=utf-8
+
+# SQLite WASM files
+/*.wasm
+  Content-Type: application/wasm
+  Cross-Origin-Resource-Policy: cross-origin
+
+/*.mjs
+  Content-Type: application/javascript; charset=utf-8
+  Cross-Origin-Resource-Policy: cross-origin

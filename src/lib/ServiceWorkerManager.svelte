@@ -86,32 +86,16 @@
 
 <!-- Update Notification Toast -->
 {#if showNotification}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-  <div 
+  <button 
     class="notification-backdrop"
     onclick={dismissNotification}
-    role="button"
-    tabindex="0"
-    onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && dismissNotification()}
-    aria-label="Close notification backdrop"
+    aria-label="Close notification"
   >
     <div 
       class="update-notification"
       role="alert"
       aria-live="polite"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
     >
-      <button 
-        class="close-button"
-        onclick={dismissNotification}
-        onkeydown={(e) => e.key === 'Enter' && dismissNotification()}
-        aria-label="Close notification"
-        tabindex="0"
-      >
-        ✕
-      </button>
       <div class="notification-content">
         <div class="notification-icon">🎉</div>
         <div class="notification-text">
@@ -120,7 +104,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </button>
 {/if}
 
 <!-- Developer Tools (only show in development) -->
@@ -156,6 +140,8 @@
     padding: 20px;
     animation: fadeIn 0.3s ease-out;
     cursor: pointer;
+    border: none;
+    font-family: inherit;
   }
 
   .notification-backdrop:focus {
@@ -219,29 +205,6 @@
     font-size: 15px;
     opacity: 0.95;
     line-height: 1.5;
-  }
-
-  .close-button {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 20px;
-    cursor: pointer;
-    padding: 8px;
-    border-radius: 6px;
-    opacity: 0.8;
-    transition: all 0.2s;
-    flex-shrink: 0;
-    position: absolute;
-    top: 12px;
-    right: 12px;
-  }
-
-  .close-button:hover,
-  .close-button:focus {
-    opacity: 1;
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.1);
   }
 
   /* Developer Tools */
