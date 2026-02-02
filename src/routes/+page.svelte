@@ -2,10 +2,12 @@
 	import MapView from '$lib/components/map/MapView.svelte';
 	import BottomNavigation from '$lib/components/nav/BottomNavigation.svelte';
 	import AuthDialog from '$lib/components/nav/AuthDialog.svelte';
+	import UploadDialog from '$lib/components/nav/UploadDialog.svelte';
 </script>
 
 <main class="app-container">
 	<AuthDialog />
+	<UploadDialog />
 	<MapView />
 	<BottomNavigation />
 </main>

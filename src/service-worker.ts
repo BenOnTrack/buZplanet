@@ -39,6 +39,9 @@ const CACHE_STRATEGIES = {
 self.addEventListener('install', (event) => {
   console.log(`Service Worker: Installing version ${APP_VERSION}`);
   
+  // Skip waiting - automatically activate the new service worker
+  self.skipWaiting();
+  
   // Create a new cache and add all files to it
   async function addFilesToCache() {
     const cache = await caches.open(CACHE);
@@ -100,7 +103,22 @@ self.addEventListener('activate', (event) => {
   // Take control of all clients immediately
   self.clients.claim();
   
-  event.waitUntil(deleteOldCaches());
+  // Notify all clients that a new version is active
+  async function notifyClients() {
+    const clients = await self.clients.matchAll({ includeUncontrolled: true });
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'NEW_VERSION_ACTIVATED',
+        version: APP_VERSION,
+        buildDate: BUILD_DATE
+      });
+    });
+  }
+  
+  event.waitUntil(Promise.all([
+    deleteOldCaches(),
+    notifyClients()
+  ]));
 });
 
 self.addEventListener('fetch', (event) => {
@@ -218,6 +236,15 @@ self.addEventListener('message', (event) => {
         main: CACHE,
         runtime: RUNTIME_CACHE
       }
+    });
+  }
+  
+  if (event.data && event.data.type === 'FORCE_REFRESH_ALL') {
+    // Force refresh all clients
+    self.clients.matchAll({ includeUncontrolled: true }).then(clients => {
+      clients.forEach(client => {
+        client.navigate(client.url);
+      });
     });
   }
 });
