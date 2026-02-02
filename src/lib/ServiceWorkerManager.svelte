@@ -86,16 +86,22 @@
 
 <!-- Update Notification Toast -->
 {#if showNotification}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
   <div 
     class="notification-backdrop"
     onclick={dismissNotification}
-    role="presentation"
+    role="button"
+    tabindex="0"
+    onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && dismissNotification()}
+    aria-label="Close notification backdrop"
   >
     <div 
       class="update-notification"
       role="alert"
       aria-live="polite"
       onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
     >
       <button 
         class="close-button"
@@ -149,6 +155,12 @@
     justify-content: center;
     padding: 20px;
     animation: fadeIn 0.3s ease-out;
+    cursor: pointer;
+  }
+
+  .notification-backdrop:focus {
+    outline: 2px solid #4ade80;
+    outline-offset: -2px;
   }
 
   @keyframes fadeIn {
@@ -169,6 +181,7 @@
     max-width: 400px;
     width: 100%;
     animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    cursor: default;
   }
 
   @keyframes scaleIn {
@@ -257,10 +270,6 @@
   }
 
   .dev-tools summary::before {
-    content: '🔧 ';
-  }
-
-  .dev-tools[open] summary::before {
     content: '🔧 ';
   }
 
