@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 
 // Read package.json to get version
 let packageVersion = '1.0.0';

@@ -1,9 +1,11 @@
 <script lang="ts">
 	import MapView from '$lib/components/MapView.svelte';
 	import BottomNavigation from '$lib/components/BottomNavigation.svelte';
+	import CircularDialog from '$lib/components/CircularDialog.svelte';
 </script>
 
 <main class="app-container">
+	<CircularDialog />
 	<MapView />
 	<BottomNavigation />
 </main>

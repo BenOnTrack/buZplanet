@@ -36,7 +36,7 @@
 		center={initialView.center}
 		zoom={initialView.zoom}
 		class="map-instance"
-		attributionControl={true}
+		attributionControl={{}}
 	>
 		<!-- Map layers and controls can be added here -->
 		<!-- Slot for additional map components -->
