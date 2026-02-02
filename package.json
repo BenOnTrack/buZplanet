@@ -40,6 +40,7 @@
     "bits-ui": "^2.15.5",
     "phosphor-svelte": "^3.1.0",
     "svelte-maplibre": "^1.2.6",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "vaul-svelte": "^0.3.2"
   }
 }

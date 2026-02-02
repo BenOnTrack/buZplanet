@@ -1,67 +1,103 @@
 <script lang="ts">
-	import { Tabs } from "bits-ui";
-	
-	let activeTab = $state('stories');
+import FeaturesDrawer from "$lib/components/drawers/FeaturesDrawer.svelte";
+import StoriesDrawer from "$lib/components/drawers/StoriesDrawer.svelte";
+import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
+
+	// State for tracking which drawer is open (null if none)
+	let currentOpenDrawer = $state<string | null>(null);
+
+	// Bindable states for each drawer
+	let storiesOpen = $state(false);
+	let tripsOpen = $state(false);
+	let featuresOpen = $state(false);
+
+	// Keep the drawer states in sync with currentOpenDrawer
+	$effect(() => {
+		storiesOpen = currentOpenDrawer === 'stories';
+		tripsOpen = currentOpenDrawer === 'trips';
+		featuresOpen = currentOpenDrawer === 'features';
+	});
+
+	// Watch for changes in drawer states (when closed via drawer's close button)
+	$effect(() => {
+		if (!storiesOpen && currentOpenDrawer === 'stories') {
+			currentOpenDrawer = null;
+		}
+		if (!tripsOpen && currentOpenDrawer === 'trips') {
+			currentOpenDrawer = null;
+		}
+		if (!featuresOpen && currentOpenDrawer === 'features') {
+			currentOpenDrawer = null;
+		}
+	});
 	
 	const navigationItems = [
 		{ 
 			id: 'stories', 
 			label: 'Stories', 
 			icon: '📚',
-			ariaLabel: 'View stories section'
+			ariaLabel: 'Open stories drawer'
 		},
 		{ 
 			id: 'trips', 
 			label: 'Trips', 
 			icon: '🗺️',
-			ariaLabel: 'View trips section'
+			ariaLabel: 'Open trips drawer'
 		},
 		{ 
 			id: 'features', 
 			label: 'Features', 
 			icon: '⭐',
-			ariaLabel: 'View features section'
+			ariaLabel: 'Open features drawer'
 		}
 	];
 
-	function handleTabChange(value: string) {
-		activeTab = value;
-		// Here you can add navigation logic or state updates
-		console.log('Active tab:', value);
-		// You can dispatch custom events or call navigation functions here
+	function openDrawer(itemId: string) {
+		// If the same drawer is already open, close it
+		if (currentOpenDrawer === itemId) {
+			currentOpenDrawer = null;
+			console.log('Closed drawer:', itemId);
+		} else {
+			// Close any open drawer and open the new one
+			currentOpenDrawer = itemId;
+			console.log('Opened drawer:', itemId);
+		}
 	}
 
 	// Handle keyboard navigation
 	function handleKeyDown(event: KeyboardEvent, itemId: string) {
 		if (event.key === 'Enter' || event.key === ' ') {
 			event.preventDefault();
-			activeTab = itemId;
-			handleTabChange(itemId);
+			openDrawer(itemId);
 		}
 	}
 </script>
 
 <div class="bottom-nav">
-	<Tabs.Root 
-		value={activeTab} 
-		class="w-full h-full flex items-center"
-		onValueChange={handleTabChange}
-	>
-		<Tabs.List class="grid w-full grid-cols-3 gap-0 h-full">
+	<nav class="w-full h-full flex items-center" aria-label="Main navigation">
+		<div class="grid w-full grid-cols-3 gap-0 h-full">
 			{#each navigationItems as item}
-				<Tabs.Trigger 
-					value={item.id}
-					class="flex flex-col items-center justify-center gap-1 h-full py-2 px-3 bg-transparent border-none text-muted-foreground transition-all duration-200 hover:text-foreground hover:bg-muted/50 data-[state=active]:text-accent-foreground data-[state=active]:bg-accent/10 rounded-none focus-visible:ring-2 focus-visible:ring-accent-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+				<button 
+					type="button"
+					class="nav-button flex flex-col items-center justify-center gap-1 h-full py-2 px-3 bg-transparent border-none text-muted-foreground transition-all duration-200 hover:text-foreground hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-accent-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-none"
 					aria-label={item.ariaLabel}
+					onclick={() => openDrawer(item.id)}
 					onkeydown={(e) => handleKeyDown(e, item.id)}
 				>
 					<span class="text-xl" aria-hidden="true">{item.icon}</span>
 					<span class="text-xs font-medium">{item.label}</span>
-				</Tabs.Trigger>
+				</button>
 			{/each}
-		</Tabs.List>
-	</Tabs.Root>
+		</div>
+	</nav>
 </div>
+
+<StoriesDrawer bind:open={storiesOpen} />
+<TripsDrawer bind:open={tripsOpen} />
+<FeaturesDrawer bind:open={featuresOpen} />
+
+
+
 
 <style>
 	.bottom-nav {
@@ -82,10 +118,65 @@
 		padding-bottom: max(env(safe-area-inset-bottom), 0px);
 	}
 
+	.nav-button {
+		cursor: pointer;
+		outline: none;
+		transition: all 0.2s ease;
+	}
+
+	.nav-button:focus-visible {
+		outline: 2px solid hsl(var(--accent-foreground));
+		outline-offset: 2px;
+	}
+
+	.nav-button:active {
+		transform: scale(0.95);
+	}
+
+	/* Drawer styles */
+	:global(.drawer-overlay) {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 50;
+	}
+
+	:global(.drawer-content) {
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		z-index: 50;
+		max-height: 85vh;
+		background: hsl(var(--background));
+		border-top-left-radius: 12px;
+		border-top-right-radius: 12px;
+		border: 1px solid hsl(var(--border));
+		border-bottom: none;
+		box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -2px rgba(0, 0, 0, 0.1);
+	}
+
+	:global(.drawer-handle) {
+		width: 40px;
+		height: 4px;
+		background: hsl(var(--muted-foreground));
+		border-radius: 2px;
+		margin: 12px auto 0 auto;
+		flex-shrink: 0;
+	}
+
+
+
 	/* Responsive adjustments */
 	@media (max-width: 480px) {
 		.bottom-nav {
 			height: 72px;
 		}
+
+		:global(.drawer-content) {
+			max-height: 90vh;
+		}
+
+
 	}
 </style>
