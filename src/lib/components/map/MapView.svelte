@@ -10,13 +10,30 @@
 		type LngLatLike
 	} from 'svelte-maplibre';
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import { createMapStyle } from './mapStyle.js';
 
 	// Default map configuration
-	const mapStyle = 'https://demotiles.maplibre.org/style.json';
+	let mapStyle: StyleSpecification = $state({
+		version: 8,
+		name: 'Loading',
+		sources: {},
+		glyphs: '',
+		sprite: '',
+		layers: []
+	});
+	
 	const initialView = {
 		center: [0, 0] as [number, number],
 		zoom: 2
 	};
+	
+	// Initialize map style with current page origin
+	$effect(() => {
+		if (page.url?.origin) {
+			mapStyle = createMapStyle(page.url.origin);
+		}
+	});
 
 	// Handle viewport height changes for mobile browsers
 	let mapContainer: HTMLDivElement;
@@ -54,6 +71,12 @@
 			fitBoundsOptions={{ maxZoom: 16 }}
 			trackUserLocation={true}
 		/>
+		<BackgroundLayer
+      id="background"
+      paint={{
+        "background-color": "#FBF2E7",
+      }}
+    ></BackgroundLayer>
 	</MapLibre>
 </div>
 
