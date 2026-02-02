@@ -1,0 +1,50 @@
+name = "buzplanet"
+compatibility_date = "2024-12-19"
+# Enable Node.js compatibility for SvelteKit and Firebase
+compatibility_flags = ["nodejs_compat"]
+# Specify the build output directory for Pages
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+[env.production]
+# Production environment variables (add your production Firebase config here if different)
+vars = {}
+
+[env.preview]
+# Preview/staging environment variables
+vars = {}
+
+# Optional: Configure custom domains, routes, etc.
+# [route]
+# pattern = "your-custom-domain.com/*"
+
+# Uncomment and configure the following if you need them:
+
+# [vars]
+# API_URL = "https://api.example.com"
+# DEBUG = "false"
+
+# [[kv_namespaces]]
+# binding = "MY_KV_NAMESPACE"
+# id = "your-kv-namespace-id"
+
+# [[r2_buckets]]
+# binding = "MY_BUCKET"
+# bucket_name = "my-bucket"
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "my-database"
+# database_id = "your-database-id"
+
+# [durable_objects]
+# bindings = [
+#   { name = "MY_DURABLE_OBJECT", class_name = "MyDurableObject" }
+# ]
+
+# [analytics_engine_datasets]
+# [[analytics_engine_datasets]]
+# binding = "ANALYTICS"
+# dataset = "my_analytics"
+
+# [observability]
+# enabled = true
