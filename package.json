@@ -34,5 +34,10 @@
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "wrangler": "^4.60.0"
+  },
+  "dependencies": {
+    "bits-ui": "^2.15.5",
+    "svelte-maplibre": "^1.2.6",
+    "tailwindcss-animate": "^1.0.7"
   }
 }
