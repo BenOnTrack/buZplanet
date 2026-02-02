@@ -3,14 +3,84 @@
 	import Upload from "phosphor-svelte/lib/Upload";
 	import X from "phosphor-svelte/lib/X";
 	import CloudArrowUp from "phosphor-svelte/lib/CloudArrowUp";
+	import { opfsManager } from "$lib/utils/opfs";
+
+	// State for upload functionality
+	let selectedFile: File | null = $state(null);
+	let isUploading = $state(false);
+	let uploadError = $state('');
+	let uploadSuccess = $state('');
+	let dialogOpen = $state(false);
+
+	// Handle file selection
+	const handleFileChange = (event: Event) => {
+		const input = event.target as HTMLInputElement;
+		if (input.files && input.files[0]) {
+			selectedFile = input.files[0];
+			uploadError = '';
+			uploadSuccess = '';
+		}
+	};
+
+	// Handle file upload to OPFS
+	const handleUpload = async (event: Event) => {
+		event.preventDefault();
+		
+		if (!selectedFile) {
+			uploadError = 'Please select a file first';
+			return;
+		}
+
+		isUploading = true;
+		uploadError = '';
+		uploadSuccess = '';
+
+		try {
+			// Save file to OPFS
+			const filePath = await opfsManager.saveFile(selectedFile);
+			uploadSuccess = `File uploaded successfully: ${filePath}`;
+			
+			// Reset form
+			selectedFile = null;
+			const fileInput = document.getElementById('fileUpload') as HTMLInputElement;
+			if (fileInput) {
+				fileInput.value = '';
+			}
+			
+			// Close dialog after a short delay
+			setTimeout(() => {
+				dialogOpen = false;
+				uploadSuccess = '';
+			}, 1500);
+			
+		} catch (error) {
+			uploadError = `Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+		} finally {
+			isUploading = false;
+		}
+	};
+
+	// Reset state when dialog closes
+	const handleOpenChange = (open: boolean) => {
+		dialogOpen = open;
+		if (!open) {
+			selectedFile = null;
+			uploadError = '';
+			uploadSuccess = '';
+			const fileInput = document.getElementById('fileUpload') as HTMLInputElement;
+			if (fileInput) {
+				fileInput.value = '';
+			}
+		}
+	};
 </script>
 
-<Dialog.Root>
+<Dialog.Root bind:open={dialogOpen} onOpenChange={handleOpenChange}>
 	<Dialog.Trigger
 		class="fixed top-20 left-4 z-50 rounded-full bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background focus-visible:outline-hidden inline-flex h-12 w-12 items-center justify-center transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.98]"
-		onclick={(e) => {
-			// Handle click
-		}}
+						onclick={(e) => {
+					dialogOpen = true;
+				}}
 		onkeydown={(e) => {
 			if (e.key === 'Enter' || e.key === ' ') {
 				e.preventDefault();
@@ -44,21 +114,50 @@
 					<input
 						id="fileUpload"
 						type="file"
-						class="h-input rounded-card-sm border-border-input bg-background placeholder:text-foreground-alt/50 hover:border-dark-40 focus:ring-foreground focus:ring-offset-background focus:outline-hidden inline-flex w-full items-center border px-4 text-base focus:ring-2 focus:ring-offset-2 sm:text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium"
-						name="file"
-						accept="*/*"
+											class="h-input rounded-card-sm border-border-input bg-background placeholder:text-foreground-alt/50 hover:border-dark-40 focus:ring-foreground focus:ring-offset-background focus:outline-hidden inline-flex w-full items-center border px-4 text-base focus:ring-2 focus:ring-offset-2 sm:text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium"
+					name="file"
+					accept="*/*"
+					onchange={handleFileChange}
 					/>
 					<CloudArrowUp
 						class="text-dark/30 absolute right-4 top-[14px] size-[22px] pointer-events-none"
 					/>
 				</div>
 			</div>
+			
+			<!-- Upload Status Messages -->
+			{#if uploadError}
+				<div class="mb-4 rounded-md bg-red-50 border border-red-200 p-3">
+					<p class="text-sm text-red-800">{uploadError}</p>
+				</div>
+			{/if}
+			
+			{#if uploadSuccess}
+				<div class="mb-4 rounded-md bg-green-50 border border-green-200 p-3">
+					<p class="text-sm text-green-800">{uploadSuccess}</p>
+				</div>
+			{/if}
+			
 			<div class="flex w-full justify-end">
-				<Dialog.Close
-					class="h-input rounded-input bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-dark focus-visible:ring-offset-background focus-visible:outline-hidden inline-flex items-center justify-center px-[50px] text-[15px] font-semibold focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.98]"
+				<button
+					type="button"
+					class="h-input rounded-input bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-dark focus-visible:ring-offset-background focus-visible:outline-hidden inline-flex items-center justify-center px-[50px] text-[15px] font-semibold focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+					disabled={!selectedFile || isUploading}
+					onclick={handleUpload}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							handleUpload(e);
+						}
+					}}
+					aria-label="Upload selected file to storage"
 				>
-					Upload
-				</Dialog.Close>
+					{#if isUploading}
+						Uploading...
+					{:else}
+						Upload
+					{/if}
+				</button>
 			</div>
 			<Dialog.Close
 				class="focus-visible:ring-foreground focus-visible:ring-offset-background focus-visible:outline-hidden absolute right-5 top-5 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.98]"
