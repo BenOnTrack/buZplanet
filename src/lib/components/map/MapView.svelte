@@ -11,7 +11,8 @@
 	} from 'svelte-maplibre';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { createMapStyle } from './mapStyle.js';
+	import { createMapStyle } from '$lib/utils/map/mapStyle.js';
+	import BasemapVectorTileSource from '$lib/components/map/BasemapVectorTileSource.svelte';
 
 	// Default map configuration
 	let mapStyle: StyleSpecification = $state({
@@ -22,12 +23,12 @@
 		sprite: '',
 		layers: []
 	});
-	
+
 	const initialView = {
 		center: [0, 0] as [number, number],
 		zoom: 2
 	};
-	
+
 	// Initialize map style with current page origin
 	$effect(() => {
 		if (page.url?.origin) {
@@ -62,6 +63,14 @@
 		center={initialView.center}
 		zoom={initialView.zoom}
 		class="map-instance"
+		minZoom={0}
+		maxZoom={19}
+		pitchWithRotate={true}
+		bearingSnap={7}
+		renderWorldCopies={true}
+		dragRotate={true}
+		interactive={true}
+		projection={{ type: 'globe' }}
 		attributionControl={false}
 	>
 		<NavigationControl position="top-right" />
@@ -72,11 +81,12 @@
 			trackUserLocation={true}
 		/>
 		<BackgroundLayer
-      id="background"
-      paint={{
-        "background-color": "#FBF2E7",
-      }}
-    ></BackgroundLayer>
+			id="background"
+			paint={{
+				'background-color': '#FBF2E7'
+			}}
+		></BackgroundLayer>
+		<BasemapVectorTileSource />
 	</MapLibre>
 </div>
 
