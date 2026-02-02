@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { MapLibre } from 'svelte-maplibre';
+	import {
+		MapLibre,
+		BackgroundLayer,
+		NavigationControl,
+		GeolocateControl,
+		FullscreenControl,
+		ScaleControl,
+		type StyleSpecification,
+		type LngLatLike
+	} from 'svelte-maplibre';
 	import { onMount } from 'svelte';
 
 	// Default map configuration
@@ -36,10 +45,15 @@
 		center={initialView.center}
 		zoom={initialView.zoom}
 		class="map-instance"
-		attributionControl={{}}
+		attributionControl={false}
 	>
-		<!-- Map layers and controls can be added here -->
-		<!-- Slot for additional map components -->
+		<NavigationControl position="top-right" />
+		<GeolocateControl
+			position="top-right"
+			positionOptions={{ enableHighAccuracy: true }}
+			fitBoundsOptions={{ maxZoom: 16 }}
+			trackUserLocation={true}
+		/>
 	</MapLibre>
 </div>
 
