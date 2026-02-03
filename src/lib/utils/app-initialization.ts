@@ -70,7 +70,7 @@ class AppInitializer {
       logs: [...this.state.logs, logEntry]
     });
     
-    console.log(logEntry);
+    // Log to state only
   }
 
   /**

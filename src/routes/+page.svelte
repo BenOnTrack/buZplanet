@@ -57,17 +57,14 @@
 			const worker = getWorker();
 			
 			const pingResponse = await worker.ping();
-			console.log('Test ping:', pingResponse);
 			
 			const taskResponse = await worker.processTask(`Test task at ${new Date().toLocaleTimeString()}`);
-			console.log('Test task:', taskResponse);
 			
 			// Test tile request if databases are available
 			try {
 				const testTile = await worker.requestTile('basemap', 0, 0, 0);
-				console.log('Test tile request:', testTile.byteLength, 'bytes');
 			} catch (tileError) {
-				console.log('Tile test skipped (no basemap.mbtiles found):', tileError);
+				// Tile test skipped if no basemap.mbtiles found
 			}
 			
 		} catch (error) {

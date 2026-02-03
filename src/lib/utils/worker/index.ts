@@ -75,13 +75,13 @@ export class WorkerManager {
 		// Handle broadcast messages (no ID)
 		switch (type) {
 			case 'ready':
-				console.log('Worker is ready');
+				// Worker is ready
 				break;
 			case 'worker-error':
 				console.error('Worker reported error:', data);
 				break;
 			default:
-				console.log('Worker message:', type, data);
+				// Broadcast messages (no ID)
 		}
 	}
 

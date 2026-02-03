@@ -57,7 +57,6 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 				await initializeSqlite();
 				// Check and log all OPFS .mbtiles files
 				const opfsFiles = await listOpfsMbtilesFiles();
-				console.log('🗂️ OPFS .mbtiles files found during initialization:', opfsFiles);
 				postMessage({
 					type: 'initialized',
 					data: {
@@ -134,7 +133,6 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 				
 			case 'task':
 				// Example task processing
-				console.log('Processing task:', data);
 				// Simulate some work
 				const taskResult = `Task completed: ${data}`;
 				postMessage({
@@ -145,7 +143,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 				break;
 				
 			default:
-				console.log('Unknown message type:', type);
+				// Unknown message type
 				postMessage({
 					type: 'error',
 					data: `Unknown message type: ${type}`,
@@ -189,13 +187,13 @@ async function initializeSqlite(): Promise<void> {
 	if (sqlite3) return; // Already initialized
 	
 	try {
-		console.log('Initializing SQLite...');
+		// Initialize SQLite
 		sqlite3 = await sqlite3InitModule();
 		
 		// Get OPFS root directory
 		opfsRoot = await navigator.storage.getDirectory();
 		
-		console.log('✅ SQLite and OPFS initialized successfully');
+		// SQLite and OPFS initialized successfully
 	} catch (error) {
 		console.error('❌ Failed to initialize SQLite:', error);
 		throw error;
@@ -218,7 +216,7 @@ async function listOpfsMbtilesFiles(): Promise<string[]> {
 			}
 		}
 		
-		console.log(`📂 Found ${mbtilesFiles.length} .mbtiles files in OPFS root:`, mbtilesFiles);
+		// Found .mbtiles files in OPFS root
 		return mbtilesFiles;
 		
 	} catch (error) {
@@ -252,13 +250,13 @@ async function scanAndIndexDatabases(): Promise<{
 		}
 	}
 	
-	console.log(`Found ${mbtilesList.length} .mbtiles files in OPFS:`, mbtilesList);
+	// console.log(`Found ${mbtilesList.length} .mbtiles files in OPFS:`, mbtilesList);
 	
 	// Process each database
 	for (const filename of mbtilesList) {
 		try {
 			await processDatabaseFile(filename);
-			console.log(`✅ Successfully loaded: ${filename}`);
+							// Successfully loaded database
 		} catch (error) {
 			console.error(`❌ Failed to load ${filename}:`, error);
 			corruptedFiles.push(filename);
@@ -275,7 +273,7 @@ async function scanAndIndexDatabases(): Promise<{
 		indexKeys: dbIndex.size
 	};
 	
-	console.log('Database scan complete:', result);
+	// console.log('Database scan complete:', result);
 	
 	// Notify about corrupted files if any
 	if (corruptedFiles.length > 0) {
@@ -305,7 +303,7 @@ async function processDatabaseFile(filename: string): Promise<void> {
 		throw new Error(`File ${filename} is empty`);
 	}
 	
-	console.log(`Processing ${filename}: ${file.size} bytes`);
+	// console.log(`Processing ${filename}: ${file.size} bytes`);
 	
 	// Open database in read-only mode
 	const db: OpfsDatabase = new sqlite3.oo1.OpfsDb(filename, 'r');
@@ -495,7 +493,7 @@ function closeDatabase(filename: string): void {
 				}
 			}
 			
-			console.log(`Database ${filename} closed`);
+				// Database closed
 		} catch (error) {
 			console.error(`Error closing database ${filename}:`, error);
 		}
@@ -515,7 +513,7 @@ async function removeCorruptedFile(filename: string): Promise<void> {
 	
 	try {
 		await opfsRoot.removeEntry(filename);
-		console.log(`Removed corrupted file: ${filename}`);
+					// Removed corrupted file
 	} catch (error) {
 		console.error(`Failed to remove corrupted file ${filename}:`, error);
 	}
@@ -640,9 +638,9 @@ function getDatabasesBySource(source: string): DatabaseEntry[] {
 	
 	// Log matching results for debugging
 	if (matchingDbs.length > 0) {
-		console.log(`Found ${matchingDbs.length} database(s) for source '${source}':`, matchingDbs.map(db => db.filename));
+		// Found database(s) for source
 	} else {
-		console.log(`No databases found for source '${source}'. Available databases:`, Array.from(openDatabases.keys()));
+		// No databases found for source
 	}
 	
 	return matchingDbs;

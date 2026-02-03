@@ -14,6 +14,7 @@
 	import { createMapStyle } from '$lib/utils/map/mapStyle.js';
 	import BasemapVectorTileSource from '$lib/components/map/BasemapVectorTileSource.svelte';
 	import BuildingVectorTileSource from '$lib/components/map/BuildingVectorTileSource.svelte';
+	import TransportationVectorTileSource from '$lib/components/map/TransportationVectorTileSource.svelte';
 
 	interface Props {
 		ready?: boolean;
@@ -95,6 +96,7 @@
 			}}
 		></BackgroundLayer>
 			<BasemapVectorTileSource />
+			<TransportationVectorTileSource />
 			<BuildingVectorTileSource />
 		</MapLibre>
 	{:else}

@@ -271,32 +271,68 @@
   ></FillLayer>
   <LineLayer
     id="basemap-landcover-cliff-outline"
-    minzoom={13}
     sourceLayer={"landcover"}
     filter={["all", ["==", "subclass", "cliff"]]}
     paint={{
       "line-color": "#4a4848",
-      "line-width": 1,
+      "line-width": {
+        "base": 1,
+        "stops": [
+          [12, 0],
+          [13, 1]
+        ]
+      } as any,
+      "line-opacity": {
+        "base": 1,
+        "stops": [
+          [12, 0],
+          [13, 1]
+        ]
+      } as any,
     }}
   ></LineLayer>
   <LineLayer
     id="basemap-landuse-grass-outline"
-    minzoom={13}
     sourceLayer={"landuse"}
     filter={["all", ["==", "subclass", "grass"]]}
     paint={{
       "line-color": "#99c79c",
-      "line-width": 1,
+      "line-width": {
+        "base": 1,
+        "stops": [
+          [12, 0],
+          [13, 1]
+        ]
+      } as any,
+      "line-opacity": {
+        "base": 1,
+        "stops": [
+          [12, 0],
+          [13, 1]
+        ]
+      } as any,
     }}
   ></LineLayer>
   <LineLayer
     id="basemap-landuse-barrier-outline"
-    minzoom={13}
     sourceLayer={"landuse"}
     filter={["all", ["==", "subclass", "barrier"]]}
     paint={{
       "line-color": "#b4b4b4",
-      "line-width": 1,
+      "line-width": {
+        "base": 1,
+        "stops": [
+          [12, 0],
+          [13, 1]
+        ]
+      } as any,
+      "line-opacity": {
+        "base": 1,
+        "stops": [
+          [12, 0],
+          [13, 1]
+        ]
+      } as any,
     }}
   ></LineLayer>
   <FillLayer
@@ -321,7 +357,6 @@
   ></FillLayer>
   <LineLayer
     id="basemap-landuse-sport-downhill"
-    minzoom={14}
     sourceLayer={"landuse"}
     filter={["all", ["==", "subclass", "sport"]]}
     paint={{
@@ -342,31 +377,45 @@
         "#b4b4b4",
       ],
       "line-width": [
-        "case",
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        13,
+        0,
+        14,
         [
-          "in",
-          ["get", "category"],
+          "case",
           [
-            "literal",
+            "in",
+            ["get", "category"],
             [
-              "novice_downhill_ski_run",
-              "easy_downhill_ski_run",
-              "intermediate_downhill_ski_run",
-              "advanced_downhill_ski_run",
-              "expert_downhill_ski_run",
-              "freeride_downhill_ski_run",
+              "literal",
+              [
+                "novice_downhill_ski_run",
+                "easy_downhill_ski_run",
+                "intermediate_downhill_ski_run",
+                "advanced_downhill_ski_run",
+                "expert_downhill_ski_run",
+                "freeride_downhill_ski_run",
+              ],
             ],
           ],
-        ],
-        2,
-        1,
+          2,
+          1,
+        ]
       ],
+      "line-opacity": {
+        "base": 1,
+        "stops": [
+          [13, 0],
+          [14, 1]
+        ]
+      } as any,
     }}
   ></LineLayer>
   <SymbolLayer
     id="basemap-area-name-national_park"
     sourceLayer={"park"}
-    minzoom={6}
     filter={[
       "all",
       ["in", "category", "protected_area" as any, "national_park" as any, "nature_reserve" as any],
@@ -396,12 +445,18 @@
       "text-halo-blur": 0.5,
       "text-halo-color": "rgba(255,255,255,0.8)",
       "text-halo-width": 2,
+      "text-opacity": {
+        "base": 1,
+        "stops": [
+          [5, 0],
+          [6, 1]
+        ]
+      } as any,
     }}
   ></SymbolLayer>
   <SymbolLayer
     id="basemap-water-name-lakeline"
     sourceLayer={"water"}
-    minzoom={6}
     filter={["all", ["==", "$type", "LineString"]]}
     layout={{
       "symbol-placement": "line",
@@ -421,6 +476,13 @@
       "text-color": "#74aee9",
       "text-halo-color": "rgba(255,255,255,0.7)",
       "text-halo-width": 2,
+      "text-opacity": {
+        "base": 1,
+        "stops": [
+          [5, 0],
+          [6, 1]
+        ]
+      } as any,
     }}
   ></SymbolLayer>
   <SymbolLayer

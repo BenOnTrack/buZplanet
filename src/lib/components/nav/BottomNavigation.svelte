@@ -56,11 +56,11 @@ import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
 		// If the same drawer is already open, close it
 		if (currentOpenDrawer === itemId) {
 			currentOpenDrawer = null;
-			console.log('Closed drawer:', itemId);
+			// Drawer closed
 		} else {
 			// Close any open drawer and open the new one
 			currentOpenDrawer = itemId;
-			console.log('Opened drawer:', itemId);
+			// Drawer opened
 		}
 	}
 

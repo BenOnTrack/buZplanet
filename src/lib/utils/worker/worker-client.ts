@@ -35,7 +35,7 @@ export class SqliteWorkerClient {
             // Handle unsolicited messages (notifications)
             switch (type) {
                 case 'ready':
-                    console.log('✅ SQLite worker is ready');
+                    					// SQLite worker is ready
                     break;
                 case 'corrupted-databases-detected':
                     console.warn('⚠️ Corrupted databases detected:', data);
@@ -43,7 +43,7 @@ export class SqliteWorkerClient {
                     window.dispatchEvent(new CustomEvent('worker:corrupted-databases', { detail: data }));
                     break;
                 default:
-                    console.log('Worker notification:', type, data);
+                    					// Worker notification
             }
         });
 
@@ -139,16 +139,17 @@ const workerClient = new SqliteWorkerClient('/src/lib/utils/worker/worker.ts');
 
 // Initialize
 const initResult = await workerClient.initialize();
-console.log('Initialization result:', initResult.message);
-console.log('OPFS .mbtiles files found:', initResult.opfsFiles);
+// Commented out example output logs
+// console.log('Initialization result:', initResult.message);
+// console.log('OPFS .mbtiles files found:', initResult.opfsFiles);
 
 // Scan databases
 const scanResult = await workerClient.scanDatabases();
-console.log('Scan result:', scanResult);
+// console.log('Scan result:', scanResult);
 
 // Get database list
 const databases = await workerClient.getDatabases();
-console.log('Available databases:', databases);
+// console.log('Available databases:', databases);
 
 // Query a database
 const tiles = await workerClient.queryDatabase(

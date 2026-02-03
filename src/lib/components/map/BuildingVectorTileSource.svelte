@@ -27,24 +27,33 @@
         "interpolate",
         ["linear"],
         ["zoom"],
-        14,
+        13,
         0,
-        14.05,
+        14,
         ["get", "render_height"],
       ],
       "fill-extrusion-base": [
         "interpolate",
         ["linear"],
         ["zoom"],
-        14,
+        13,
         0,
-        14.05,
+        14,
         ["get", "render_min_height"],
       ],
-      "fill-extrusion-opacity": 0.6,
+      "fill-extrusion-opacity": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        13,
+        0,
+        14,
+        0.6,
+      ],
     }}
-    layout={
-    {visibility: "visible"}}
+    layout={{
+      visibility: "visible"
+    }}
     beforeLayerType="symbol"
   ></FillExtrusionLayer>
   <!-- <FillLayer
