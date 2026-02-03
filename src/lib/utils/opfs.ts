@@ -33,17 +33,17 @@ export class OPFSManager {
 	/**
 	 * Save a file to OPFS
 	 * @param file - The File object to save
-	 * @param directory - Optional subdirectory (default: 'tiles')
+	 * @param directory - Optional subdirectory (default: '' for root)
 	 * @returns Promise<string> - The file path where it was saved
 	 */
-	public async saveFile(file: File, directory: string = 'tiles'): Promise<string> {
+	public async saveFile(file: File, directory: string = ''): Promise<string> {
 		if (!this.root) {
 			await this.initialize();
 		}
 
 		try {
-			// Create or get the directory
-			const dirHandle = await this.root!.getDirectoryHandle(directory, { create: true });
+			// Use root directory or create/get subdirectory
+			const dirHandle = directory ? await this.root!.getDirectoryHandle(directory, { create: true }) : this.root!;
 			
 			// Generate unique filename if file already exists
 			let filename = file.name;
@@ -64,7 +64,7 @@ export class OPFSManager {
 			await writable.write(file);
 			await writable.close();
 
-			return `${directory}/${filename}`;
+			return directory ? `${directory}/${filename}` : filename;
 		} catch (error) {
 			throw new Error(`Failed to save file: ${error}`);
 		}
@@ -84,19 +84,21 @@ export class OPFSManager {
 
 	/**
 	 * List files in a directory
-	 * @param directory - Directory name (default: 'tiles')
+	 * @param directory - Directory name (default: '' for root)
 	 * @returns Promise<string[]> - Array of filenames
 	 */
-	public async listFiles(directory: string = 'tiles'): Promise<string[]> {
+	public async listFiles(directory: string = ''): Promise<string[]> {
 		if (!this.root) {
 			await this.initialize();
 		}
 
 		try {
-			const dirHandle = await this.root!.getDirectoryHandle(directory);
+			// Use root directory or get subdirectory
+			const dirHandle = directory ? await this.root!.getDirectoryHandle(directory) : this.root!;
 			const files: string[] = [];
 			
-			for await (const [name, handle] of dirHandle.entries()) {
+			// TypeScript doesn't recognize entries() method but it exists in modern browsers
+			for await (const [name, handle] of (dirHandle as any).entries()) {
 				if (handle.kind === 'file') {
 					files.push(name);
 				}
@@ -111,7 +113,7 @@ export class OPFSManager {
 
 	/**
 	 * Get a file from OPFS
-	 * @param filepath - Full path to the file (e.g., 'tiles/myfile.txt')
+	 * @param filepath - Full path to the file (e.g., 'myfile.txt' or 'subdir/myfile.txt')
 	 * @returns Promise<File | null> - The File object or null if not found
 	 */
 	public async getFile(filepath: string): Promise<File | null> {
@@ -122,9 +124,10 @@ export class OPFSManager {
 		try {
 			const pathParts = filepath.split('/');
 			const filename = pathParts.pop()!;
-			const directory = pathParts.join('/') || 'tiles';
+			const directory = pathParts.join('/');
 
-			const dirHandle = await this.root!.getDirectoryHandle(directory);
+			// Use root directory or get subdirectory
+			const dirHandle = directory ? await this.root!.getDirectoryHandle(directory) : this.root!;
 			const fileHandle = await dirHandle.getFileHandle(filename);
 			
 			return await fileHandle.getFile();
@@ -135,7 +138,7 @@ export class OPFSManager {
 
 	/**
 	 * Delete a file from OPFS
-	 * @param filepath - Full path to the file (e.g., 'tiles/myfile.txt')
+	 * @param filepath - Full path to the file (e.g., 'myfile.txt' or 'subdir/myfile.txt')
 	 * @returns Promise<boolean> - True if deleted successfully
 	 */
 	public async deleteFile(filepath: string): Promise<boolean> {
@@ -146,9 +149,10 @@ export class OPFSManager {
 		try {
 			const pathParts = filepath.split('/');
 			const filename = pathParts.pop()!;
-			const directory = pathParts.join('/') || 'tiles';
+			const directory = pathParts.join('/');
 
-			const dirHandle = await this.root!.getDirectoryHandle(directory);
+			// Use root directory or get subdirectory
+			const dirHandle = directory ? await this.root!.getDirectoryHandle(directory) : this.root!;
 			await dirHandle.removeEntry(filename);
 			
 			return true;

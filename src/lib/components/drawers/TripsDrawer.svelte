@@ -3,7 +3,7 @@
 	import { clsx } from "clsx";
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
-	let activeSnapPoint = $state("200px");
+	let activeSnapPoint = $state<string | number>("200px");
 </script>
 
 <!-- Trips Drawer -->
@@ -12,8 +12,8 @@
 	<Drawer.Portal>
 		<Drawer.Content class="fixed flex flex-col bg-white border border-gray-200 border-b-none rounded-t-[10px] bottom-0 left-0 right-0 h-full max-h-[97%] mx-[-1px] z-[60]">
 			<div class={clsx("flex flex-col w-full p-4 pt-5", {
-				"overflow-y-auto": activeSnapPoint === 1,
-				"overflow-hidden": activeSnapPoint !== 1,
+				"overflow-y-auto": activeSnapPoint === 1 || activeSnapPoint === "1",
+				"overflow-hidden": activeSnapPoint !== 1 && activeSnapPoint !== "1",
 			})}>
 				<div class="flex items-center justify-between mb-4">
 					<Drawer.Title class="text-2xl font-medium flex items-center gap-2">

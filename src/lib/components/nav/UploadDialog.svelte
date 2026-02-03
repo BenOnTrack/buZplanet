@@ -36,7 +36,7 @@
 		uploadSuccess = '';
 
 		try {
-			// Save file to OPFS
+			// Save file to OPFS root
 			const filePath = await opfsManager.saveFile(selectedFile);
 			uploadSuccess = `File uploaded successfully: ${filePath}`;
 			

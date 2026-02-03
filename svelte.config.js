@@ -8,7 +8,7 @@ const config = {
 	kit: {
 		adapter: adapter(),
 		serviceWorker: {
-			register: true // Enable SvelteKit's service worker
+			register: false // Enable SvelteKit's service worker
 		},
 		alias: {
 			'$paraglide': 'src/paraglide'

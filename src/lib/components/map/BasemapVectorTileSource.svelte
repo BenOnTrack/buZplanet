@@ -1,9 +1,6 @@
 <!-- BasemapVectorTileSource.svelte -->
 <script lang="ts">
-  import VectorTileSource from "svelte-maplibre/VectorTileSource.svelte"
-  import LineLayer from "svelte-maplibre/LineLayer.svelte"
-  import SymbolLayer from "svelte-maplibre/SymbolLayer.svelte"
-  import FillLayer from "svelte-maplibre/FillLayer.svelte"
+  import { VectorTileSource, LineLayer, SymbolLayer, FillLayer } from "svelte-maplibre"
 
 </script>
 
@@ -30,8 +27,8 @@
     beforeLayerType="symbol"
     filter={[
       "all",
-      ["in", "subclass", "residential", "suburb", "neighbourhood"],
-    ]}
+      ["in", "subclass", "residential" as any, "suburb" as any, "neighbourhood" as any],
+    ] as any}
     paint={{
       "fill-color": {
         base: 1,
@@ -39,7 +36,7 @@
           [12, "hsla(30, 19%, 90%, 0.4)"],
           [16, "hsla(30, 19%, 90%, 0.2)"],
         ],
-      },
+      } as any,
     }}
   ></FillLayer>
   <FillLayer
@@ -72,8 +69,8 @@
     filter={[
       "all",
       ["==", "$type", "Polygon"],
-      ["in", "subclass", "industrial", "garages", "dam"],
-    ]}
+      ["in", "subclass", "industrial" as any, "garages" as any, "dam" as any],
+    ] as any}
     paint={{
       "fill-color": "hsla(243, 63%, 88%, 0.34)",
     }}
@@ -130,7 +127,7 @@
           [0, false],
           [9, true],
         ],
-      },
+      } as any,
       "fill-color": "#66aa44",
       "fill-opacity": 0.1,
       "fill-outline-color": "hsla(0, 0%, 0%, 0.03)",
@@ -219,7 +216,7 @@
           [6, [2, 0]],
           [8, [0, 0]],
         ],
-      },
+      } as any,
     }}
   ></FillLayer>
   <FillLayer
@@ -372,8 +369,8 @@
     minzoom={6}
     filter={[
       "all",
-      ["in", "category", "protected_area", "national_park", "nature_reserve"],
-    ]}
+      ["in", "category", "protected_area" as any, "national_park" as any, "nature_reserve" as any],
+    ] as any}
     layout={{
       "text-font": ["Noto Sans Italic"],
       "text-size": {
@@ -382,7 +379,7 @@
           [12, 10],
           [15, 14],
         ],
-      },
+      } as any,
       "text-field": [
         "coalesce",
         ["get", "name:en"], // Try to get name in the specified language
@@ -471,7 +468,7 @@
           [0, 10],
           [6, 14],
         ],
-      },
+      } as any,
     }}
     paint={{
       "text-color": "#74aee9",
