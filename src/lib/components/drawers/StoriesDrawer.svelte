@@ -6,10 +6,10 @@
 	let activeSnapPoint = $state<string | number>("200px");
 </script>
 <!-- Stories Drawer -->
-<Drawer.Root bind:open={open} snapPoints={["200px", "400px", 1]} bind:activeSnapPoint>
-	<Drawer.Overlay class="fixed inset-0 bg-black/40 z-[60]" />
+<Drawer.Root bind:open={open} snapPoints={["200px", "400px", 1]} bind:activeSnapPoint modal={false}>
+	<Drawer.Overlay class="fixed inset-0 bg-black/40 z-60" style="pointer-events: none" />
 	<Drawer.Portal>
-		<Drawer.Content class="fixed flex flex-col bg-white border border-gray-200 border-b-none rounded-t-[10px] bottom-0 left-0 right-0 h-full max-h-[97%] mx-[-1px] z-[60]">
+		<Drawer.Content class="fixed flex flex-col bg-white border border-gray-200 border-b-none rounded-t-[10px] bottom-0 left-0 right-0 h-full max-h-[97%] mx-[-1px] z-60">
 			<div class={clsx("flex flex-col w-full p-4 pt-5", {
 				"overflow-y-auto": activeSnapPoint === 1 || activeSnapPoint === "1",
 				"overflow-hidden": activeSnapPoint !== 1 && activeSnapPoint !== "1",
