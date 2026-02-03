@@ -61,7 +61,12 @@ export class WorkerManager {
 			}
 
 			if (error) {
-				pending.reject(new Error(data));
+				// Don't log "No tile found" errors as they are expected
+				const errorMsg = typeof data === 'string' ? data : 'Unknown error';
+				if (!errorMsg.includes('No tile found')) {
+					console.error(`Worker error for ${type}:`, errorMsg);
+				}
+				pending.reject(new Error(errorMsg));
 			} else {
 				pending.resolve(data);
 			}

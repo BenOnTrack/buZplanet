@@ -14,6 +14,12 @@
 	import { createMapStyle } from '$lib/utils/map/mapStyle.js';
 	import BasemapVectorTileSource from '$lib/components/map/BasemapVectorTileSource.svelte';
 
+	interface Props {
+		ready?: boolean;
+	}
+
+	let { ready = true }: Props = $props();
+
 	// Default map configuration
 	let mapStyle: StyleSpecification = $state({
 		version: 8,
@@ -58,7 +64,8 @@
 </script>
 
 <div class="map-container" bind:this={mapContainer}>
-	<MapLibre
+	{#if ready}
+		<MapLibre
 		style={mapStyle}
 		center={initialView.center}
 		zoom={initialView.zoom}
@@ -86,8 +93,16 @@
 				'background-color': '#FBF2E7'
 			}}
 		></BackgroundLayer>
-		<BasemapVectorTileSource />
-	</MapLibre>
+			<BasemapVectorTileSource />
+		</MapLibre>
+	{:else}
+		<div class="map-placeholder">
+			<div class="placeholder-content">
+				<div class="placeholder-icon">🗺️</div>
+				<p>Initializing map...</p>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -144,6 +159,32 @@
 			height: calc(100vh - max(env(safe-area-inset-top), 0px) - 76px);
 			height: calc(100dvh - max(env(safe-area-inset-top), 0px) - 76px);
 		}
+	}
+
+	.map-placeholder {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: #FBF2E7;
+		color: #666;
+	}
+
+	.placeholder-content {
+		text-align: center;
+	}
+
+	.placeholder-icon {
+		font-size: 3rem;
+		margin-bottom: 1rem;
+		opacity: 0.6;
+	}
+
+	.placeholder-content p {
+		margin: 0;
+		font-size: 1rem;
+		opacity: 0.7;
 	}
 
 	/* Responsive adjustments for smaller screens */

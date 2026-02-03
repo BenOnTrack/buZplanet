@@ -3,168 +3,118 @@
 	import BottomNavigation from '$lib/components/nav/BottomNavigation.svelte';
 	import AuthDialog from '$lib/components/nav/AuthDialog.svelte';
 	import UploadDialog from '$lib/components/nav/UploadDialog.svelte';
-	import { getWorker, terminateWorker } from '$lib/utils/worker';
-	import { createProtocolHandler } from '$lib/utils/map/protocol-handler';
+	import LoadingScreen from '$lib/components/LoadingScreen.svelte';
+	import { terminateWorker } from '$lib/utils/worker';
+	import { appInitializer } from '$lib/utils/app-initialization';
 	import { onMount, onDestroy } from 'svelte';
-	import maplibregl from "maplibre-gl"
 	
 	// Import dev tools in development
 	if (import.meta.env.DEV) {
 		import('$lib/utils/worker/dev-tools');
 	}
 
-	// Worker status tracking
-	let workerStatus = $state('initializing');
-	let workerLogs = $state<string[]>([]);
-	let showWorkerDebug = $state(false);
+	// Initialization state
+	let initState = $state({
+		status: 'pending' as const,
+		logs: [] as string[]
+	});
 
-	function addLog(message: string) {
-		const timestamp = new Date().toLocaleTimeString();
-		workerLogs = [...workerLogs, `[${timestamp}] ${message}`];
-		console.log(message);
-	}
+	let isAppReady = $derived(initState.status === 'complete');
+	let showDebugPanel = $state(false);
 
-	// Initialize worker and protocol handler when component mounts
+	// Subscribe to initialization state changes
+	let unsubscribe: (() => void) | null = null;
+
 	onMount(async () => {
+		// Subscribe to initialization state
+		unsubscribe = appInitializer.subscribe((state) => {
+			initState = state;
+		});
+
+		// Start initialization
 		try {
-			addLog('🔄 Initializing worker...');
-			workerStatus = 'connecting';
-			
-			const worker = getWorker();
-			addLog('✅ Worker instance created');
-			
-			await worker.waitForReady();
-			addLog('✅ Worker is ready!');
-			workerStatus = 'ready';
-			
-			// Test initialization
-			const initResponse = await worker.initializeWorker({ 
-				appVersion: '1.0.0',
-				timestamp: Date.now()
-			});
-			
-			// Handle both string and object responses for backwards compatibility
-			if (typeof initResponse === 'string') {
-				addLog(`✅ Init response: ${initResponse}`);
-			} else {
-				addLog(`✅ Init response: ${initResponse.message}`);
-				addLog(`📂 OPFS .mbtiles files found: ${initResponse.opfsFiles.length}`);
-				if (initResponse.opfsFiles.length > 0) {
-					initResponse.opfsFiles.forEach(file => {
-						addLog(`  📄 ${file}`);
-					});
-				} else {
-					addLog('  📄 No .mbtiles files found in OPFS');
-				}
+			const result = await appInitializer.initialize();
+			if (!result.success) {
+				console.error('App initialization failed:', result.error);
 			}
-			
-			// Scan and index databases
-			try {
-				addLog('🔄 Scanning and indexing databases...');
-				const scanResult = await worker.sendMessage('scan-databases');
-				addLog(`✅ Database scan complete: ${scanResult.successfulDbs}/${scanResult.totalFiles} databases loaded`);
-				if (scanResult.corruptedFiles.length > 0) {
-					addLog(`⚠️ Corrupted files removed: ${scanResult.corruptedFiles.join(', ')}`);
-				}
-			} catch (scanError) {
-				addLog(`⚠️ Database scan failed: ${scanError instanceof Error ? scanError.message : 'Unknown error'}`);
-			}
-			
-			// Register MBTiles protocol handler
-			try {
-				addLog('🔄 Registering MBTiles protocol handler...');
-				const protocolHandler = createProtocolHandler(worker);
-				maplibregl.addProtocol('mbtiles', protocolHandler);
-				addLog('✅ MBTiles protocol handler registered!');
-			} catch (protocolError) {
-				addLog(`❌ Protocol handler registration failed: ${protocolError instanceof Error ? protocolError.message : 'Unknown error'}`);
-			}
-			
-			// Test ping
-			const pingResponse = await worker.ping();
-			addLog(`✅ Ping response: ${pingResponse}`);
-			
-			// Test task processing
-			const taskResponse = await worker.processTask('Hello from main thread!');
-			addLog(`✅ Task response: ${taskResponse}`);
-			
-			workerStatus = 'working';
-			addLog('🎉 Worker and protocol handler fully initialized!');
-			
 		} catch (error) {
-			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-			addLog(`❌ Failed to initialize worker: ${errorMsg}`);
-			workerStatus = 'error';
-			console.error('Failed to initialize worker:', error);
+			console.error('Unexpected initialization error:', error);
 		}
 	});
 
 	// Clean up worker when component is destroyed
 	onDestroy(() => {
-		addLog('🔄 Terminating worker...');
+		if (unsubscribe) {
+			unsubscribe();
+		}
 		terminateWorker();
-		addLog('✅ Worker terminated');
 	});
 
+	// Development testing functions
 	async function testWorker() {
 		try {
-			addLog('🔄 Testing worker...');
+			const { getWorker } = await import('$lib/utils/worker');
 			const worker = getWorker();
 			
 			const pingResponse = await worker.ping();
-			addLog(`✅ Test ping: ${pingResponse}`);
+			console.log('Test ping:', pingResponse);
 			
 			const taskResponse = await worker.processTask(`Test task at ${new Date().toLocaleTimeString()}`);
-			addLog(`✅ Test task: ${taskResponse}`);
+			console.log('Test task:', taskResponse);
 			
 			// Test tile request if databases are available
 			try {
 				const testTile = await worker.requestTile('basemap', 0, 0, 0);
-				addLog(`✅ Test tile request: ${testTile.byteLength} bytes`);
+				console.log('Test tile request:', testTile.byteLength, 'bytes');
 			} catch (tileError) {
-				addLog(`ℹ️ Tile test skipped (no basemap.mbtiles found): ${tileError instanceof Error ? tileError.message : 'Unknown error'}`);
+				console.log('Tile test skipped (no basemap.mbtiles found):', tileError);
 			}
 			
 		} catch (error) {
-			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-			addLog(`❌ Test failed: ${errorMsg}`);
+			console.error('Test failed:', error);
 		}
 	}
 
 	function clearLogs() {
-		workerLogs = [];
+		if (initState.logs) {
+			initState = { ...initState, logs: [] };
+		}
 	}
 </script>
 
 <main class="app-container">
-	<AuthDialog />
-	<UploadDialog />
-	<MapView />
-	<BottomNavigation />
+	{#if !isAppReady}
+		<LoadingScreen state={initState} showLogs={import.meta.env.DEV} />
+	{:else}
+		<AuthDialog />
+		<UploadDialog />
+		<MapView ready={isAppReady} />
+		<BottomNavigation />
+	{/if}
 	
-	<!-- Worker Debug Panel - only show in development -->
-	{#if import.meta.env.DEV}
+	<!-- Worker Debug Panel - only show in development when app is ready -->
+	{#if import.meta.env.DEV && isAppReady}
 		<div class="worker-debug-panel">
 			<button 
 				class="debug-toggle"
-				onclick={() => showWorkerDebug = !showWorkerDebug}
-				onkeydown={(e) => e.key === 'Enter' && (showWorkerDebug = !showWorkerDebug)}
+				onclick={() => showDebugPanel = !showDebugPanel}
+				onkeydown={(e) => e.key === 'Enter' && (showDebugPanel = !showDebugPanel)}
 				aria-label="Toggle worker debug panel"
 			>
-				🔧 Worker: {workerStatus}
+				🔧 Worker: {initState.status}
 			</button>
 			
-			{#if showWorkerDebug}
+			{#if showDebugPanel}
 				<div class="debug-content">
 					<div class="debug-controls">
 						<button onclick={testWorker} onkeydown={(e) => e.key === 'Enter' && testWorker()}>Test Worker</button>
 						<button onclick={clearLogs} onkeydown={(e) => e.key === 'Enter' && clearLogs()}>Clear Logs</button>
 					</div>
 					<div class="debug-logs">
-						{#each workerLogs as log}
+						{#each initState.logs as log}
 							<div class="log-entry">{log}</div>
 						{/each}
-						{#if workerLogs.length === 0}
+						{#if initState.logs.length === 0}
 							<div class="log-entry empty">No logs yet...</div>
 						{/if}
 					</div>

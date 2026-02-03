@@ -575,7 +575,10 @@ async function handleTileRequest(
 		throw new Error(`No tile found for ${source} ${z}/${x}/${y}`);
 
 	} catch (error) {
-		console.error(`Tile request failed: ${source} ${z}/${x}/${y}:`, error);
+		// Only log errors for non-missing-tile issues
+		if (error instanceof Error && !error.message.includes('No tile found')) {
+			console.error(`Tile request failed: ${source} ${z}/${x}/${y}:`, error);
+		}
 		throw error;
 	}
 }

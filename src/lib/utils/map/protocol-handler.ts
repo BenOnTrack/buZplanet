@@ -61,6 +61,13 @@ export function createProtocolHandler(
       };
 
     } catch (error) {
+      // Check if it's a "no tile found" error (normal behavior)
+      if (error instanceof Error && error.message.includes('No tile found')) {
+        // Missing tiles are normal - silently return empty data
+        return { data: new ArrayBuffer(0) };
+      }
+      
+      // Log other errors as warnings since they might indicate real issues
       console.warn(`Failed to fetch tile ${url}:`, error);
       // Return empty ArrayBuffer instead of throwing to prevent map errors
       return { data: new ArrayBuffer(0) };
@@ -87,6 +94,13 @@ async function requestTileFromWorker(
     return tileData;
     
   } catch (error) {
+    // Check if it's a "no tile found" error (normal behavior)
+    if (error instanceof Error && error.message.includes('No tile found')) {
+      // This is expected for missing tiles - don't log as error
+      throw error; // Still throw so the catch above can handle it gracefully
+    }
+    
+    // Log other errors as they might be actual issues
     console.error('Worker tile request failed:', error);
     throw error;
   }
