@@ -118,6 +118,20 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 				} satisfies WorkerResponse, [tileData]); // Transfer ArrayBuffer
 				break;
 				
+			case 'list-databases':
+				// List all available databases with their metadata
+				const availableDbs = getDatabaseList();
+				postMessage({
+					type: 'database-list-response',
+					data: {
+						databases: availableDbs,
+						totalCount: availableDbs.length,
+						filenames: availableDbs.map(db => db.filename)
+					},
+					id
+				} satisfies WorkerResponse);
+				break;
+				
 			case 'task':
 				// Example task processing
 				console.log('Processing task:', data);
@@ -585,17 +599,50 @@ async function handleTileRequest(
 
 // Get databases by source name
 function getDatabasesBySource(source: string): DatabaseEntry[] {
-	// For now, match by filename containing the source name
-	// This can be improved with better indexing
+	// Improved matching logic for different naming patterns
 	const matchingDbs: DatabaseEntry[] = [];
 	
 	for (const [key, entries] of dbIndex.entries()) {
 		for (const entry of entries) {
-			if (entry.filename.toLowerCase().includes(source.toLowerCase()) || 
-				entry.filename === `${source}.mbtiles`) {
+			const filename = entry.filename.toLowerCase();
+			const sourceLower = source.toLowerCase();
+			
+			// Check for exact match or source name in filename
+			if (filename === `${sourceLower}.mbtiles` || 
+				filename.includes(sourceLower)) {
 				matchingDbs.push(entry);
+				continue;
+			}
+			
+			// Special handling for building files with patterns like:
+			// building_XXX.mbtiles, buildings_XXX.mbtiles, etc.
+			if (sourceLower === 'building') {
+				if (filename.startsWith('building') || 
+					filename.startsWith('buildings') || 
+					filename.includes('building')) {
+					matchingDbs.push(entry);
+					continue;
+				}
+			}
+			
+			// Special handling for basemap files with patterns like:
+			// basemap_XXX.mbtiles, base_XXX.mbtiles, etc.
+			if (sourceLower === 'basemap') {
+				if (filename.startsWith('basemap') || 
+					filename.startsWith('base') || 
+					filename.includes('basemap')) {
+					matchingDbs.push(entry);
+					continue;
+				}
 			}
 		}
+	}
+	
+	// Log matching results for debugging
+	if (matchingDbs.length > 0) {
+		console.log(`Found ${matchingDbs.length} database(s) for source '${source}':`, matchingDbs.map(db => db.filename));
+	} else {
+		console.log(`No databases found for source '${source}'. Available databases:`, Array.from(openDatabases.keys()));
 	}
 	
 	return matchingDbs;

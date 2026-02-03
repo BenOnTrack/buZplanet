@@ -13,6 +13,7 @@
 	import { page } from '$app/state';
 	import { createMapStyle } from '$lib/utils/map/mapStyle.js';
 	import BasemapVectorTileSource from '$lib/components/map/BasemapVectorTileSource.svelte';
+	import BuildingVectorTileSource from '$lib/components/map/BuildingVectorTileSource.svelte';
 
 	interface Props {
 		ready?: boolean;
@@ -94,6 +95,7 @@
 			}}
 		></BackgroundLayer>
 			<BasemapVectorTileSource />
+			<BuildingVectorTileSource />
 		</MapLibre>
 	{:else}
 		<div class="map-placeholder">

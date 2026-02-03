@@ -148,6 +148,10 @@ export class WorkerManager {
 		return this.sendMessage('tile-request', { source, z, x, y });
 	}
 
+	async listDatabases(): Promise<{databases: any[]; totalCount: number; filenames: string[]}> {
+		return this.sendMessage('list-databases');
+	}
+
 	postMessage(type: string, data?: any): void {
 		if (!this.worker) {
 			throw new Error('Worker not initialized');
