@@ -108,6 +108,16 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 				} satisfies WorkerResponse);
 				break;
 				
+			case 'tile-request':
+				// Handle tile request from protocol handler
+				const tileData = await handleTileRequest(data.source, data.z, data.x, data.y);
+				postMessage({
+					type: 'tile-response',
+					data: tileData,
+					id
+				} satisfies WorkerResponse, [tileData]); // Transfer ArrayBuffer
+				break;
+				
 			case 'task':
 				// Example task processing
 				console.log('Processing task:', data);
@@ -501,6 +511,111 @@ async function removeCorruptedFile(filename: string): Promise<void> {
 self.addEventListener('beforeunload', () => {
 	closeAllDatabases();
 });
+
+// Handle tile requests
+async function handleTileRequest(
+	source: string,
+	z: number,
+	x: number,
+	y: number
+): Promise<ArrayBuffer> {
+	try {
+		// Validate coordinates
+		if (z < 0 || z > 22 || x < 0 || y < 0) {
+			throw new Error(`Invalid tile coordinates: z=${z} x=${x} y=${y}`);
+		}
+
+		// Find databases for the source
+		const sourceDbs = getDatabasesBySource(source);
+		if (sourceDbs.length === 0) {
+			throw new Error(`No database found for source: ${source}`);
+		}
+
+		// Convert XYZ to TMS Y coordinate (MBTiles use TMS scheme)
+		const tmsY = (1 << z) - 1 - y;
+
+		// Try to get tile from databases (prioritize first match)
+		for (const dbEntry of sourceDbs) {
+			// Check if zoom level is within database range
+			if (dbEntry.minzoom !== undefined && z < dbEntry.minzoom) continue;
+			if (dbEntry.maxzoom !== undefined && z > dbEntry.maxzoom) continue;
+
+			try {
+				const stmt = dbEntry.db.prepare(
+					'SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?'
+				);
+
+				stmt.bind([z, x, tmsY]);
+
+				if (stmt.step()) {
+					const tileData = stmt.get(0) as Uint8Array;
+					stmt.finalize();
+
+					if (tileData && tileData.length > 0) {
+						// Check if tile is gzipped (common in MBTiles)
+						if (isGzipped(tileData)) {
+							// Decompress gzipped tile
+							const decompressed = await gunzip(tileData);
+							return decompressed;
+						} else {
+							// Return tile data as-is
+							return tileData.buffer.slice(tileData.byteOffset, tileData.byteOffset + tileData.byteLength);
+						}
+					}
+				} else {
+					stmt.finalize();
+				}
+			} catch (dbError) {
+				console.warn(`Error querying ${dbEntry.filename}:`, dbError);
+				continue;
+			}
+		}
+
+		// No tile found in any database
+		throw new Error(`No tile found for ${source} ${z}/${x}/${y}`);
+
+	} catch (error) {
+		console.error(`Tile request failed: ${source} ${z}/${x}/${y}:`, error);
+		throw error;
+	}
+}
+
+// Get databases by source name
+function getDatabasesBySource(source: string): DatabaseEntry[] {
+	// For now, match by filename containing the source name
+	// This can be improved with better indexing
+	const matchingDbs: DatabaseEntry[] = [];
+	
+	for (const [key, entries] of dbIndex.entries()) {
+		for (const entry of entries) {
+			if (entry.filename.toLowerCase().includes(source.toLowerCase()) || 
+				entry.filename === `${source}.mbtiles`) {
+				matchingDbs.push(entry);
+			}
+		}
+	}
+	
+	return matchingDbs;
+}
+
+// Check if data is gzipped
+function isGzipped(data: Uint8Array): boolean {
+	return data.length >= 2 && data[0] === 0x1f && data[1] === 0x8b;
+}
+
+// Gunzip decompression using modern Compression Streams API
+async function gunzip(data: Uint8Array): Promise<ArrayBuffer> {
+	try {
+		const decompressionStream = new DecompressionStream('gzip');
+		const inputStream = new Response(data).body as ReadableStream<Uint8Array>;
+		const decompressedStream = inputStream.pipeThrough(decompressionStream);
+		const decompressedArrayBuffer = await new Response(decompressedStream).arrayBuffer();
+		return decompressedArrayBuffer;
+	} catch (error) {
+		console.error('Gunzip decompression failed:', error);
+		throw error;
+	}
+}
 
 // Send ready message when worker starts
 postMessage({

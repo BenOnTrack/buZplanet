@@ -4,8 +4,10 @@
 	import AuthDialog from '$lib/components/nav/AuthDialog.svelte';
 	import UploadDialog from '$lib/components/nav/UploadDialog.svelte';
 	import { getWorker, terminateWorker } from '$lib/utils/worker';
+	import { createProtocolHandler } from '$lib/utils/map/protocol-handler';
 	import { onMount, onDestroy } from 'svelte';
-
+	import maplibregl from "maplibre-gl"
+	
 	// Import dev tools in development
 	if (import.meta.env.DEV) {
 		import('$lib/utils/worker/dev-tools');
@@ -22,7 +24,7 @@
 		console.log(message);
 	}
 
-	// Initialize worker when component mounts
+	// Initialize worker and protocol handler when component mounts
 	onMount(async () => {
 		try {
 			addLog('🔄 Initializing worker...');
@@ -56,6 +58,28 @@
 				}
 			}
 			
+			// Scan and index databases
+			try {
+				addLog('🔄 Scanning and indexing databases...');
+				const scanResult = await worker.sendMessage('scan-databases');
+				addLog(`✅ Database scan complete: ${scanResult.successfulDbs}/${scanResult.totalFiles} databases loaded`);
+				if (scanResult.corruptedFiles.length > 0) {
+					addLog(`⚠️ Corrupted files removed: ${scanResult.corruptedFiles.join(', ')}`);
+				}
+			} catch (scanError) {
+				addLog(`⚠️ Database scan failed: ${scanError instanceof Error ? scanError.message : 'Unknown error'}`);
+			}
+			
+			// Register MBTiles protocol handler
+			try {
+				addLog('🔄 Registering MBTiles protocol handler...');
+				const protocolHandler = createProtocolHandler(worker);
+				maplibregl.addProtocol('mbtiles', protocolHandler);
+				addLog('✅ MBTiles protocol handler registered!');
+			} catch (protocolError) {
+				addLog(`❌ Protocol handler registration failed: ${protocolError instanceof Error ? protocolError.message : 'Unknown error'}`);
+			}
+			
 			// Test ping
 			const pingResponse = await worker.ping();
 			addLog(`✅ Ping response: ${pingResponse}`);
@@ -65,7 +89,7 @@
 			addLog(`✅ Task response: ${taskResponse}`);
 			
 			workerStatus = 'working';
-			addLog('🎉 Worker fully initialized and tested!');
+			addLog('🎉 Worker and protocol handler fully initialized!');
 			
 		} catch (error) {
 			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -92,6 +116,14 @@
 			
 			const taskResponse = await worker.processTask(`Test task at ${new Date().toLocaleTimeString()}`);
 			addLog(`✅ Test task: ${taskResponse}`);
+			
+			// Test tile request if databases are available
+			try {
+				const testTile = await worker.requestTile('basemap', 0, 0, 0);
+				addLog(`✅ Test tile request: ${testTile.byteLength} bytes`);
+			} catch (tileError) {
+				addLog(`ℹ️ Tile test skipped (no basemap.mbtiles found): ${tileError instanceof Error ? tileError.message : 'Unknown error'}`);
+			}
 			
 		} catch (error) {
 			const errorMsg = error instanceof Error ? error.message : 'Unknown error';

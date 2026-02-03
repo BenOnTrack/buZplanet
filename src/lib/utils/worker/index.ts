@@ -139,6 +139,10 @@ export class WorkerManager {
 		return this.sendMessage('task', taskData);
 	}
 
+	async requestTile(source: string, z: number, x: number, y: number): Promise<ArrayBuffer> {
+		return this.sendMessage('tile-request', { source, z, x, y });
+	}
+
 	postMessage(type: string, data?: any): void {
 		if (!this.worker) {
 			throw new Error('Worker not initialized');

@@ -86,7 +86,7 @@
 				'background-color': '#FBF2E7'
 			}}
 		></BackgroundLayer>
-		<!-- <BasemapVectorTileSource /> -->
+		<BasemapVectorTileSource />
 	</MapLibre>
 </div>
 
