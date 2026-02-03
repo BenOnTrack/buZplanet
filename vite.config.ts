@@ -35,7 +35,13 @@ export default defineConfig({
     },
 	},
 	preview: {
-		port: 5600
+		port: 5600,
+		// Also add headers for preview mode
+		headers: {
+      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Access-Control-Allow-Origin": "*",
+    },
 	},
 	optimizeDeps: {
     exclude: ["@sqlite.org/sqlite-wasm"],
