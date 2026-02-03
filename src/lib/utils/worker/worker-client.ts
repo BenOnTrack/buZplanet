@@ -72,7 +72,7 @@ export class SqliteWorkerClient {
     }
 
     // Initialize SQLite and OPFS
-    async initialize(): Promise<string> {
+    async initialize(): Promise<{message: string; opfsFiles: string[]}> {
         return this.sendMessage('init');
     }
 
@@ -138,7 +138,9 @@ export class SqliteWorkerClient {
 const workerClient = new SqliteWorkerClient('/src/lib/utils/worker/worker.ts');
 
 // Initialize
-await workerClient.initialize();
+const initResult = await workerClient.initialize();
+console.log('Initialization result:', initResult.message);
+console.log('OPFS .mbtiles files found:', initResult.opfsFiles);
 
 // Scan databases
 const scanResult = await workerClient.scanDatabases();

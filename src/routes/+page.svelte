@@ -40,7 +40,21 @@
 				appVersion: '1.0.0',
 				timestamp: Date.now()
 			});
-			addLog(`✅ Init response: ${initResponse}`);
+			
+			// Handle both string and object responses for backwards compatibility
+			if (typeof initResponse === 'string') {
+				addLog(`✅ Init response: ${initResponse}`);
+			} else {
+				addLog(`✅ Init response: ${initResponse.message}`);
+				addLog(`📂 OPFS .mbtiles files found: ${initResponse.opfsFiles.length}`);
+				if (initResponse.opfsFiles.length > 0) {
+					initResponse.opfsFiles.forEach(file => {
+						addLog(`  📄 ${file}`);
+					});
+				} else {
+					addLog('  📄 No .mbtiles files found in OPFS');
+				}
+			}
 			
 			// Test ping
 			const pingResponse = await worker.ping();

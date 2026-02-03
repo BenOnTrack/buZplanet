@@ -55,9 +55,15 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 			case 'init':
 				// Initialize SQLite and OPFS
 				await initializeSqlite();
+				// Check and log all OPFS .mbtiles files
+				const opfsFiles = await listOpfsMbtilesFiles();
+				console.log('🗂️ OPFS .mbtiles files found during initialization:', opfsFiles);
 				postMessage({
 					type: 'initialized',
-					data: 'SQLite and OPFS initialized',
+					data: {
+						message: 'SQLite and OPFS initialized',
+						opfsFiles: opfsFiles
+					},
 					id
 				} satisfies WorkerResponse);
 				break;
@@ -168,6 +174,31 @@ async function initializeSqlite(): Promise<void> {
 		console.log('✅ SQLite and OPFS initialized successfully');
 	} catch (error) {
 		console.error('❌ Failed to initialize SQLite:', error);
+		throw error;
+	}
+}
+
+// List all .mbtiles files in OPFS root directory
+async function listOpfsMbtilesFiles(): Promise<string[]> {
+	if (!opfsRoot) {
+		throw new Error('OPFS not initialized');
+	}
+	
+	const mbtilesFiles: string[] = [];
+	
+	try {
+		// Iterate through all entries in OPFS root
+		for await (const [name, handle] of (opfsRoot as any).entries()) {
+			if (name.endsWith('.mbtiles') && handle.kind === 'file') {
+				mbtilesFiles.push(name);
+			}
+		}
+		
+		console.log(`📂 Found ${mbtilesFiles.length} .mbtiles files in OPFS root:`, mbtilesFiles);
+		return mbtilesFiles;
+		
+	} catch (error) {
+		console.error('❌ Error listing OPFS .mbtiles files:', error);
 		throw error;
 	}
 }

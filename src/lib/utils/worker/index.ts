@@ -131,7 +131,7 @@ export class WorkerManager {
 		return this.sendMessage('ping');
 	}
 
-	async initializeWorker(initData?: any): Promise<string> {
+	async initializeWorker(initData?: any): Promise<{message: string; opfsFiles: string[]}> {
 		return this.sendMessage('init', initData);
 	}
 
