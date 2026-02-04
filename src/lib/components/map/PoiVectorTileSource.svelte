@@ -247,8 +247,8 @@
 	></HeatmapLayer>
 	<!-- facility -->
 	<HeatmapLayer
-		id="heat_faciliy"
-		sourceLayer={'poi_faciliy'}
+		id="heat_facility"
+		sourceLayer={'poi_facility'}
 		layout={{ visibility: 'none' }}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -696,32 +696,30 @@
 		id="poi_place_minor"
 		sourceLayer={'poi_place'}
 		filter={[
+			'!',
 			[
-				'!',
+				'in',
+				['get', 'category'],
 				[
-					'in',
-					['get', 'category'],
+					'literal',
 					[
-						'literal',
-						[
-							'continent',
-							'country',
-							'county',
-							'district',
-							'island',
-							'islet',
-							'locality',
-							'municipality',
-							'ocean',
-							'province',
-							'region',
-							'sea',
-							'state',
-							'subdistrict',
-							'city',
-							'town',
-							'capital'
-						]
+						'continent',
+						'country',
+						'county',
+						'district',
+						'island',
+						'islet',
+						'locality',
+						'municipality',
+						'ocean',
+						'province',
+						'region',
+						'sea',
+						'state',
+						'subdistrict',
+						'city',
+						'town',
+						'capital'
 					]
 				]
 			]
@@ -771,30 +769,28 @@
 		id="poi_place_major"
 		sourceLayer={'poi_place'}
 		filter={[
+			'in',
+			['get', 'category'],
 			[
-				'in',
-				['get', 'category'],
+				'literal',
 				[
-					'literal',
-					[
-						'continent',
-						'country',
-						'county',
-						'district',
-						'island',
-						'islet',
-						'locality',
-						'municipality',
-						'ocean',
-						'province',
-						'region',
-						'sea',
-						'state',
-						'subdistrict',
-						'city',
-						'town',
-						'capital'
-					]
+					'continent',
+					'country',
+					'county',
+					'district',
+					'island',
+					'islet',
+					'locality',
+					'municipality',
+					'ocean',
+					'province',
+					'region',
+					'sea',
+					'state',
+					'subdistrict',
+					'city',
+					'town',
+					'capital'
 				]
 			]
 		]}

@@ -3,6 +3,7 @@
 	import BottomNavigation from '$lib/components/nav/BottomNavigation.svelte';
 	import AuthDialog from '$lib/components/nav/AuthDialog.svelte';
 	import UploadDialog from '$lib/components/nav/UploadDialog.svelte';
+	import SettingsDialog from '$lib/components/nav/SettingsDialog.svelte';
 	import LoadingScreen from '$lib/components/LoadingScreen.svelte';
 	import { terminateWorker } from '$lib/utils/worker';
 	import { appInitializer } from '$lib/utils/app-initialization';
@@ -121,6 +122,7 @@
 	{:else}
 		<AuthDialog />
 		<UploadDialog />
+		<SettingsDialog />
 		<MapView ready={isAppReady} />
 		<BottomNavigation />
 	{/if}
