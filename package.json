@@ -1,11 +1,13 @@
 {
 	"name": "buzplanet",
 	"private": true,
-	"version": "0.0.15",
+	"version": "0.0.16",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
+		"dev:vite": "vite dev",
 		"build": "vite build",
+		"build:dev": "vite build --mode development",
 		"preview": "wrangler pages dev .svelte-kit/cloudflare --compatibility-date=2024-12-19 --compatibility-flags=nodejs_compat --port 4173",
 		"prepare": "husky",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
