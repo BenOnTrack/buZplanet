@@ -2,6 +2,7 @@
 	import { Dialog, Separator, Tabs } from 'bits-ui';
 	import X from 'phosphor-svelte/lib/X';
 	import Gear from 'phosphor-svelte/lib/Gear';
+	import ColorsSettings from '$lib/components/settings/ColorsSettings.svelte';
 </script>
 
 <Dialog.Root>
@@ -57,16 +58,13 @@
 							>Tab3</Tabs.Trigger
 						>
 					</Tabs.List>
-					<Tabs.Content value="colors" class="pt-3 select-none">
-						<div class="p-4">
-							<h4 class="mb-2 text-[20px] leading-none font-semibold tracking-[-0.01em]">
-								Tab 1 Content
-							</h4>
-							<p class="text-muted-foreground text-sm">This is the content for the first tab.</p>
+					<Tabs.Content value="colors" class="pt-3">
+						<div class="max-h-[60vh] overflow-y-auto px-1">
+							<ColorsSettings />
 						</div>
 					</Tabs.Content>
 					<Tabs.Content value="tab2" class="pt-3 select-none">
-						<div class="p-4">
+						<div class="max-h-[60vh] overflow-y-auto p-4">
 							<h4 class="mb-2 text-[20px] leading-none font-semibold tracking-[-0.01em]">
 								Tab 2 Content
 							</h4>
@@ -74,7 +72,7 @@
 						</div>
 					</Tabs.Content>
 					<Tabs.Content value="tab3" class="pt-3 select-none">
-						<div class="p-4">
+						<div class="max-h-[60vh] overflow-y-auto p-4">
 							<h4 class="mb-2 text-[20px] leading-none font-semibold tracking-[-0.01em]">
 								Tab 3 Content
 							</h4>

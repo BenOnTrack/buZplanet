@@ -2,143 +2,236 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { VectorTileSource, HeatmapLayer, SymbolLayer, FillLayer } from 'svelte-maplibre';
+	import { appState } from '$lib/stores/AppState.svelte.js';
+	import { onMount } from 'svelte';
 
-	let iconImage = $state({
-		attraction: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		education: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		entertainment: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		facility: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		food_and_drink: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		healthcare: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		leisure: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		lodging: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		natural: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		place: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		route: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		shop: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-bright-',
-			'teal'
-		],
-		transportation: [
-			'case',
-			['has', 'relationChildId'],
-			[
+	// Track initialization
+	let isInitialized = $state(false);
+
+	// Initialize on mount
+	onMount(async () => {
+		await appState.ensureInitialized();
+		isInitialized = true;
+	});
+
+	// Reactive icon image expressions that use colors from AppState
+	const iconImage = $derived(() => {
+		if (!isInitialized) {
+			// Return default values during initialization
+			return {
+				attraction: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'teal'
+				],
+				education: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'stone'
+				],
+				entertainment: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'fuchsia'
+				],
+				facility: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'zinc'
+				],
+				food_and_drink: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'amber'
+				],
+				healthcare: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'red'
+				],
+				leisure: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'blue'
+				],
+				lodging: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'slate'
+				],
+				natural: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'green'
+				],
+				place: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'neutral'
+				],
+				route: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'indigo'
+				],
+				shop: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					'rose'
+				],
+				transportation: [
+					'case',
+					['has', 'relationChildId'],
+					[
+						'concat',
+						'super-',
+						['to-string', ['get', 'class']],
+						'-',
+						['to-string', ['get', 'subclass']],
+						'-',
+						['to-string', ['get', 'category']],
+						'-bright-',
+						'sky'
+					],
+					[
+						'concat',
+						['to-string', ['get', 'class']],
+						'-',
+						['to-string', ['get', 'subclass']],
+						'-',
+						['to-string', ['get', 'category']],
+						'-bright-',
+						'sky'
+					]
+				],
+				bookmarks: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-dark-',
+					'blue'
+				],
+				visited: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-dark-',
+					'green'
+				],
+				todo: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-dark-',
+					'red'
+				],
+				followed: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-dark-',
+					'purple'
+				],
+				search: [
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-dark-',
+					'yellow'
+				]
+			};
+		}
+
+		// Get current color mappings from AppState
+		const colorMappings = appState.colorMappings;
+
+		return {
+			attraction: [
 				'concat',
-				'super-',
 				['to-string', ['get', 'class']],
 				'-',
 				['to-string', ['get', 'subclass']],
 				'-',
 				['to-string', ['get', 'category']],
 				'-bright-',
-				'teal'
+				colorMappings.attraction
 			],
-			[
+			education: [
 				'concat',
 				['to-string', ['get', 'class']],
 				'-',
@@ -146,59 +239,184 @@
 				'-',
 				['to-string', ['get', 'category']],
 				'-bright-',
-				'teal'
+				colorMappings.education
+			],
+			entertainment: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.entertainment
+			],
+			facility: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.facility
+			],
+			food_and_drink: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.food_and_drink
+			],
+			healthcare: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.healthcare
+			],
+			leisure: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.leisure
+			],
+			lodging: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.lodging
+			],
+			natural: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.natural
+			],
+			place: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.place
+			],
+			route: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.route
+			],
+			shop: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-bright-',
+				colorMappings.shop
+			],
+			transportation: [
+				'case',
+				['has', 'relationChildId'],
+				[
+					'concat',
+					'super-',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					colorMappings.transportation
+				],
+				[
+					'concat',
+					['to-string', ['get', 'class']],
+					'-',
+					['to-string', ['get', 'subclass']],
+					'-',
+					['to-string', ['get', 'category']],
+					'-bright-',
+					colorMappings.transportation
+				]
+			],
+			bookmarks: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-dark-',
+				colorMappings.bookmarks
+			],
+			visited: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-dark-',
+				colorMappings.visited
+			],
+			todo: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-dark-',
+				colorMappings.todo
+			],
+			followed: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-dark-',
+				colorMappings.followed
+			],
+			search: [
+				'concat',
+				['to-string', ['get', 'class']],
+				'-',
+				['to-string', ['get', 'subclass']],
+				'-',
+				['to-string', ['get', 'category']],
+				'-dark-',
+				colorMappings.search
 			]
-		],
-		bookmarks: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-dark-',
-			'teal'
-		],
-		visited: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-dark-',
-			'teal'
-		],
-		todo: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-dark-',
-			'teal'
-		],
-		followed: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-dark-',
-			'teal'
-		],
-		search: [
-			'concat',
-			['to-string', ['get', 'class']],
-			'-',
-			['to-string', ['get', 'subclass']],
-			'-',
-			['to-string', ['get', 'category']],
-			'-dark-',
-			'teal'
-		]
+		};
 	});
 </script>
 
@@ -388,7 +606,7 @@
 		sourceLayer={'poi_attraction'}
 		minzoom={13.5}
 		layout={{
-			'icon-image': iconImage.attraction,
+			'icon-image': iconImage().attraction,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -416,7 +634,7 @@
 		sourceLayer={'poi_education'}
 		minzoom={17}
 		layout={{
-			'icon-image': iconImage.education,
+			'icon-image': iconImage().education,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -444,7 +662,7 @@
 		sourceLayer={'poi_entertainment'}
 		minzoom={16}
 		layout={{
-			'icon-image': iconImage.entertainment,
+			'icon-image': iconImage().entertainment,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -472,7 +690,7 @@
 		sourceLayer={'poi_facility'}
 		minzoom={18}
 		layout={{
-			'icon-image': iconImage.facility,
+			'icon-image': iconImage().facility,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -500,7 +718,7 @@
 		sourceLayer={'poi_food_and_drink'}
 		minzoom={14}
 		layout={{
-			'icon-image': iconImage.food_and_drink,
+			'icon-image': iconImage().food_and_drink,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -528,7 +746,7 @@
 		sourceLayer={'poi_healthcare'}
 		minzoom={15}
 		layout={{
-			'icon-image': iconImage.healthcare,
+			'icon-image': iconImage().healthcare,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -556,7 +774,7 @@
 		sourceLayer={'poi_leisure'}
 		minzoom={10}
 		layout={{
-			'icon-image': iconImage.leisure,
+			'icon-image': iconImage().leisure,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -584,7 +802,7 @@
 		sourceLayer={'poi_lodging'}
 		minzoom={14}
 		layout={{
-			'icon-image': iconImage.lodging,
+			'icon-image': iconImage().lodging,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -612,7 +830,7 @@
 		sourceLayer={'poi_natural'}
 		minzoom={8}
 		layout={{
-			'icon-image': iconImage.natural,
+			'icon-image': iconImage().natural,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -640,7 +858,7 @@
 		sourceLayer={'poi_shop'}
 		minzoom={17}
 		layout={{
-			'icon-image': iconImage.shop,
+			'icon-image': iconImage().shop,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -668,7 +886,7 @@
 		sourceLayer={'poi_transportation'}
 		minzoom={15.5}
 		layout={{
-			'icon-image': iconImage.transportation,
+			'icon-image': iconImage().transportation,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': [
@@ -725,7 +943,7 @@
 			]
 		]}
 		layout={{
-			'icon-image': iconImage.place,
+			'icon-image': iconImage().place,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']],
@@ -795,7 +1013,7 @@
 			]
 		]}
 		layout={{
-			'icon-image': iconImage.place,
+			'icon-image': iconImage().place,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']],

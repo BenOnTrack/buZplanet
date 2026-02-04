@@ -7,13 +7,60 @@ export interface MapViewState {
 	pitch?: number;
 }
 
+export interface ColorMappings {
+	// Map feature categories
+	attraction: string;
+	education: string;
+	entertainment: string;
+	facility: string;
+	food_and_drink: string;
+	healthcare: string;
+	leisure: string;
+	lodging: string;
+	natural: string;
+	place: string;
+	route: string;
+	shop: string;
+	transportation: string;
+	// User action categories
+	bookmarks: string;
+	visited: string;
+	todo: string;
+	followed: string;
+	search: string;
+}
+
 export interface AppConfig {
 	mapView: MapViewState;
+	colorMappings: ColorMappings;
 	// Future config properties can be added here
 	// theme?: string;
 	// selectedLayers?: string[];
 	// userPreferences?: Record<string, any>;
 }
+
+const DEFAULT_COLOR_MAPPINGS: ColorMappings = {
+	// Map feature categories
+	attraction: 'teal',
+	education: 'stone',
+	entertainment: 'fuchsia',
+	facility: 'zinc',
+	food_and_drink: 'amber',
+	healthcare: 'red',
+	leisure: 'blue',
+	lodging: 'slate',
+	natural: 'green',
+	place: 'neutral',
+	route: 'indigo',
+	shop: 'rose',
+	transportation: 'sky',
+	// User action categories
+	bookmarks: 'blue',
+	visited: 'green',
+	todo: 'red',
+	followed: 'purple',
+	search: 'yellow'
+};
 
 const DEFAULT_CONFIG: AppConfig = {
 	mapView: {
@@ -21,7 +68,8 @@ const DEFAULT_CONFIG: AppConfig = {
 		zoom: 2,
 		bearing: 0,
 		pitch: 0
-	}
+	},
+	colorMappings: DEFAULT_COLOR_MAPPINGS
 };
 
 /**
@@ -30,8 +78,9 @@ const DEFAULT_CONFIG: AppConfig = {
  * Only initializes in browser environment
  */
 class AppState {
-	// Reactive state for current configuration
-	private _config = $state<AppConfig>(DEFAULT_CONFIG);
+	// Separate reactive states to prevent cross-triggers
+	private _mapView = $state<MapViewState>(DEFAULT_CONFIG.mapView);
+	private _colorMappings = $state<ColorMappings>(DEFAULT_CONFIG.colorMappings);
 
 	// Storage key for IndexedDB
 	private readonly STORAGE_KEY = 'app-config';
@@ -53,14 +102,22 @@ class AppState {
 		}
 	}
 
-	// Getter for the current configuration
+	// Getter for the current configuration (computed from separate states)
 	get config(): AppConfig {
-		return this._config;
+		return {
+			mapView: this._mapView,
+			colorMappings: this._colorMappings
+		};
 	}
 
 	// Getter for map view state
 	get mapView(): MapViewState {
-		return this._config.mapView;
+		return this._mapView;
+	}
+
+	// Getter for color mappings
+	get colorMappings(): ColorMappings {
+		return this._colorMappings;
 	}
 
 	// Getter for initialization status
@@ -144,8 +201,15 @@ class AppState {
 			});
 
 			if (result && result.value) {
-				// Merge saved config with defaults to ensure all properties exist
-				this._config = { ...DEFAULT_CONFIG, ...result.value };
+				// Load and merge saved config with defaults, updating separate states
+				this._mapView = {
+					...DEFAULT_CONFIG.mapView,
+					...result.value.mapView
+				};
+				this._colorMappings = {
+					...DEFAULT_COLOR_MAPPINGS,
+					...result.value.colorMappings
+				};
 			}
 		} catch (error) {
 			console.error('Failed to load config:', error);
@@ -166,11 +230,12 @@ class AppState {
 			// Create a plain object copy to avoid cloning issues with Svelte state
 			const plainConfig: AppConfig = {
 				mapView: {
-					center: [...this._config.mapView.center] as [number, number],
-					zoom: this._config.mapView.zoom,
-					bearing: this._config.mapView.bearing,
-					pitch: this._config.mapView.pitch
-				}
+					center: [...this._mapView.center] as [number, number],
+					zoom: this._mapView.zoom,
+					bearing: this._mapView.bearing,
+					pitch: this._mapView.pitch
+				},
+				colorMappings: { ...this._colorMappings }
 			};
 
 			await new Promise<void>((resolve, reject) => {
@@ -192,13 +257,10 @@ class AppState {
 	 * Update map view state
 	 */
 	updateMapView(mapView: Partial<MapViewState>): void {
-		// Create a new config object to ensure reactivity
-		this._config = {
-			...this._config,
-			mapView: {
-				...this._config.mapView,
-				...mapView
-			}
+		// Update map view state directly (isolated from color mappings)
+		this._mapView = {
+			...this._mapView,
+			...mapView
 		};
 		this.saveConfig(); // Auto-save changes
 	}
@@ -232,6 +294,33 @@ class AppState {
 	}
 
 	/**
+	 * Update color mapping for a specific category (isolated from map view)
+	 */
+	updateColorMapping(categoryKey: string, colorName: string): void {
+		// Update color mappings directly without affecting map view
+		this._colorMappings = {
+			...this._colorMappings,
+			[categoryKey]: colorName
+		};
+		this.saveConfig(); // Auto-save changes
+	}
+
+	/**
+	 * Reset color mappings to defaults
+	 */
+	resetColorMappings(): void {
+		this._colorMappings = { ...DEFAULT_COLOR_MAPPINGS };
+		this.saveConfig();
+	}
+
+	/**
+	 * Get color for a specific category
+	 */
+	getCategoryColor(categoryKey: string): string {
+		return this._colorMappings[categoryKey as keyof ColorMappings] || 'neutral';
+	}
+
+	/**
 	 * Ensure storage is initialized before operations
 	 * Useful for ensuring state is ready before use
 	 */
@@ -247,7 +336,8 @@ class AppState {
 	 * Reset to default configuration
 	 */
 	async reset(): Promise<void> {
-		this._config = { ...DEFAULT_CONFIG };
+		this._mapView = { ...DEFAULT_CONFIG.mapView };
+		this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
 		await this.saveConfig();
 	}
 
@@ -255,7 +345,7 @@ class AppState {
 	 * Get configuration as plain object (for debugging)
 	 */
 	export(): AppConfig {
-		return JSON.parse(JSON.stringify(this._config));
+		return JSON.parse(JSON.stringify(this.config));
 	}
 
 	/**
@@ -263,7 +353,14 @@ class AppState {
 	 */
 	async import(config: Partial<AppConfig>): Promise<void> {
 		await this.ensureInitialized();
-		this._config = { ...DEFAULT_CONFIG, ...config };
+		this._mapView = {
+			...DEFAULT_CONFIG.mapView,
+			...config.mapView
+		};
+		this._colorMappings = {
+			...DEFAULT_COLOR_MAPPINGS,
+			...config.colorMappings
+		};
 		await this.saveConfig();
 	}
 }
