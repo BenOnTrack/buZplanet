@@ -17,6 +17,7 @@
 	import BasemapVectorTileSource from '$lib/components/map/BasemapVectorTileSource.svelte';
 	import BuildingVectorTileSource from '$lib/components/map/BuildingVectorTileSource.svelte';
 	import TransportationVectorTileSource from '$lib/components/map/TransportationVectorTileSource.svelte';
+	import PoiVectorTileSource from './PoiVectorTileSource.svelte';
 
 	interface Props {
 		ready?: boolean;
@@ -229,6 +230,7 @@
 			<BasemapVectorTileSource />
 			<TransportationVectorTileSource />
 			<BuildingVectorTileSource />
+			<PoiVectorTileSource />
 		</MapLibre>
 	{:else}
 		<div class="map-placeholder">
