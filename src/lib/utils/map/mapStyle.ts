@@ -25,8 +25,6 @@ export function createMapStyle(origin: string): StyleSpecification {
 		// Sprite path - MapLibre expects the base path without extension
 		// This will automatically look for busyplanet.json, busyplanet.png, busyplanet@2x.json, busyplanet@2x.png
 		sprite: `${origin}/sprites/busyplanet`,
-		layers: [
-		
-		]
+		layers: []
 	};
 }

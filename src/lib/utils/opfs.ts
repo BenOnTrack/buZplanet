@@ -43,12 +43,14 @@ export class OPFSManager {
 
 		try {
 			// Use root directory or create/get subdirectory
-			const dirHandle = directory ? await this.root!.getDirectoryHandle(directory, { create: true }) : this.root!;
-			
+			const dirHandle = directory
+				? await this.root!.getDirectoryHandle(directory, { create: true })
+				: this.root!;
+
 			// Generate unique filename if file already exists
 			let filename = file.name;
 			let counter = 1;
-			
+
 			while (await this.fileExists(dirHandle, filename)) {
 				const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
 				const ext = file.name.match(/\.[^/.]+$/)?.[0] || '';
@@ -58,7 +60,7 @@ export class OPFSManager {
 
 			// Create file handle
 			const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-			
+
 			// Create writable stream and write file
 			const writable = await fileHandle.createWritable();
 			await writable.write(file);
@@ -73,7 +75,10 @@ export class OPFSManager {
 	/**
 	 * Check if a file exists in the given directory
 	 */
-	private async fileExists(dirHandle: FileSystemDirectoryHandle, filename: string): Promise<boolean> {
+	private async fileExists(
+		dirHandle: FileSystemDirectoryHandle,
+		filename: string
+	): Promise<boolean> {
 		try {
 			await dirHandle.getFileHandle(filename);
 			return true;
@@ -96,14 +101,14 @@ export class OPFSManager {
 			// Use root directory or get subdirectory
 			const dirHandle = directory ? await this.root!.getDirectoryHandle(directory) : this.root!;
 			const files: string[] = [];
-			
+
 			// TypeScript doesn't recognize entries() method but it exists in modern browsers
 			for await (const [name, handle] of (dirHandle as any).entries()) {
 				if (handle.kind === 'file') {
 					files.push(name);
 				}
 			}
-			
+
 			return files;
 		} catch (error) {
 			// Directory doesn't exist or other error
@@ -129,7 +134,7 @@ export class OPFSManager {
 			// Use root directory or get subdirectory
 			const dirHandle = directory ? await this.root!.getDirectoryHandle(directory) : this.root!;
 			const fileHandle = await dirHandle.getFileHandle(filename);
-			
+
 			return await fileHandle.getFile();
 		} catch (error) {
 			return null;
@@ -154,7 +159,7 @@ export class OPFSManager {
 			// Use root directory or get subdirectory
 			const dirHandle = directory ? await this.root!.getDirectoryHandle(directory) : this.root!;
 			await dirHandle.removeEntry(filename);
-			
+
 			return true;
 		} catch (error) {
 			return false;

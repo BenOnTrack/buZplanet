@@ -11,7 +11,7 @@ const config = {
 			register: false // Enable SvelteKit's service worker
 		},
 		alias: {
-			'$paraglide': 'src/paraglide'
+			$paraglide: 'src/paraglide'
 		}
 	}
 };

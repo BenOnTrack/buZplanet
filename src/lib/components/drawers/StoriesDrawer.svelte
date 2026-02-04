@@ -1,21 +1,26 @@
 <script lang="ts">
-	import { Drawer } from "vaul-svelte";
-	import { clsx } from "clsx";
+	import { Drawer } from 'vaul-svelte';
+	import { clsx } from 'clsx';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
-	let activeSnapPoint = $state<string | number>("200px");
+	let activeSnapPoint = $state<string | number>('200px');
 </script>
+
 <!-- Stories Drawer -->
-<Drawer.Root bind:open={open} snapPoints={["200px", "400px", 1]} bind:activeSnapPoint modal={false}>
-	<Drawer.Overlay class="fixed inset-0 bg-black/40 z-60" style="pointer-events: none" />
+<Drawer.Root bind:open snapPoints={['200px', '400px', 1]} bind:activeSnapPoint modal={false}>
+	<Drawer.Overlay class="fixed inset-0 z-60 bg-black/40" style="pointer-events: none" />
 	<Drawer.Portal>
-		<Drawer.Content class="fixed flex flex-col bg-white border border-gray-200 border-b-none rounded-t-[10px] bottom-0 left-0 right-0 h-full max-h-[97%] mx-[-1px] z-60">
-			<div class={clsx("flex flex-col w-full p-4 pt-5", {
-				"overflow-y-auto": activeSnapPoint === 1 || activeSnapPoint === "1",
-				"overflow-hidden": activeSnapPoint !== 1 && activeSnapPoint !== "1",
-			})}>
-				<div class="flex items-center justify-between mb-4">
-					<Drawer.Title class="text-2xl font-medium flex items-center gap-2">
+		<Drawer.Content
+			class="border-b-none fixed right-0 bottom-0 left-0 z-60 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+		>
+			<div
+				class={clsx('flex w-full flex-col p-4 pt-5', {
+					'overflow-y-auto': activeSnapPoint === 1 || activeSnapPoint === '1',
+					'overflow-hidden': activeSnapPoint !== 1 && activeSnapPoint !== '1'
+				})}
+			>
+				<div class="mb-4 flex items-center justify-between">
+					<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
 						<span>📚</span>
 						Stories
 					</Drawer.Title>
@@ -24,41 +29,49 @@
 						<span aria-hidden="true" class="text-xl">✕</span>
 					</Drawer.Close>
 				</div>
-				
-				<p class="text-gray-600 mb-6">Discover amazing stories and adventures from around the world.</p>
-				
+
+				<p class="mb-6 text-gray-600">
+					Discover amazing stories and adventures from around the world.
+				</p>
+
 				<div class="space-y-4">
-					<div class="p-4 bg-gray-50 rounded-lg">
-						<h3 class="font-medium mb-2 flex items-center gap-2">
+					<div class="rounded-lg bg-gray-50 p-4">
+						<h3 class="mb-2 flex items-center gap-2 font-medium">
 							<span class="text-gold-500">🏆</span>
 							Featured Stories
 						</h3>
-						<p class="text-sm text-gray-600">Handpicked tales of adventure, discovery, and human connection.</p>
+						<p class="text-sm text-gray-600">
+							Handpicked tales of adventure, discovery, and human connection.
+						</p>
 					</div>
-					
-					<div class="p-4 bg-gray-50 rounded-lg">
-						<h3 class="font-medium mb-2 flex items-center gap-2">
+
+					<div class="rounded-lg bg-gray-50 p-4">
+						<h3 class="mb-2 flex items-center gap-2 font-medium">
 							<span class="text-blue-500">🌍</span>
 							Travel Stories
 						</h3>
-						<p class="text-sm text-gray-600">Journey through different cultures and breathtaking destinations.</p>
+						<p class="text-sm text-gray-600">
+							Journey through different cultures and breathtaking destinations.
+						</p>
 					</div>
-					
-					<div class="p-4 bg-gray-50 rounded-lg">
-						<h3 class="font-medium mb-2 flex items-center gap-2">
+
+					<div class="rounded-lg bg-gray-50 p-4">
+						<h3 class="mb-2 flex items-center gap-2 font-medium">
 							<span class="text-red-500">❤️</span>
 							Personal Stories
 						</h3>
-						<p class="text-sm text-gray-600">Heartfelt experiences and life-changing moments shared by our community.</p>
+						<p class="text-sm text-gray-600">
+							Heartfelt experiences and life-changing moments shared by our community.
+						</p>
 					</div>
 				</div>
-				
-				<button class="bg-black text-white mt-8 rounded-md h-12 flex-shrink-0 font-medium">
+
+				<button class="mt-8 h-12 flex-shrink-0 rounded-md bg-black font-medium text-white">
 					Read Stories
 				</button>
-				
+
 				<div class="mt-8">
-					<h2 class="text-xl font-medium mb-4">Recent Stories</h2>
+					<h2 class="mb-4 text-xl font-medium">Recent Stories</h2>
 					<div class="space-y-4">
 						<div>
 							<span class="block font-medium">The Mountain That Changed Everything</span>
@@ -75,6 +88,6 @@
 					</div>
 				</div>
 			</div>
-	</Drawer.Content>
+		</Drawer.Content>
 	</Drawer.Portal>
 </Drawer.Root>

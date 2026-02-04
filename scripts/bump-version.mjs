@@ -16,19 +16,19 @@ const bumpType = process.argv[2] || 'patch';
 
 // Increment version based on type
 switch (bumpType) {
-  case 'major':
-    major += 1;
-    minor = 0;
-    patch = 0;
-    break;
-  case 'minor':
-    minor += 1;
-    patch = 0;
-    break;
-  case 'patch':
-  default:
-    patch += 1;
-    break;
+	case 'major':
+		major += 1;
+		minor = 0;
+		patch = 0;
+		break;
+	case 'minor':
+		minor += 1;
+		patch = 0;
+		break;
+	case 'patch':
+	default:
+		patch += 1;
+		break;
 }
 
 const newVersion = `${major}.${minor}.${patch}`;
@@ -42,9 +42,9 @@ console.log(`📝 Updated package.json`);
 
 // Try to create a git commit (if git is available and this is a git repo)
 try {
-  execSync('git add package.json', { stdio: 'inherit' });
-  execSync(`git commit -m "chore: bump version to ${newVersion}"`, { stdio: 'inherit' });
-  console.log(`📦 Git commit created for version ${newVersion}`);
+	execSync('git add package.json', { stdio: 'inherit' });
+	execSync(`git commit -m "chore: bump version to ${newVersion}"`, { stdio: 'inherit' });
+	console.log(`📦 Git commit created for version ${newVersion}`);
 } catch (error) {
-  console.log('ℹ️  Git commit skipped (not a git repo or git not available)');
+	console.log('ℹ️  Git commit skipped (not a git repo or git not available)');
 }

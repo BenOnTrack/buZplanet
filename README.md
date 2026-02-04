@@ -8,7 +8,7 @@ This project was created with Svelte's CLI and configured for Cloudflare Pages d
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - npm or pnpm
 - Git (for version control)
 - Cloudflare account (for deployment)
@@ -52,7 +52,8 @@ npx sv create buZplanet
 ```
 
 During setup, the following options were selected:
-- **Template**: minimal 
+
+- **Template**: minimal
 - **TypeScript**: Yes
 - **Add-ons**:
   - Paraglide (i18n): `languageTags:en, fr, es+demo:no`
@@ -74,7 +75,7 @@ pages_build_output_dir = ".svelte-kit/cloudflare"
 [env.production]
 vars = {}
 
-[env.preview] 
+[env.preview]
 vars = {}
 ```
 
@@ -90,6 +91,7 @@ wrangler login
 #### Created Version Bump Script
 
 Created `scripts/bump-version.mjs` for semantic versioning:
+
 - Supports `patch`, `minor`, and `major` version bumps
 - Updates `package.json` automatically
 - Creates git commits for version changes
@@ -101,15 +103,15 @@ Added the following scripts to `package.json`:
 
 ```json
 {
-  "scripts": {
-    "deploy": "npm run version:patch && npm run build && wrangler pages deploy .svelte-kit/cloudflare",
-    "deploy:production": "npm run version:patch && npm run build && wrangler pages deploy --env production", 
-    "version:patch": "node scripts/bump-version.mjs patch",
-    "version:minor": "node scripts/bump-version.mjs minor",
-    "version:major": "node scripts/bump-version.mjs major",
-    "preview": "wrangler pages dev .svelte-kit/cloudflare --compatibility-date=2024-12-19 --compatibility-flags=nodejs_compat --port 4173",
-    "gen": "wrangler types"
-  }
+	"scripts": {
+		"deploy": "npm run version:patch && npm run build && wrangler pages deploy .svelte-kit/cloudflare",
+		"deploy:production": "npm run version:patch && npm run build && wrangler pages deploy --env production",
+		"version:patch": "node scripts/bump-version.mjs patch",
+		"version:minor": "node scripts/bump-version.mjs minor",
+		"version:major": "node scripts/bump-version.mjs major",
+		"preview": "wrangler pages dev .svelte-kit/cloudflare --compatibility-date=2024-12-19 --compatibility-flags=nodejs_compat --port 4173",
+		"gen": "wrangler types"
+	}
 }
 ```
 
@@ -130,26 +132,27 @@ Added the following scripts to `package.json`:
 
 ## 🛠 Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server on localhost:5600 |
-| `npm run build` | Build for production |
-| `npm run preview` | Preview build using Wrangler |
-| `npm run deploy` | Bump patch version, build, and deploy |
-| `npm run deploy:production` | Deploy to production environment |
-| `npm run version:patch` | Bump patch version (0.0.1 → 0.0.2) |
-| `npm run version:minor` | Bump minor version (0.1.0 → 0.2.0) |
-| `npm run version:major` | Bump major version (1.0.0 → 2.0.0) |
-| `npm run gen` | Generate Cloudflare types |
-| `npm run check` | Run Svelte type checking |
-| `npm run lint` | Check code formatting |
-| `npm run format` | Format code with Prettier |
+| Script                      | Description                                |
+| --------------------------- | ------------------------------------------ |
+| `npm run dev`               | Start development server on localhost:5600 |
+| `npm run build`             | Build for production                       |
+| `npm run preview`           | Preview build using Wrangler               |
+| `npm run deploy`            | Bump patch version, build, and deploy      |
+| `npm run deploy:production` | Deploy to production environment           |
+| `npm run version:patch`     | Bump patch version (0.0.1 → 0.0.2)         |
+| `npm run version:minor`     | Bump minor version (0.1.0 → 0.2.0)         |
+| `npm run version:major`     | Bump major version (1.0.0 → 2.0.0)         |
+| `npm run gen`               | Generate Cloudflare types                  |
+| `npm run check`             | Run Svelte type checking                   |
+| `npm run lint`              | Check code formatting                      |
+| `npm run format`            | Format code with Prettier                  |
 
 ## 🌍 Internationalization
 
 This project uses Paraglide for i18n with support for:
+
 - English (en)
-- French (fr) 
+- French (fr)
 - Spanish (es)
 
 Translation files are managed in the `project.inlang/` directory.
@@ -187,7 +190,7 @@ Version bumping is automated through custom scripts:
 # Patch version (bug fixes): 0.0.1 → 0.0.2
 npm run version:patch
 
-# Minor version (new features): 0.1.0 → 0.2.0  
+# Minor version (new features): 0.1.0 → 0.2.0
 npm run version:minor
 
 # Major version (breaking changes): 1.0.0 → 2.0.0
@@ -195,6 +198,7 @@ npm run version:major
 ```
 
 Each version bump:
+
 - Updates `package.json`
 - Creates a git commit
 - Can be combined with deployment
@@ -209,7 +213,7 @@ buzplanet/
 │   └── bump-version.mjs   # Version management
 ├── project.inlang/        # Internationalization
 ├── wrangler.toml         # Cloudflare configuration
-├── vite.config.ts        # Vite configuration  
+├── vite.config.ts        # Vite configuration
 ├── svelte.config.js      # Svelte configuration
 └── package.json          # Dependencies and scripts
 ```

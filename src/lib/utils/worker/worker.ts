@@ -1,7 +1,7 @@
 // Web Worker TypeScript implementation
 // This worker runs in a separate thread and can communicate with the main thread
-import sqlite3InitModule from "@sqlite.org/sqlite-wasm"
-import type {OpfsDatabase, Sqlite3Static} from "@sqlite.org/sqlite-wasm"
+import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import type { OpfsDatabase, Sqlite3Static } from '@sqlite.org/sqlite-wasm';
 
 export interface WorkerMessage {
 	type: string;
@@ -40,7 +40,7 @@ const openDatabases = new Map<string, OpfsDatabase>();
 // Listen for messages from the main thread
 self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 	const { type, data, id } = event.data;
-	
+
 	try {
 		switch (type) {
 			case 'ping':
@@ -51,7 +51,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 					id
 				} satisfies WorkerResponse);
 				break;
-				
+
 			case 'init':
 				// Initialize SQLite and OPFS
 				await initializeSqlite();
@@ -66,7 +66,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 					id
 				} satisfies WorkerResponse);
 				break;
-				
+
 			case 'scan-databases':
 				// Scan and index all .mbtiles files
 				const scanResult = await scanAndIndexDatabases();
@@ -76,7 +76,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 					id
 				} satisfies WorkerResponse);
 				break;
-				
+
 			case 'query-database':
 				// Execute query on specific database
 				const queryResult = await queryDatabase(data.filename, data.query, data.params);
@@ -86,7 +86,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 					id
 				} satisfies WorkerResponse);
 				break;
-				
+
 			case 'get-databases':
 				// Get list of available databases
 				const databases = getDatabaseList();
@@ -96,7 +96,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 					id
 				} satisfies WorkerResponse);
 				break;
-				
+
 			case 'close-database':
 				// Close specific database
 				closeDatabase(data.filename);
@@ -106,17 +106,22 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 					id
 				} satisfies WorkerResponse);
 				break;
-				
+
 			case 'tile-request':
 				// Handle tile request from protocol handler
 				const tileData = await handleTileRequest(data.source, data.z, data.x, data.y);
-				postMessage({
-					type: 'tile-response',
-					data: tileData,
-					id
-				} satisfies WorkerResponse, [tileData]); // Transfer ArrayBuffer
+				postMessage(
+					{
+						type: 'tile-response',
+						data: tileData,
+						id
+					} satisfies WorkerResponse,
+					{
+						transfer: [tileData]
+					}
+				); // Transfer ArrayBuffer
 				break;
-				
+
 			case 'list-databases':
 				// List all available databases with their metadata
 				const availableDbs = getDatabaseList();
@@ -125,12 +130,12 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 					data: {
 						databases: availableDbs,
 						totalCount: availableDbs.length,
-						filenames: availableDbs.map(db => db.filename)
+						filenames: availableDbs.map((db) => db.filename)
 					},
 					id
 				} satisfies WorkerResponse);
 				break;
-				
+
 			case 'task':
 				// Example task processing
 				// Simulate some work
@@ -141,7 +146,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 					id
 				} satisfies WorkerResponse);
 				break;
-				
+
 			default:
 				// Unknown message type
 				postMessage({
@@ -185,14 +190,14 @@ self.addEventListener('unhandledrejection', (event) => {
 // SQLite initialization
 async function initializeSqlite(): Promise<void> {
 	if (sqlite3) return; // Already initialized
-	
+
 	try {
 		// Initialize SQLite
 		sqlite3 = await sqlite3InitModule();
-		
+
 		// Get OPFS root directory
 		opfsRoot = await navigator.storage.getDirectory();
-		
+
 		// SQLite and OPFS initialized successfully
 	} catch (error) {
 		console.error('❌ Failed to initialize SQLite:', error);
@@ -205,9 +210,9 @@ async function listOpfsMbtilesFiles(): Promise<string[]> {
 	if (!opfsRoot) {
 		throw new Error('OPFS not initialized');
 	}
-	
+
 	const mbtilesFiles: string[] = [];
-	
+
 	try {
 		// Iterate through all entries in OPFS root
 		for await (const [name, handle] of (opfsRoot as any).entries()) {
@@ -215,10 +220,9 @@ async function listOpfsMbtilesFiles(): Promise<string[]> {
 				mbtilesFiles.push(name);
 			}
 		}
-		
+
 		// Found .mbtiles files in OPFS root
 		return mbtilesFiles;
-		
 	} catch (error) {
 		console.error('❌ Error listing OPFS .mbtiles files:', error);
 		throw error;
@@ -235,46 +239,46 @@ async function scanAndIndexDatabases(): Promise<{
 	if (!sqlite3 || !opfsRoot) {
 		throw new Error('SQLite not initialized');
 	}
-	
+
 	// Clear existing index
 	dbIndex.clear();
 	closeAllDatabases();
-	
+
 	const mbtilesList: string[] = [];
 	const corruptedFiles: string[] = [];
-	
+
 	// Find all .mbtiles files
 	for await (const [name, handle] of (opfsRoot as any).entries()) {
 		if (name.endsWith('.mbtiles') && handle.kind === 'file') {
 			mbtilesList.push(name);
 		}
 	}
-	
+
 	// console.log(`Found ${mbtilesList.length} .mbtiles files in OPFS:`, mbtilesList);
-	
+
 	// Process each database
 	for (const filename of mbtilesList) {
 		try {
 			await processDatabaseFile(filename);
-							// Successfully loaded database
+			// Successfully loaded database
 		} catch (error) {
 			console.error(`❌ Failed to load ${filename}:`, error);
 			corruptedFiles.push(filename);
-			
+
 			// Remove corrupted file
 			await removeCorruptedFile(filename);
 		}
 	}
-	
+
 	const result = {
 		totalFiles: mbtilesList.length,
 		successfulDbs: mbtilesList.length - corruptedFiles.length,
 		corruptedFiles,
 		indexKeys: dbIndex.size
 	};
-	
+
 	// console.log('Database scan complete:', result);
-	
+
 	// Notify about corrupted files if any
 	if (corruptedFiles.length > 0) {
 		postMessage({
@@ -285,7 +289,7 @@ async function scanAndIndexDatabases(): Promise<{
 			}
 		} satisfies WorkerResponse);
 	}
-	
+
 	return result;
 }
 
@@ -294,24 +298,24 @@ async function processDatabaseFile(filename: string): Promise<void> {
 	if (!sqlite3 || !opfsRoot) {
 		throw new Error('SQLite not initialized');
 	}
-	
+
 	// Validate file exists and has content
 	const fileHandle = await opfsRoot.getFileHandle(filename, { create: false });
 	const file = await fileHandle.getFile();
-	
+
 	if (file.size === 0) {
 		throw new Error(`File ${filename} is empty`);
 	}
-	
+
 	// console.log(`Processing ${filename}: ${file.size} bytes`);
-	
+
 	// Open database in read-only mode
 	const db: OpfsDatabase = new sqlite3.oo1.OpfsDb(filename, 'r');
-	
+
 	try {
 		// Validate database and get metadata
 		const metadata = await validateAndGetMetadata(db);
-		
+
 		// Create database entry
 		const dbEntry: DatabaseEntry = {
 			db,
@@ -320,7 +324,7 @@ async function processDatabaseFile(filename: string): Promise<void> {
 			maxzoom: metadata.maxzoom,
 			filename
 		};
-		
+
 		// Add to index with multiple keys for easy lookup
 		const indexKeys = generateIndexKeys(dbEntry);
 		for (const key of indexKeys) {
@@ -329,10 +333,9 @@ async function processDatabaseFile(filename: string): Promise<void> {
 			}
 			dbIndex.get(key)!.push(dbEntry);
 		}
-		
+
 		// Keep reference to open database
 		openDatabases.set(filename, db);
-		
 	} catch (error) {
 		db.close();
 		throw error;
@@ -344,19 +347,19 @@ async function validateAndGetMetadata(db: OpfsDatabase): Promise<DatabaseMetadat
 	try {
 		// Check if it's a valid MBTiles database
 		const tables = db.selectArrays("SELECT name FROM sqlite_master WHERE type='table'");
-		const tableNames = tables.map(row => row[0]);
-		
+		const tableNames = tables.map((row) => row[0]);
+
 		if (!tableNames.includes('tiles') || !tableNames.includes('metadata')) {
 			throw new Error('Invalid MBTiles database: missing required tables');
 		}
-		
+
 		// Get metadata
 		const metadata: DatabaseMetadata = {};
 		const metadataRows = db.selectArrays('SELECT name, value FROM metadata');
-		
+
 		for (const [name, value] of metadataRows) {
 			if (value === null || value === undefined) continue;
-			
+
 			switch (name) {
 				case 'bounds':
 					if (typeof value === 'string') {
@@ -380,35 +383,36 @@ async function validateAndGetMetadata(db: OpfsDatabase): Promise<DatabaseMetadat
 					break;
 			}
 		}
-		
+
 		// Verify we can read tiles
 		const tileCount = db.selectValue('SELECT COUNT(*) FROM tiles');
 		if (!tileCount || tileCount === 0) {
 			throw new Error('Database contains no tiles');
 		}
-		
+
 		return metadata;
-		
 	} catch (error) {
-		throw new Error(`Database validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		throw new Error(
+			`Database validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+		);
 	}
 }
 
 // Generate index keys for database lookup
 function generateIndexKeys(dbEntry: DatabaseEntry): string[] {
 	const keys = [dbEntry.filename];
-	
+
 	// Add bounds-based keys if available
 	if (dbEntry.bounds) {
 		const [west, south, east, north] = dbEntry.bounds;
 		keys.push(`bounds_${west}_${south}_${east}_${north}`);
 	}
-	
+
 	// Add zoom-based keys
 	if (dbEntry.minzoom !== undefined && dbEntry.maxzoom !== undefined) {
 		keys.push(`zoom_${dbEntry.minzoom}_${dbEntry.maxzoom}`);
 	}
-	
+
 	return keys;
 }
 
@@ -418,7 +422,7 @@ async function queryDatabase(filename: string, query: string, params?: any[]): P
 	if (!db) {
 		throw new Error(`Database ${filename} not found or not open`);
 	}
-	
+
 	try {
 		if (params) {
 			return db.selectArrays(query, params);
@@ -431,17 +435,17 @@ async function queryDatabase(filename: string, query: string, params?: any[]): P
 }
 
 // Get list of available databases
-function getDatabaseList(): Array<{filename: string; metadata: DatabaseMetadata}> {
-	const databases: Array<{filename: string; metadata: DatabaseMetadata}> = [];
-	
+function getDatabaseList(): Array<{ filename: string; metadata: DatabaseMetadata }> {
+	const databases: Array<{ filename: string; metadata: DatabaseMetadata }> = [];
+
 	for (const [filename, db] of openDatabases) {
 		try {
 			const metadataRows = db.selectArrays('SELECT name, value FROM metadata');
 			const metadata: DatabaseMetadata = {};
-			
+
 			for (const [name, value] of metadataRows) {
 				if (value === null || value === undefined) continue;
-				
+
 				switch (name) {
 					case 'bounds':
 						if (typeof value === 'string') {
@@ -465,13 +469,13 @@ function getDatabaseList(): Array<{filename: string; metadata: DatabaseMetadata}
 						break;
 				}
 			}
-			
+
 			databases.push({ filename, metadata });
 		} catch (error) {
 			console.warn(`Failed to get metadata for ${filename}:`, error);
 		}
 	}
-	
+
 	return databases;
 }
 
@@ -482,18 +486,18 @@ function closeDatabase(filename: string): void {
 		try {
 			db.close();
 			openDatabases.delete(filename);
-			
+
 			// Remove from index
 			for (const [key, entries] of dbIndex.entries()) {
-				const filtered = entries.filter(entry => entry.filename !== filename);
+				const filtered = entries.filter((entry) => entry.filename !== filename);
 				if (filtered.length === 0) {
 					dbIndex.delete(key);
 				} else {
 					dbIndex.set(key, filtered);
 				}
 			}
-			
-				// Database closed
+
+			// Database closed
 		} catch (error) {
 			console.error(`Error closing database ${filename}:`, error);
 		}
@@ -510,10 +514,10 @@ function closeAllDatabases(): void {
 // Remove corrupted file from OPFS
 async function removeCorruptedFile(filename: string): Promise<void> {
 	if (!opfsRoot) return;
-	
+
 	try {
 		await opfsRoot.removeEntry(filename);
-					// Removed corrupted file
+		// Removed corrupted file
 	} catch (error) {
 		console.error(`Failed to remove corrupted file ${filename}:`, error);
 	}
@@ -571,7 +575,20 @@ async function handleTileRequest(
 							return decompressed;
 						} else {
 							// Return tile data as-is
-							return tileData.buffer.slice(tileData.byteOffset, tileData.byteOffset + tileData.byteLength);
+							const typedArray = tileData as Uint8Array;
+							// Create a new ArrayBuffer to ensure it's not SharedArrayBuffer
+							const buffer =
+								typedArray.buffer instanceof ArrayBuffer
+									? typedArray.buffer
+									: new ArrayBuffer(typedArray.byteLength);
+							if (!(typedArray.buffer instanceof ArrayBuffer)) {
+								new Uint8Array(buffer).set(typedArray);
+								return buffer;
+							}
+							return buffer.slice(
+								typedArray.byteOffset,
+								typedArray.byteOffset + typedArray.byteLength
+							);
 						}
 					}
 				} else {
@@ -585,7 +602,6 @@ async function handleTileRequest(
 
 		// No tile found in any database
 		throw new Error(`No tile found for ${source} ${z}/${x}/${y}`);
-
 	} catch (error) {
 		// Only log errors for non-missing-tile issues
 		if (error instanceof Error && !error.message.includes('No tile found')) {
@@ -599,50 +615,53 @@ async function handleTileRequest(
 function getDatabasesBySource(source: string): DatabaseEntry[] {
 	// Improved matching logic for different naming patterns
 	const matchingDbs: DatabaseEntry[] = [];
-	
+
 	for (const [key, entries] of dbIndex.entries()) {
 		for (const entry of entries) {
 			const filename = entry.filename.toLowerCase();
 			const sourceLower = source.toLowerCase();
-			
+
 			// Check for exact match or source name in filename
-			if (filename === `${sourceLower}.mbtiles` || 
-				filename.includes(sourceLower)) {
+			if (filename === `${sourceLower}.mbtiles` || filename.includes(sourceLower)) {
 				matchingDbs.push(entry);
 				continue;
 			}
-			
+
 			// Special handling for building files with patterns like:
 			// building_XXX.mbtiles, buildings_XXX.mbtiles, etc.
 			if (sourceLower === 'building') {
-				if (filename.startsWith('building') || 
-					filename.startsWith('buildings') || 
-					filename.includes('building')) {
+				if (
+					filename.startsWith('building') ||
+					filename.startsWith('buildings') ||
+					filename.includes('building')
+				) {
 					matchingDbs.push(entry);
 					continue;
 				}
 			}
-			
+
 			// Special handling for basemap files with patterns like:
 			// basemap_XXX.mbtiles, base_XXX.mbtiles, etc.
 			if (sourceLower === 'basemap') {
-				if (filename.startsWith('basemap') || 
-					filename.startsWith('base') || 
-					filename.includes('basemap')) {
+				if (
+					filename.startsWith('basemap') ||
+					filename.startsWith('base') ||
+					filename.includes('basemap')
+				) {
 					matchingDbs.push(entry);
 					continue;
 				}
 			}
 		}
 	}
-	
+
 	// Log matching results for debugging
 	if (matchingDbs.length > 0) {
 		// Found database(s) for source
 	} else {
 		// No databases found for source
 	}
-	
+
 	return matchingDbs;
 }
 
@@ -654,8 +673,16 @@ function isGzipped(data: Uint8Array): boolean {
 // Gunzip decompression using modern Compression Streams API
 async function gunzip(data: Uint8Array): Promise<ArrayBuffer> {
 	try {
+		// Ensure we have an ArrayBuffer, not SharedArrayBuffer
+		const buffer =
+			data.buffer instanceof ArrayBuffer ? data.buffer : new ArrayBuffer(data.byteLength);
+		if (!(data.buffer instanceof ArrayBuffer)) {
+			new Uint8Array(buffer).set(data);
+		}
+
 		const decompressionStream = new DecompressionStream('gzip');
-		const inputStream = new Response(data).body as ReadableStream<Uint8Array>;
+		const response = new Response(buffer);
+		const inputStream = response.body!;
 		const decompressedStream = inputStream.pipeThrough(decompressionStream);
 		const decompressedArrayBuffer = await new Response(decompressedStream).arrayBuffer();
 		return decompressedArrayBuffer;

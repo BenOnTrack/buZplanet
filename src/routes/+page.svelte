@@ -7,16 +7,30 @@
 	import { terminateWorker } from '$lib/utils/worker';
 	import { appInitializer } from '$lib/utils/app-initialization';
 	import { onMount, onDestroy } from 'svelte';
-	
+
 	// Import dev tools in development
 	if (import.meta.env.DEV) {
 		import('$lib/utils/worker/dev-tools');
 	}
 
 	// Initialization state
-	let initState = $state({
-		status: 'pending' as const,
-		logs: [] as string[]
+	type InitState = {
+		status:
+			| 'pending'
+			| 'initializing'
+			| 'worker-ready'
+			| 'appstate-ready'
+			| 'protocol-ready'
+			| 'database-scanning'
+			| 'complete'
+			| 'error';
+		logs: string[];
+		error?: string;
+	};
+
+	let initState = $state<InitState>({
+		status: 'pending',
+		logs: []
 	});
 
 	let isAppReady = $derived(initState.status === 'complete');
@@ -25,25 +39,46 @@
 	// Subscribe to initialization state changes
 	let unsubscribe: (() => void) | null = null;
 
-	onMount(async () => {
+	onMount(() => {
 		// Subscribe to initialization state
 		unsubscribe = appInitializer.subscribe((state) => {
 			initState = state;
 		});
 
+		// Add global app cleanup handler
+		const handleAppCleanup = () => {
+			// This event can be caught by components that need to save state
+			console.log('App cleanup triggered');
+		};
+
+		window.addEventListener('app-cleanup', handleAppCleanup);
+
 		// Start initialization
-		try {
-			const result = await appInitializer.initialize();
-			if (!result.success) {
-				console.error('App initialization failed:', result.error);
-			}
-		} catch (error) {
-			console.error('Unexpected initialization error:', error);
-		}
+		appInitializer
+			.initialize()
+			.then((result) => {
+				if (!result.success) {
+					console.error('App initialization failed:', result.error);
+				}
+			})
+			.catch((error) => {
+				console.error('Unexpected initialization error:', error);
+			});
+
+		return () => {
+			window.removeEventListener('app-cleanup', handleAppCleanup);
+		};
 	});
 
 	// Clean up worker when component is destroyed
 	onDestroy(() => {
+		// Save any pending app state before cleanup
+		if (typeof window !== 'undefined') {
+			// Trigger a final save of any pending state
+			const event = new CustomEvent('app-cleanup');
+			window.dispatchEvent(event);
+		}
+
 		if (unsubscribe) {
 			unsubscribe();
 		}
@@ -55,18 +90,19 @@
 		try {
 			const { getWorker } = await import('$lib/utils/worker');
 			const worker = getWorker();
-			
+
 			const pingResponse = await worker.ping();
-			
-			const taskResponse = await worker.processTask(`Test task at ${new Date().toLocaleTimeString()}`);
-			
+
+			const taskResponse = await worker.processTask(
+				`Test task at ${new Date().toLocaleTimeString()}`
+			);
+
 			// Test tile request if databases are available
 			try {
 				const testTile = await worker.requestTile('basemap', 0, 0, 0);
 			} catch (tileError) {
 				// Tile test skipped if no basemap.mbtiles found
 			}
-			
 		} catch (error) {
 			console.error('Test failed:', error);
 		}
@@ -88,24 +124,28 @@
 		<MapView ready={isAppReady} />
 		<BottomNavigation />
 	{/if}
-	
+
 	<!-- Worker Debug Panel - only show in development when app is ready -->
 	{#if import.meta.env.DEV && isAppReady}
 		<div class="worker-debug-panel">
-			<button 
+			<button
 				class="debug-toggle"
-				onclick={() => showDebugPanel = !showDebugPanel}
+				onclick={() => (showDebugPanel = !showDebugPanel)}
 				onkeydown={(e) => e.key === 'Enter' && (showDebugPanel = !showDebugPanel)}
 				aria-label="Toggle worker debug panel"
 			>
 				🔧 Worker: {initState.status}
 			</button>
-			
+
 			{#if showDebugPanel}
 				<div class="debug-content">
 					<div class="debug-controls">
-						<button onclick={testWorker} onkeydown={(e) => e.key === 'Enter' && testWorker()}>Test Worker</button>
-						<button onclick={clearLogs} onkeydown={(e) => e.key === 'Enter' && clearLogs()}>Clear Logs</button>
+						<button onclick={testWorker} onkeydown={(e) => e.key === 'Enter' && testWorker()}
+							>Test Worker</button
+						>
+						<button onclick={clearLogs} onkeydown={(e) => e.key === 'Enter' && clearLogs()}
+							>Clear Logs</button
+						>
 					</div>
 					<div class="debug-logs">
 						{#each initState.logs as log}

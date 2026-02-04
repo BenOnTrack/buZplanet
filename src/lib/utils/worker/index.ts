@@ -4,11 +4,14 @@ import type { WorkerMessage, WorkerResponse } from './worker';
 export class WorkerManager {
 	private worker: Worker | null = null;
 	private messageId = 0;
-	private pendingMessages = new Map<string, {
-		resolve: (value: any) => void;
-		reject: (reason?: any) => void;
-		timeout?: NodeJS.Timeout;
-	}>();
+	private pendingMessages = new Map<
+		string,
+		{
+			resolve: (value: any) => void;
+			reject: (reason?: any) => void;
+			timeout?: NodeJS.Timeout;
+		}
+	>();
 	private isReady = false;
 	private readyPromise: Promise<void> | null = null;
 
@@ -19,10 +22,10 @@ export class WorkerManager {
 	private initialize(): void {
 		try {
 			this.worker = new Worker();
-			
+
 			// Set up message listener
 			this.worker.addEventListener('message', this.handleMessage.bind(this));
-			
+
 			// Set up error listener
 			this.worker.addEventListener('error', (error) => {
 				console.error('Worker error:', error);
@@ -40,7 +43,6 @@ export class WorkerManager {
 				};
 				this.worker?.addEventListener('message', checkReady);
 			});
-
 		} catch (error) {
 			console.error('Failed to initialize worker:', error);
 			throw error;
@@ -54,7 +56,7 @@ export class WorkerManager {
 		if (id && this.pendingMessages.has(id)) {
 			const pending = this.pendingMessages.get(id)!;
 			this.pendingMessages.delete(id);
-			
+
 			// Clear timeout if it exists
 			if (pending.timeout) {
 				clearTimeout(pending.timeout);
@@ -81,13 +83,13 @@ export class WorkerManager {
 				console.error('Worker reported error:', data);
 				break;
 			default:
-				// Broadcast messages (no ID)
+			// Broadcast messages (no ID)
 		}
 	}
 
 	private handleError(error: ErrorEvent): void {
 		console.error('Worker error:', error.message);
-		
+
 		// Reject all pending messages
 		this.pendingMessages.forEach(({ reject, timeout }) => {
 			if (timeout) clearTimeout(timeout);
@@ -136,7 +138,7 @@ export class WorkerManager {
 		return this.sendMessage('ping');
 	}
 
-	async initializeWorker(initData?: any): Promise<{message: string; opfsFiles: string[]}> {
+	async initializeWorker(initData?: any): Promise<{ message: string; opfsFiles: string[] }> {
 		return this.sendMessage('init', initData);
 	}
 
@@ -148,7 +150,7 @@ export class WorkerManager {
 		return this.sendMessage('tile-request', { source, z, x, y });
 	}
 
-	async listDatabases(): Promise<{databases: any[]; totalCount: number; filenames: string[]}> {
+	async listDatabases(): Promise<{ databases: any[]; totalCount: number; filenames: string[] }> {
 		return this.sendMessage('list-databases');
 	}
 

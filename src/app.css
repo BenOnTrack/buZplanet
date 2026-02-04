@@ -1,17 +1,17 @@
-@import url("https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
-@import "tailwindcss";
-@plugin "tailwindcss-animate";
+@import 'tailwindcss';
+@plugin 'tailwindcss-animate';
 
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
-	font-family: "Cal Sans";
+	font-family: 'Cal Sans';
 	font-style: normal;
 	font-weight: 600;
 	font-display: swap;
-	src: url("/CalSans-SemiBold.woff2") format("woff2");
+	src: url('/CalSans-SemiBold.woff2') format('woff2');
 }
 
 :root {
@@ -34,10 +34,10 @@
 	--accent-foreground: hsl(204 80% 16%);
 	--destructive: hsl(347 77% 50%);
 	--tertiary: hsl(37.7 92.1% 50.2%);
-	--line: hsl(0 0% 100%); 
+	--line: hsl(0 0% 100%);
 	/* black */
-	--contrast: hsl(0 0% 0%); 
-	
+	--contrast: hsl(0 0% 0%);
+
 	/* Shadows */
 	--shadow-mini: 0px 1px 0px 1px rgba(0, 0, 0, 0.04);
 	--shadow-mini-inset: 0px 1px 0px 0px rgba(0, 0, 0, 0.04) inset;
@@ -70,8 +70,8 @@
 	--line: hsl(0 0% 9.02%);
 	--tertiary: hsl(61.3 100% 82.2%);
 	/* white */
-	--contrast: hsl(0 0% 100%); 
-	
+	--contrast: hsl(0 0% 100%);
+
 	/* Shadows */
 	--shadow-mini: 0px 1px 0px 1px rgba(0, 0, 0, 0.3);
 	--shadow-mini-inset: 0px 1px 0px 0px rgba(0, 0, 0, 0.5) inset;
@@ -102,18 +102,18 @@
 	--color-destructive: var(--destructive);
 	--color-tertiary: var(--tertiary);
 	--color-line: var(--line);
-	--color-contrast: var(--contrast); 
-	
+	--color-contrast: var(--contrast);
+
 	--shadow-mini: var(--shadow-mini);
 	--shadow-mini-inset: var(--shadow-mini-inset);
 	--shadow-popover: var(--shadow-popover);
 	--shadow-kbd: var(--shadow-kbd);
 	--shadow-btn: var(--shadow-btn);
 	--shadow-card: var(--shadow-card);
-	--shadow-date-field-focus: var(--shadow-date-field-focus); 
-	
-	--text-xxs: 10px; 
-	
+	--shadow-date-field-focus: var(--shadow-date-field-focus);
+
+	--text-xxs: 10px;
+
 	--radius-card: 16px;
 	--radius-card-lg: 20px;
 	--radius-card-sm: 10px;
@@ -122,13 +122,13 @@
 	--radius-5px: 5px;
 	--radius-9px: 9px;
 	--radius-10px: 10px;
-	--radius-15px: 15px; 
-	
+	--radius-15px: 15px;
+
 	--spacing-input: 3rem;
-	--spacing-input-sm: 2.5rem; 
-	
-	--breakpoint-desktop: 1440px; 
-	
+	--spacing-input-sm: 2.5rem;
+
+	--breakpoint-desktop: 1440px;
+
 	--animate-accordion-down: accordion-down 0.2s ease-out;
 	--animate-accordion-up: accordion-up 0.2s ease-out;
 	--animate-caret-blink: caret-blink 1s ease-out infinite;
@@ -139,13 +139,13 @@
 	--animate-enter-from-left: enter-from-left 0.2s ease;
 	--animate-enter-from-right: enter-from-right 0.2s ease;
 	--animate-exit-to-left: exit-to-left 0.2s ease;
-	--animate-exit-to-right: exit-to-right 0.2s ease; 
-	
-	--font-sans: "Inter", "sans-serif";
-	--font-mono: "Source Code Pro", "monospace";
-	--font-alt: "Courier", "sans-serif";
-	--font-display: "Cal Sans", "sans-serif"; 
-	
+	--animate-exit-to-right: exit-to-right 0.2s ease;
+
+	--font-sans: 'Inter', 'sans-serif';
+	--font-mono: 'Source Code Pro', 'monospace';
+	--font-alt: 'Courier', 'sans-serif';
+	--font-display: 'Cal Sans', 'sans-serif';
+
 	@keyframes accordion-down {
 		from {
 			height: 0;
@@ -153,8 +153,8 @@
 		to {
 			height: var(--bits-accordion-content-height);
 		}
-	} 
-	
+	}
+
 	@keyframes accordion-up {
 		from {
 			height: var(--bits-accordion-content-height);
@@ -162,8 +162,8 @@
 		to {
 			height: 0;
 		}
-	} 
-	
+	}
+
 	@keyframes caret-blink {
 		0%,
 		70%,
@@ -174,8 +174,8 @@
 		50% {
 			opacity: 0;
 		}
-	} 
-	
+	}
+
 	@keyframes enter-from-right {
 		from {
 			opacity: 0;
@@ -185,8 +185,8 @@
 			opacity: 1;
 			transform: translateX(0);
 		}
-	} 
-	
+	}
+
 	@keyframes enter-from-left {
 		from {
 			opacity: 0;
@@ -196,8 +196,8 @@
 			opacity: 1;
 			transform: translateX(0);
 		}
-	} 
-	
+	}
+
 	@keyframes exit-to-right {
 		from {
 			opacity: 1;
@@ -207,8 +207,8 @@
 			opacity: 0;
 			transform: translateX(200px);
 		}
-	} 
-	
+	}
+
 	@keyframes exit-to-left {
 		from {
 			opacity: 1;
@@ -218,8 +218,8 @@
 			opacity: 0;
 			transform: translateX(-200px);
 		}
-	} 
-	
+	}
+
 	@keyframes scale-in {
 		from {
 			opacity: 0;
@@ -229,8 +229,8 @@
 			opacity: 1;
 			transform: rotateX(0deg) scale(1);
 		}
-	} 
-	
+	}
+
 	@keyframes scale-out {
 		from {
 			opacity: 1;
@@ -240,8 +240,8 @@
 			opacity: 0;
 			transform: rotateX(-10deg) scale(0.95);
 		}
-	} 
-	
+	}
+
 	@keyframes fade-in {
 		from {
 			opacity: 0;
@@ -249,8 +249,8 @@
 		to {
 			opacity: 1;
 		}
-	} 
-	
+	}
+
 	@keyframes fade-out {
 		from {
 			opacity: 1;
@@ -268,8 +268,8 @@
 	::backdrop,
 	::file-selector-button {
 		border-color: var(--color-border-card, currentColor);
-	} 
-	
+	}
+
 	* {
 		@apply border-border;
 	}
@@ -277,15 +277,15 @@
 		-webkit-text-size-adjust: 100%;
 		font-variation-settings: normal;
 		scrollbar-color: var(--bg-muted);
-	} 
-	
+	}
+
 	body {
 		@apply bg-background text-foreground;
 		font-feature-settings:
-			"rlig" 1,
-			"calt" 1;
-	} 
-	
+			'rlig' 1,
+			'calt' 1;
+	}
+
 	::selection {
 		background: #fdffa4;
 		color: black;
@@ -296,11 +296,11 @@
 	*:not(body):not(.focus-override) {
 		outline: none !important;
 		&:focus-visible {
-			@apply focus-visible:ring-foreground focus-visible:ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-1;
+			@apply focus-visible:ring-foreground focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-hidden;
 		}
-	} 
-	
+	}
+
 	.link {
-		@apply hover:text-foreground/80 focus-visible:ring-foreground focus-visible:ring-offset-background rounded-xs focus-visible:outline-hidden inline-flex items-center gap-1 font-medium underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-offset-2;
+		@apply hover:text-foreground/80 focus-visible:ring-foreground focus-visible:ring-offset-background inline-flex items-center gap-1 rounded-xs font-medium underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden;
 	}
 }

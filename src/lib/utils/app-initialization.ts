@@ -4,204 +4,239 @@
 
 import { getWorker } from '$lib/utils/worker';
 import { createProtocolHandler } from '$lib/utils/map/protocol-handler';
+import { appState } from '$lib/stores/AppState.svelte';
 import maplibregl from 'maplibre-gl';
 
-export type InitializationStatus = 
-  | 'pending' 
-  | 'initializing' 
-  | 'worker-ready' 
-  | 'protocol-ready' 
-  | 'complete' 
-  | 'error';
+export type InitializationStatus =
+	| 'pending'
+	| 'initializing'
+	| 'worker-ready'
+	| 'appstate-ready'
+	| 'protocol-ready'
+	| 'database-scanning'
+	| 'complete'
+	| 'error';
 
 export interface InitializationState {
-  status: InitializationStatus;
-  error?: string;
-  logs: string[];
+	status: InitializationStatus;
+	error?: string;
+	logs: string[];
 }
 
 export interface InitializationResult {
-  success: boolean;
-  error?: string;
-  workerInfo?: any;
+	success: boolean;
+	error?: string;
+	workerInfo?: any;
 }
 
 class AppInitializer {
-  private initializationPromise: Promise<InitializationResult> | null = null;
-  private state: InitializationState = {
-    status: 'pending',
-    logs: []
-  };
-  
-  private listeners: Array<(state: InitializationState) => void> = [];
+	private initializationPromise: Promise<InitializationResult> | null = null;
+	private state: InitializationState = {
+		status: 'pending',
+		logs: []
+	};
 
-  /**
-   * Subscribe to initialization state changes
-   */
-  subscribe(callback: (state: InitializationState) => void): () => void {
-    this.listeners.push(callback);
-    // Immediately call with current state
-    callback(this.state);
-    
-    return () => {
-      const index = this.listeners.indexOf(callback);
-      if (index > -1) {
-        this.listeners.splice(index, 1);
-      }
-    };
-  }
+	private listeners: Array<(state: InitializationState) => void> = [];
 
-  /**
-   * Update state and notify listeners
-   */
-  private updateState(updates: Partial<InitializationState>) {
-    this.state = { ...this.state, ...updates };
-    this.listeners.forEach(callback => callback(this.state));
-  }
+	/**
+	 * Subscribe to initialization state changes
+	 */
+	subscribe(callback: (state: InitializationState) => void): () => void {
+		this.listeners.push(callback);
+		// Immediately call with current state
+		callback(this.state);
 
-  /**
-   * Add log entry
-   */
-  private addLog(message: string) {
-    const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `[${timestamp}] ${message}`;
-    
-    this.updateState({
-      logs: [...this.state.logs, logEntry]
-    });
-    
-    // Log to state only
-  }
+		return () => {
+			const index = this.listeners.indexOf(callback);
+			if (index > -1) {
+				this.listeners.splice(index, 1);
+			}
+		};
+	}
 
-  /**
-   * Initialize the app (worker + protocol handlers)
-   * Returns a promise that resolves when everything is ready
-   */
-  async initialize(): Promise<InitializationResult> {
-    // Return existing promise if already initializing
-    if (this.initializationPromise) {
-      return this.initializationPromise;
-    }
+	/**
+	 * Update state and notify listeners
+	 */
+	private updateState(updates: Partial<InitializationState>) {
+		this.state = { ...this.state, ...updates };
+		this.listeners.forEach((callback) => callback(this.state));
+	}
 
-    this.initializationPromise = this.performInitialization();
-    return this.initializationPromise;
-  }
+	/**
+	 * Add log entry
+	 */
+	private addLog(message: string) {
+		const timestamp = new Date().toLocaleTimeString();
+		const logEntry = `[${timestamp}] ${message}`;
 
-  private async performInitialization(): Promise<InitializationResult> {
-    try {
-      this.updateState({ status: 'initializing' });
-      this.addLog('🚀 Starting app initialization...');
+		this.updateState({
+			logs: [...this.state.logs, logEntry]
+		});
 
-      // Step 1: Initialize Worker
-      this.addLog('🔄 Initializing worker...');
-      const worker = getWorker();
-      this.addLog('✅ Worker instance created');
+		// Log to state only
+	}
 
-      await worker.waitForReady();
-      this.addLog('✅ Worker is ready!');
-      this.updateState({ status: 'worker-ready' });
+	/**
+	 * Initialize the app with fast startup (defer heavy operations)
+	 * Returns a promise that resolves when basic functionality is ready
+	 */
+	async initialize(fastMode: boolean = false): Promise<InitializationResult> {
+		// Return existing promise if already initializing
+		if (this.initializationPromise) {
+			return this.initializationPromise;
+		}
 
-      // Step 2: Initialize worker with app data
-      const initResponse = await worker.initializeWorker({ 
-        appVersion: '1.0.0',
-        timestamp: Date.now()
-      });
+		this.initializationPromise = this.performInitialization(fastMode);
+		return this.initializationPromise;
+	}
 
-      let workerInfo;
-      if (typeof initResponse === 'string') {
-        this.addLog(`✅ Init response: ${initResponse}`);
-        workerInfo = { message: initResponse };
-      } else {
-        this.addLog(`✅ Init response: ${initResponse.message}`);
-        this.addLog(`📂 OPFS .mbtiles files found: ${initResponse.opfsFiles.length}`);
-        workerInfo = initResponse;
-        
-        if (initResponse.opfsFiles.length > 0) {
-          initResponse.opfsFiles.forEach((file: string) => {
-            this.addLog(`  📄 ${file}`);
-          });
-        } else {
-          this.addLog('  📄 No .mbtiles files found in OPFS');
-        }
-      }
+	private async performInitialization(fastMode: boolean = false): Promise<InitializationResult> {
+		try {
+			this.updateState({ status: 'initializing' });
+			this.addLog('🚀 Starting app initialization...');
 
-      // Step 3: Scan and index databases
-      try {
-        this.addLog('🔄 Scanning and indexing databases...');
-        const scanResult = await worker.sendMessage('scan-databases');
-        this.addLog(`✅ Database scan complete: ${scanResult.successfulDbs}/${scanResult.totalFiles} databases loaded`);
-        if (scanResult.corruptedFiles.length > 0) {
-          this.addLog(`⚠️ Corrupted files removed: ${scanResult.corruptedFiles.join(', ')}`);
-        }
-      } catch (scanError) {
-        this.addLog(`⚠️ Database scan failed: ${scanError instanceof Error ? scanError.message : 'Unknown error'}`);
-      }
+			// Step 1: Initialize Worker (timeout after 3 seconds)
+			this.addLog('🔄 Initializing worker...');
+			const worker = getWorker();
+			this.addLog('✅ Worker instance created');
 
-      // Step 4: Register Protocol Handlers
-      this.addLog('🔄 Registering MBTiles protocol handler...');
-      const protocolHandler = createProtocolHandler(worker);
-      maplibregl.addProtocol('mbtiles', protocolHandler);
-      this.addLog('✅ MBTiles protocol handler registered!');
-      this.updateState({ status: 'protocol-ready' });
+			// Add timeout for worker ready
+			const workerReadyPromise = Promise.race([
+				worker.waitForReady(),
+				new Promise((_, reject) =>
+					setTimeout(() => reject(new Error('Worker initialization timeout')), 3000)
+				)
+			]);
 
-      // Step 5: Final verification
-      const pingResponse = await worker.ping();
-      this.addLog(`✅ Ping response: ${pingResponse}`);
+			await workerReadyPromise;
+			this.addLog('✅ Worker is ready!');
+			this.updateState({ status: 'worker-ready' });
 
-      const taskResponse = await worker.processTask('Hello from main thread!');
-      this.addLog(`✅ Task response: ${taskResponse}`);
+			// Step 2: Initialize AppState (IndexedDB storage) - timeout after 2 seconds
+			this.addLog('🔄 Initializing AppState storage...');
+			const appStatePromise = Promise.race([
+				appState.ensureInitialized(),
+				new Promise((_, reject) =>
+					setTimeout(() => reject(new Error('AppState initialization timeout')), 2000)
+				)
+			]);
 
-      // Step 6: Complete
-      this.updateState({ status: 'complete' });
-      this.addLog('🎉 App initialization complete!');
+			await appStatePromise;
+			this.addLog('✅ AppState initialized!');
+			this.updateState({ status: 'appstate-ready' });
 
-      return {
-        success: true,
-        workerInfo
-      };
+			// Step 3: Basic worker initialization (fast)
+			const initResponse = await worker.initializeWorker({
+				appVersion: '1.0.0',
+				timestamp: Date.now()
+			});
 
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      this.addLog(`❌ Initialization failed: ${errorMsg}`);
-      
-      this.updateState({ 
-        status: 'error',
-        error: errorMsg
-      });
+			let workerInfo;
+			if (typeof initResponse === 'string') {
+				this.addLog(`✅ Init response: ${initResponse}`);
+				workerInfo = { message: initResponse };
+			} else {
+				this.addLog(`✅ Init response: ${initResponse.message}`);
+				this.addLog(`📂 OPFS .mbtiles files found: ${initResponse.opfsFiles.length}`);
+				workerInfo = initResponse;
 
-      console.error('App initialization failed:', error);
-      
-      return {
-        success: false,
-        error: errorMsg
-      };
-    }
-  }
+				if (initResponse.opfsFiles.length > 0) {
+					initResponse.opfsFiles.forEach((file: string) => {
+						this.addLog(`  📄 ${file}`);
+					});
+				} else {
+					this.addLog('  📄 No .mbtiles files found in OPFS');
+				}
+			}
 
-  /**
-   * Get current initialization status
-   */
-  getStatus(): InitializationStatus {
-    return this.state.status;
-  }
+			// Step 4: Register Protocol Handlers (essential for map functionality)
+			this.addLog('🔄 Registering MBTiles protocol handler...');
+			const protocolHandler = createProtocolHandler(worker);
+			maplibregl.addProtocol('mbtiles', protocolHandler);
+			this.addLog('✅ MBTiles protocol handler registered!');
+			this.updateState({ status: 'protocol-ready' });
 
-  /**
-   * Check if app is ready for map initialization
-   */
-  isReady(): boolean {
-    return this.state.status === 'complete';
-  }
+			if (!fastMode) {
+				// Step 5: Scan and index databases (heavy operation - skip in fast mode)
+				this.addLog('🔄 Scanning and indexing databases...');
+				this.updateState({ status: 'database-scanning' });
 
-  /**
-   * Reset initialization state (useful for testing)
-   */
-  reset() {
-    this.initializationPromise = null;
-    this.state = {
-      status: 'pending',
-      logs: []
-    };
-  }
+				try {
+					const scanResult = await worker.sendMessage('scan-databases', undefined, 10000); // 10s timeout
+					this.addLog(
+						`✅ Database scan complete: ${scanResult.successfulDbs}/${scanResult.totalFiles} databases loaded`
+					);
+					if (scanResult.corruptedFiles.length > 0) {
+						this.addLog(`⚠️ Corrupted files removed: ${scanResult.corruptedFiles.join(', ')}`);
+					}
+				} catch (scanError) {
+					this.addLog(
+						`⚠️ Database scan failed: ${scanError instanceof Error ? scanError.message : 'Unknown error'}`
+					);
+					// Don't fail initialization for database scan issues
+				}
+			} else {
+				this.addLog('⚡ Fast mode: Skipping database scan (will run in background)');
+				// Start database scan in background
+				worker.sendMessage('scan-databases').catch((error) => {
+					console.warn('Background database scan failed:', error);
+				});
+			}
+
+			// Step 6: Final verification (quick)
+			const pingResponse = await worker.ping();
+			this.addLog(`✅ Ping response: ${pingResponse}`);
+
+			// Step 7: Complete
+			this.updateState({ status: 'complete' });
+			this.addLog('🎉 App initialization complete!');
+
+			return {
+				success: true,
+				workerInfo
+			};
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+			this.addLog(`❌ Initialization failed: ${errorMsg}`);
+
+			this.updateState({
+				status: 'error',
+				error: errorMsg
+			});
+
+			console.error('App initialization failed:', error);
+
+			return {
+				success: false,
+				error: errorMsg
+			};
+		}
+	}
+
+	/**
+	 * Get current initialization status
+	 */
+	getStatus(): InitializationStatus {
+		return this.state.status;
+	}
+
+	/**
+	 * Check if app is ready for map initialization
+	 */
+	isReady(): boolean {
+		return this.state.status === 'complete';
+	}
+
+	/**
+	 * Reset initialization state (useful for testing)
+	 */
+	reset() {
+		this.initializationPromise = null;
+		this.state = {
+			status: 'pending',
+			logs: []
+		};
+	}
 }
 
 // Export singleton instance

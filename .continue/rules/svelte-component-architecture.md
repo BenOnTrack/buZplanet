@@ -1,5 +1,5 @@
 ---
-globs: "**/*.svelte"
+globs: '**/*.svelte'
 alwaysApply: false
 ---
 
