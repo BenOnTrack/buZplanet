@@ -4,60 +4,6 @@
 	import { appState } from '$lib/stores/AppState.svelte.js';
 	import ChevronDown from 'phosphor-svelte/lib/CaretDown';
 	import Check from 'phosphor-svelte/lib/Check';
-	import { onMount } from 'svelte';
-
-	// Track initialization state
-	let isInitialized = $state(false);
-
-	// Individual state variables for each category (following the official pattern)
-	let attraction = $state<string>('');
-	let education = $state<string>('');
-	let entertainment = $state<string>('');
-	let facility = $state<string>('');
-	let food_and_drink = $state<string>('');
-	let healthcare = $state<string>('');
-	let leisure = $state<string>('');
-	let lodging = $state<string>('');
-	let natural = $state<string>('');
-	let place = $state<string>('');
-	let route = $state<string>('');
-	let shop = $state<string>('');
-	let transportation = $state<string>('');
-	let bookmarks = $state<string>('');
-	let visited = $state<string>('');
-	let todo = $state<string>('');
-	let followed = $state<string>('');
-	let search = $state<string>('');
-
-	// Initialize appState when component mounts
-	onMount(async () => {
-		console.log('Initializing ColorsSettings component...');
-		await appState.ensureInitialized();
-		console.log('AppState initialized, config:', appState.config);
-
-		// Set initial values from appState
-		const mappings = appState.colorMappings;
-		attraction = mappings.attraction;
-		education = mappings.education;
-		entertainment = mappings.entertainment;
-		facility = mappings.facility;
-		food_and_drink = mappings.food_and_drink;
-		healthcare = mappings.healthcare;
-		leisure = mappings.leisure;
-		lodging = mappings.lodging;
-		natural = mappings.natural;
-		place = mappings.place;
-		route = mappings.route;
-		shop = mappings.shop;
-		transportation = mappings.transportation;
-		bookmarks = mappings.bookmarks;
-		visited = mappings.visited;
-		todo = mappings.todo;
-		followed = mappings.followed;
-		search = mappings.search;
-
-		isInitialized = true;
-	});
 
 	// Available colors from COLORS constant
 	const colorOptions = Object.keys(COLORS).map((colorName) => ({
@@ -66,200 +12,34 @@
 		color: COLORS[colorName as keyof typeof COLORS][600] // Use 600 shade for preview
 	}));
 
-	// Categories that can be customized with their corresponding state variables
+	// Categories that can be customized - directly using appState
 	const categories = [
-		{
-			key: 'attraction',
-			label: 'Attraction',
-			state: () => attraction,
-			setState: (v: string) => {
-				attraction = v;
-				appState.updateColorMapping('attraction', v);
-			}
-		},
-		{
-			key: 'education',
-			label: 'Education',
-			state: () => education,
-			setState: (v: string) => {
-				education = v;
-				appState.updateColorMapping('education', v);
-			}
-		},
-		{
-			key: 'entertainment',
-			label: 'Entertainment',
-			state: () => entertainment,
-			setState: (v: string) => {
-				entertainment = v;
-				appState.updateColorMapping('entertainment', v);
-			}
-		},
-		{
-			key: 'facility',
-			label: 'Facility',
-			state: () => facility,
-			setState: (v: string) => {
-				facility = v;
-				appState.updateColorMapping('facility', v);
-			}
-		},
-		{
-			key: 'food_and_drink',
-			label: 'Food & Drink',
-			state: () => food_and_drink,
-			setState: (v: string) => {
-				food_and_drink = v;
-				appState.updateColorMapping('food_and_drink', v);
-			}
-		},
-		{
-			key: 'healthcare',
-			label: 'Healthcare',
-			state: () => healthcare,
-			setState: (v: string) => {
-				healthcare = v;
-				appState.updateColorMapping('healthcare', v);
-			}
-		},
-		{
-			key: 'leisure',
-			label: 'Leisure',
-			state: () => leisure,
-			setState: (v: string) => {
-				leisure = v;
-				appState.updateColorMapping('leisure', v);
-			}
-		},
-		{
-			key: 'lodging',
-			label: 'Lodging',
-			state: () => lodging,
-			setState: (v: string) => {
-				lodging = v;
-				appState.updateColorMapping('lodging', v);
-			}
-		},
-		{
-			key: 'natural',
-			label: 'Natural',
-			state: () => natural,
-			setState: (v: string) => {
-				natural = v;
-				appState.updateColorMapping('natural', v);
-			}
-		},
-		{
-			key: 'place',
-			label: 'Place',
-			state: () => place,
-			setState: (v: string) => {
-				place = v;
-				appState.updateColorMapping('place', v);
-			}
-		},
-		{
-			key: 'route',
-			label: 'Route',
-			state: () => route,
-			setState: (v: string) => {
-				route = v;
-				appState.updateColorMapping('route', v);
-			}
-		},
-		{
-			key: 'shop',
-			label: 'Shop',
-			state: () => shop,
-			setState: (v: string) => {
-				shop = v;
-				appState.updateColorMapping('shop', v);
-			}
-		},
-		{
-			key: 'transportation',
-			label: 'Transportation',
-			state: () => transportation,
-			setState: (v: string) => {
-				transportation = v;
-				appState.updateColorMapping('transportation', v);
-			}
-		},
-		{
-			key: 'bookmarks',
-			label: 'Bookmarks',
-			state: () => bookmarks,
-			setState: (v: string) => {
-				bookmarks = v;
-				appState.updateColorMapping('bookmarks', v);
-			}
-		},
-		{
-			key: 'visited',
-			label: 'Visited',
-			state: () => visited,
-			setState: (v: string) => {
-				visited = v;
-				appState.updateColorMapping('visited', v);
-			}
-		},
-		{
-			key: 'todo',
-			label: 'To-Do',
-			state: () => todo,
-			setState: (v: string) => {
-				todo = v;
-				appState.updateColorMapping('todo', v);
-			}
-		},
-		{
-			key: 'followed',
-			label: 'Followed',
-			state: () => followed,
-			setState: (v: string) => {
-				followed = v;
-				appState.updateColorMapping('followed', v);
-			}
-		},
-		{
-			key: 'search',
-			label: 'Search',
-			state: () => search,
-			setState: (v: string) => {
-				search = v;
-				appState.updateColorMapping('search', v);
-			}
-		}
+		{ key: 'attraction', label: 'Attraction' },
+		{ key: 'education', label: 'Education' },
+		{ key: 'entertainment', label: 'Entertainment' },
+		{ key: 'facility', label: 'Facility' },
+		{ key: 'food_and_drink', label: 'Food & Drink' },
+		{ key: 'healthcare', label: 'Healthcare' },
+		{ key: 'leisure', label: 'Leisure' },
+		{ key: 'lodging', label: 'Lodging' },
+		{ key: 'natural', label: 'Natural' },
+		{ key: 'place', label: 'Place' },
+		{ key: 'route', label: 'Route' },
+		{ key: 'shop', label: 'Shop' },
+		{ key: 'transportation', label: 'Transportation' },
+		{ key: 'bookmarks', label: 'Bookmarks' },
+		{ key: 'visited', label: 'Visited' },
+		{ key: 'todo', label: 'To-Do' },
+		{ key: 'followed', label: 'Followed' },
+		{ key: 'search', label: 'Search' }
 	];
 
 	function resetToDefaults() {
-		console.log('Resetting color mappings to defaults');
 		appState.resetColorMappings();
-
-		// Update local state variables
-		const mappings = appState.colorMappings;
-		attraction = mappings.attraction;
-		education = mappings.education;
-		entertainment = mappings.entertainment;
-		facility = mappings.facility;
-		food_and_drink = mappings.food_and_drink;
-		healthcare = mappings.healthcare;
-		leisure = mappings.leisure;
-		lodging = mappings.lodging;
-		natural = mappings.natural;
-		place = mappings.place;
-		route = mappings.route;
-		shop = mappings.shop;
-		transportation = mappings.transportation;
-		bookmarks = mappings.bookmarks;
-		visited = mappings.visited;
-		todo = mappings.todo;
-		followed = mappings.followed;
-		search = mappings.search;
 	}
 </script>
 
-{#if !isInitialized}
+{#if !appState.initialized}
 	<div class="flex items-center justify-center py-8">
 		<div class="text-muted-foreground text-sm">Loading color settings...</div>
 	</div>
@@ -289,7 +69,8 @@
 
 		<div class="space-y-2">
 			{#each categories as category}
-				{@const currentValue = category.state()}
+				{@const currentValue =
+					appState.colorMappings[category.key as keyof typeof appState.colorMappings]}
 				{@const selectedLabel = currentValue
 					? colorOptions.find((option) => option.value === currentValue)?.label || 'Select color'
 					: 'Select color'}
@@ -311,7 +92,7 @@
 							type="single"
 							onValueChange={(value) => {
 								if (value) {
-									category.setState(value);
+									appState.updateColorMapping(category.key, value);
 								}
 							}}
 							items={colorOptions}
