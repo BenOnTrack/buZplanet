@@ -1,13 +1,26 @@
 name = "buzplanet"
-compatibility_date = "2024-12-19"
+main = ".svelte-kit/cloudflare/index.js"
+compatibility_date = "2026-02-04"
 # Enable Node.js compatibility for SvelteKit and Firebase
 compatibility_flags = ["nodejs_compat"]
-# Specify the build output directory for Pages
-pages_build_output_dir = ".svelte-kit/cloudflare"
+
+# Static assets directory for SvelteKit
+[assets]
+directory = ".svelte-kit/cloudflare/client"
+binding = "ASSETS"
+
+# R2 bucket for file storage (shared across environments)
+[[r2_buckets]]
+binding = "cloudflare_bucket_mbtiles"
+bucket_name = "mbtiles"
 
 [env.production]
 # Production environment variables (add your production Firebase config here if different)
 vars = {}
+# Production R2 bucket (if different from default)
+# [[env.production.r2_buckets]]
+# binding = "cloudflare_bucket_mbtiles"
+# bucket_name = "mbtiles-prod"
 
 [env.preview]
 # Preview/staging environment variables
@@ -26,10 +39,6 @@ vars = {}
 # [[kv_namespaces]]
 # binding = "MY_KV_NAMESPACE"
 # id = "your-kv-namespace-id"
-
-# [[r2_buckets]]
-# binding = "MY_BUCKET"
-# bucket_name = "my-bucket"
 
 # [[d1_databases]]
 # binding = "DB"

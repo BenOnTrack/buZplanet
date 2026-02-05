@@ -5,5 +5,15 @@ yarn.lock
 bun.lock
 bun.lockb
 
+# Build outputs
+/.svelte-kit/
+/build/
+/dist/
+
+# Generated files
+/.wrangler/
+/wrangler-config-*
+
 # Miscellaneous
 /static/
+*.log

@@ -1,7 +1,7 @@
 <script lang="ts">
-import FeaturesDrawer from "$lib/components/drawers/FeaturesDrawer.svelte";
-import StoriesDrawer from "$lib/components/drawers/StoriesDrawer.svelte";
-import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
+	import FeaturesDrawer from '$lib/components/drawers/FeaturesDrawer.svelte';
+	import StoriesDrawer from '$lib/components/drawers/StoriesDrawer.svelte';
+	import TripsDrawer from '$lib/components/drawers/TripsDrawer.svelte';
 
 	// State for tracking which drawer is open (null if none)
 	let currentOpenDrawer = $state<string | null>(null);
@@ -30,23 +30,23 @@ import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
 			currentOpenDrawer = null;
 		}
 	});
-	
+
 	const navigationItems = [
-		{ 
-			id: 'stories', 
-			label: 'Stories', 
+		{
+			id: 'stories',
+			label: 'Stories',
 			icon: '📚',
 			ariaLabel: 'Open stories drawer'
 		},
-		{ 
-			id: 'trips', 
-			label: 'Trips', 
+		{
+			id: 'trips',
+			label: 'Trips',
 			icon: '🗺️',
 			ariaLabel: 'Open trips drawer'
 		},
-		{ 
-			id: 'features', 
-			label: 'Features', 
+		{
+			id: 'features',
+			label: 'Features',
 			icon: '⭐',
 			ariaLabel: 'Open features drawer'
 		}
@@ -56,11 +56,11 @@ import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
 		// If the same drawer is already open, close it
 		if (currentOpenDrawer === itemId) {
 			currentOpenDrawer = null;
-			console.log('Closed drawer:', itemId);
+			// Drawer closed
 		} else {
 			// Close any open drawer and open the new one
 			currentOpenDrawer = itemId;
-			console.log('Opened drawer:', itemId);
+			// Drawer opened
 		}
 	}
 
@@ -74,12 +74,12 @@ import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
 </script>
 
 <div class="bottom-nav">
-	<nav class="w-full h-full flex items-center" aria-label="Main navigation">
-		<div class="grid w-full grid-cols-3 gap-0 h-full">
+	<nav class="flex h-full w-full items-center" aria-label="Main navigation">
+		<div class="grid h-full w-full grid-cols-3 gap-0">
 			{#each navigationItems as item}
-				<button 
+				<button
 					type="button"
-					class="nav-button flex flex-col items-center justify-center gap-1 h-full py-2 px-3 bg-transparent border-none text-muted-foreground transition-all duration-200 hover:text-foreground hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-accent-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-none"
+					class="nav-button text-muted-foreground hover:text-foreground hover:bg-muted/50 focus-visible:ring-accent-foreground focus-visible:ring-offset-background flex h-full flex-col items-center justify-center gap-1 rounded-none border-none bg-transparent px-3 py-2 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-offset-2"
 					aria-label={item.ariaLabel}
 					onclick={() => openDrawer(item.id)}
 					onkeydown={(e) => handleKeyDown(e, item.id)}
@@ -95,9 +95,6 @@ import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
 <StoriesDrawer bind:open={storiesOpen} />
 <TripsDrawer bind:open={tripsOpen} />
 <FeaturesDrawer bind:open={featuresOpen} />
-
-
-
 
 <style>
 	.bottom-nav {
@@ -153,7 +150,9 @@ import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
 		border-top-right-radius: 12px;
 		border: 1px solid hsl(var(--border));
 		border-bottom: none;
-		box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -2px rgba(0, 0, 0, 0.1);
+		box-shadow:
+			0 -4px 6px -1px rgba(0, 0, 0, 0.1),
+			0 -2px 4px -2px rgba(0, 0, 0, 0.1);
 	}
 
 	:global(.drawer-handle) {
@@ -165,8 +164,6 @@ import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
 		flex-shrink: 0;
 	}
 
-
-
 	/* Responsive adjustments */
 	@media (max-width: 480px) {
 		.bottom-nav {
@@ -176,7 +173,5 @@ import TripsDrawer from "$lib/components/drawers/TripsDrawer.svelte";
 		:global(.drawer-content) {
 			max-height: 90vh;
 		}
-
-
 	}
 </style>

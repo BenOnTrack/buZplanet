@@ -7,16 +7,81 @@
 		FullscreenControl,
 		ScaleControl,
 		type StyleSpecification,
-		type LngLatLike
+		type LngLatLike,
+		type Map as MapStore
 	} from 'svelte-maplibre';
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import { createMapStyle } from '$lib/utils/map/mapStyle.js';
+	import { appState } from '$lib/stores/AppState.svelte';
+	import BasemapVectorTileSource from '$lib/components/map/BasemapVectorTileSource.svelte';
+	import BuildingVectorTileSource from '$lib/components/map/BuildingVectorTileSource.svelte';
+	import TransportationVectorTileSource from '$lib/components/map/TransportationVectorTileSource.svelte';
+	import PoiVectorTileSource from './PoiVectorTileSource.svelte';
 
-	// Default map configuration
-	const mapStyle = 'https://demotiles.maplibre.org/style.json';
-	const initialView = {
-		center: [0, 0] as [number, number],
-		zoom: 2
-	};
+	interface Props {
+		ready?: boolean;
+	}
+
+	let { ready = true }: Props = $props();
+
+	// Map instance reference
+	let mapInstance = $state<MapStore | undefined>();
+
+	// Default map configuration - use AppState for initial values
+	let mapStyle: StyleSpecification = $state({
+		version: 8,
+		name: 'Loading',
+		sources: {},
+		glyphs: '',
+		sprite: '',
+		layers: []
+	});
+
+	// Get initial view from AppState
+	let currentView = $derived({
+		center: appState.mapView.center as [number, number],
+		zoom: appState.mapView.zoom,
+		bearing: appState.mapView.bearing || 0,
+		pitch: appState.mapView.pitch || 0
+	});
+
+	// Debounce timer for saving map state
+	let saveTimer: number | undefined;
+	let pendingMapState: any = null;
+
+	// Save map state to IndexedDB only when app is closing/hidden
+	function updateMapState() {
+		if (!mapInstance) return;
+
+		const center = mapInstance.getCenter();
+		const zoom = mapInstance.getZoom();
+		const bearing = mapInstance.getBearing();
+		const pitch = mapInstance.getPitch();
+
+		// Store pending state without saving to IndexedDB immediately
+		pendingMapState = {
+			center: [center.lng, center.lat],
+			zoom: zoom,
+			bearing: bearing,
+			pitch: pitch
+		};
+	}
+
+	// Actually save to IndexedDB
+	function savePendingMapState() {
+		if (pendingMapState) {
+			appState.updateMapView(pendingMapState);
+			pendingMapState = null;
+		}
+	}
+
+	// Initialize map style with current page origin
+	$effect(() => {
+		if (page.url?.origin) {
+			mapStyle = createMapStyle(page.url.origin);
+		}
+	});
 
 	// Handle viewport height changes for mobile browsers
 	let mapContainer: HTMLDivElement;
@@ -32,29 +97,149 @@
 		window.addEventListener('resize', setVH);
 		window.addEventListener('orientationchange', setVH);
 
+		// Add event listeners for saving map state when leaving the app
+		const handleBeforeUnload = () => {
+			savePendingMapState();
+		};
+
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'hidden') {
+				savePendingMapState();
+			}
+		};
+
+		const handlePageHide = () => {
+			savePendingMapState();
+		};
+
+		const handleAppCleanup = () => {
+			savePendingMapState();
+		};
+
+		// Listen for app closing/switching events
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		window.addEventListener('pagehide', handlePageHide);
+		window.addEventListener('app-cleanup', handleAppCleanup);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+
+		// Wait for map instance to be available
+		$effect(() => {
+			if (mapInstance) {
+				// Add event handlers to update map state (but not save immediately)
+				mapInstance.on('moveend', updateMapState);
+				mapInstance.on('zoomend', updateMapState);
+				mapInstance.on('rotateend', updateMapState);
+				mapInstance.on('pitchend', updateMapState);
+			}
+		});
+
 		return () => {
+			// Save any pending state before cleanup
+			savePendingMapState();
+
+			if (saveTimer) {
+				clearTimeout(saveTimer);
+			}
+
+			// Clean up event listeners
 			window.removeEventListener('resize', setVH);
 			window.removeEventListener('orientationchange', setVH);
+			window.removeEventListener('beforeunload', handleBeforeUnload);
+			window.removeEventListener('pagehide', handlePageHide);
+			window.removeEventListener('app-cleanup', handleAppCleanup);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
 		};
 	});
+
+	// Map keyboard handler for accessibility
+	function handleKeydown(event: KeyboardEvent) {
+		if (!mapInstance) return;
+
+		switch (event.key) {
+			case 'ArrowUp':
+				mapInstance.panBy([0, -100]);
+				event.preventDefault();
+				break;
+			case 'ArrowDown':
+				mapInstance.panBy([0, 100]);
+				event.preventDefault();
+				break;
+			case 'ArrowLeft':
+				mapInstance.panBy([-100, 0]);
+				event.preventDefault();
+				break;
+			case 'ArrowRight':
+				mapInstance.panBy([100, 0]);
+				event.preventDefault();
+				break;
+			case '+':
+			case '=':
+				mapInstance.zoomIn();
+				event.preventDefault();
+				break;
+			case '-':
+				mapInstance.zoomOut();
+				event.preventDefault();
+				break;
+		}
+	}
 </script>
 
-<div class="map-container" bind:this={mapContainer}>
-	<MapLibre
-		style={mapStyle}
-		center={initialView.center}
-		zoom={initialView.zoom}
-		class="map-instance"
-		attributionControl={false}
-	>
-		<NavigationControl position="top-right" />
-		<GeolocateControl
-			position="top-right"
-			positionOptions={{ enableHighAccuracy: true }}
-			fitBoundsOptions={{ maxZoom: 16 }}
-			trackUserLocation={true}
-		/>
-	</MapLibre>
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<div
+	class="map-container"
+	bind:this={mapContainer}
+	tabindex="0"
+	role="application"
+	aria-label="Interactive map - Use arrow keys to pan, +/- to zoom"
+	onkeydown={handleKeydown}
+>
+	{#if ready}
+		<MapLibre
+			bind:map={mapInstance}
+			style={mapStyle}
+			center={currentView.center}
+			zoom={currentView.zoom}
+			bearing={currentView.bearing}
+			pitch={currentView.pitch}
+			class="map-instance"
+			minZoom={0}
+			maxZoom={19}
+			pitchWithRotate={true}
+			bearingSnap={7}
+			renderWorldCopies={true}
+			dragRotate={true}
+			interactive={true}
+			projection={{ type: 'globe' }}
+			attributionControl={false}
+		>
+			<NavigationControl position="top-right" />
+			<GeolocateControl
+				position="top-right"
+				positionOptions={{ enableHighAccuracy: true }}
+				fitBoundsOptions={{ maxZoom: 16 }}
+				trackUserLocation={true}
+			/>
+			<BackgroundLayer
+				id="background"
+				paint={{
+					'background-color': '#FBF2E7'
+				}}
+			></BackgroundLayer>
+			<BasemapVectorTileSource />
+			<TransportationVectorTileSource />
+			<BuildingVectorTileSource />
+			<PoiVectorTileSource />
+		</MapLibre>
+	{:else}
+		<div class="map-placeholder">
+			<div class="placeholder-content">
+				<div class="placeholder-icon">🗺️</div>
+				<p>Initializing map...</p>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -111,6 +296,32 @@
 			height: calc(100vh - max(env(safe-area-inset-top), 0px) - 76px);
 			height: calc(100dvh - max(env(safe-area-inset-top), 0px) - 76px);
 		}
+	}
+
+	.map-placeholder {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: #fbf2e7;
+		color: #666;
+	}
+
+	.placeholder-content {
+		text-align: center;
+	}
+
+	.placeholder-icon {
+		font-size: 3rem;
+		margin-bottom: 1rem;
+		opacity: 0.6;
+	}
+
+	.placeholder-content p {
+		margin: 0;
+		font-size: 1rem;
+		opacity: 0.7;
 	}
 
 	/* Responsive adjustments for smaller screens */

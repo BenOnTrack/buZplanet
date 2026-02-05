@@ -1,5 +1,5 @@
 node_modules
-
+_archive
 # Output
 .output
 .vercel
@@ -28,3 +28,6 @@ project.inlang/cache/
 
 # Cloudflare Types
 /worker-configuration.d.ts
+
+# Local development data
+dev-data/

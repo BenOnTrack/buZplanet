@@ -6,12 +6,16 @@ const config = {
 	preprocess: vitePreprocess(),
 
 	kit: {
-		adapter: adapter(),
+		adapter: adapter({
+			platformProxy: {
+				enabled: true
+			}
+		}),
 		serviceWorker: {
-			register: true // Enable SvelteKit's service worker
+			register: false // Enable SvelteKit's service worker
 		},
 		alias: {
-			'$paraglide': 'src/paraglide'
+			$paraglide: 'src/paraglide'
 		}
 	}
 };
