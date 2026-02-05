@@ -110,16 +110,25 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 			case 'tile-request':
 				// Handle tile request from protocol handler
 				const tileData = await handleTileRequest(data.source, data.z, data.x, data.y);
-				postMessage(
-					{
+				if (tileData) {
+					postMessage(
+						{
+							type: 'tile-response',
+							data: tileData,
+							id
+						} satisfies WorkerResponse,
+						{
+							transfer: [tileData]
+						}
+					); // Transfer ArrayBuffer
+				} else {
+					// No tile data available - send response with null data
+					postMessage({
 						type: 'tile-response',
-						data: tileData,
+						data: null,
 						id
-					} satisfies WorkerResponse,
-					{
-						transfer: [tileData]
-					}
-				); // Transfer ArrayBuffer
+					} satisfies WorkerResponse);
+				}
 				break;
 
 			case 'list-databases':
@@ -534,7 +543,7 @@ async function handleTileRequest(
 	z: number,
 	x: number,
 	y: number
-): Promise<ArrayBuffer> {
+): Promise<ArrayBuffer | null> {
 	try {
 		// Validate coordinates
 		if (z < 0 || z > 22 || x < 0 || y < 0) {
@@ -544,7 +553,8 @@ async function handleTileRequest(
 		// Find databases for the source
 		const sourceDbs = getDatabasesBySource(source);
 		if (sourceDbs.length === 0) {
-			throw new Error(`No database found for source: ${source}`);
+			// No database found for this source - this is normal, just return null
+			return null;
 		}
 
 		// Convert XYZ to TMS Y coordinate (MBTiles use TMS scheme)
@@ -600,66 +610,47 @@ async function handleTileRequest(
 			}
 		}
 
-		// No tile found in any database
-		throw new Error(`No tile found for ${source} ${z}/${x}/${y}`);
+		// No tile found in any database - return null
+		return null;
 	} catch (error) {
-		// Only log errors for non-missing-tile issues
-		if (error instanceof Error && !error.message.includes('No tile found')) {
+		// Log actual errors (not missing tiles/databases)
+		if (
+			error instanceof Error &&
+			!error.message.includes('No tile found') &&
+			!error.message.includes('No database found')
+		) {
 			console.error(`Tile request failed: ${source} ${z}/${x}/${y}:`, error);
 		}
-		throw error;
+		// Return null instead of throwing error
+		return null;
 	}
 }
 
-// Get databases by source name
+// Get databases by source name - simplified and more flexible
 function getDatabasesBySource(source: string): DatabaseEntry[] {
-	// Improved matching logic for different naming patterns
 	const matchingDbs: DatabaseEntry[] = [];
+	const sourceLower = source.toLowerCase();
 
-	for (const [key, entries] of dbIndex.entries()) {
-		for (const entry of entries) {
-			const filename = entry.filename.toLowerCase();
-			const sourceLower = source.toLowerCase();
+	// Check all open databases for matches
+	for (const [filename, db] of openDatabases) {
+		const filenameLower = filename.toLowerCase();
 
-			// Check for exact match or source name in filename
-			if (filename === `${sourceLower}.mbtiles` || filename.includes(sourceLower)) {
-				matchingDbs.push(entry);
-				continue;
-			}
-
-			// Special handling for building files with patterns like:
-			// building_XXX.mbtiles, buildings_XXX.mbtiles, etc.
-			if (sourceLower === 'building') {
-				if (
-					filename.startsWith('building') ||
-					filename.startsWith('buildings') ||
-					filename.includes('building')
-				) {
-					matchingDbs.push(entry);
-					continue;
-				}
-			}
-
-			// Special handling for basemap files with patterns like:
-			// basemap_XXX.mbtiles, base_XXX.mbtiles, etc.
-			if (sourceLower === 'basemap') {
-				if (
-					filename.startsWith('basemap') ||
-					filename.startsWith('base') ||
-					filename.includes('basemap')
-				) {
-					matchingDbs.push(entry);
-					continue;
+		// Simple matching: source name should be contained in filename
+		// This covers cases like:
+		// - poi.mbtiles -> poi
+		// - building_xyz.mbtiles -> building
+		// - basemap_osm.mbtiles -> basemap
+		if (filenameLower.includes(sourceLower)) {
+			// Get the database entry from our index
+			for (const [key, entries] of dbIndex.entries()) {
+				for (const entry of entries) {
+					if (entry.filename === filename) {
+						matchingDbs.push(entry);
+						break;
+					}
 				}
 			}
 		}
-	}
-
-	// Log matching results for debugging
-	if (matchingDbs.length > 0) {
-		// Found database(s) for source
-	} else {
-		// No databases found for source
 	}
 
 	return matchingDbs;

@@ -6,7 +6,11 @@ const config = {
 	preprocess: vitePreprocess(),
 
 	kit: {
-		adapter: adapter(),
+		adapter: adapter({
+			platformProxy: {
+				enabled: true
+			}
+		}),
 		serviceWorker: {
 			register: false // Enable SvelteKit's service worker
 		},

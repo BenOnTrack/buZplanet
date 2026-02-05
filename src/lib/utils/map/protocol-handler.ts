@@ -52,19 +52,18 @@ export function createProtocolHandler(workerManager: WorkerManager): AddProtocol
 				y
 			});
 
+			// If no tile data found, return empty ArrayBuffer
+			if (!tileData) {
+				return { data: new ArrayBuffer(0) };
+			}
+
 			return {
 				data: tileData
 				// Optionally add cache control
 				// cacheControl: 'max-age=86400',
 			};
 		} catch (error) {
-			// Check if it's a "no tile found" error (normal behavior)
-			if (error instanceof Error && error.message.includes('No tile found')) {
-				// Missing tiles are normal - silently return empty data
-				return { data: new ArrayBuffer(0) };
-			}
-
-			// Log other errors as warnings since they might indicate real issues
+			// Log warnings for debugging but don't treat missing tiles as errors
 			console.warn(`Failed to fetch tile ${url}:`, error);
 			// Return empty ArrayBuffer instead of throwing to prevent map errors
 			return { data: new ArrayBuffer(0) };
@@ -75,7 +74,7 @@ export function createProtocolHandler(workerManager: WorkerManager): AddProtocol
 async function requestTileFromWorker(
 	workerManager: WorkerManager,
 	tileRequest: TileRequest
-): Promise<ArrayBuffer> {
+): Promise<ArrayBuffer | null> {
 	try {
 		// Wait for worker to be ready
 		await workerManager.waitForReady();
@@ -88,16 +87,16 @@ async function requestTileFromWorker(
 			tileRequest.y
 		);
 
-		return tileData;
+		return tileData; // Can be null if no tile found
 	} catch (error) {
 		// Check if it's a "no tile found" error (normal behavior)
 		if (error instanceof Error && error.message.includes('No tile found')) {
 			// This is expected for missing tiles - don't log as error
-			throw error; // Still throw so the catch above can handle it gracefully
+			return null; // Return null instead of throwing
 		}
 
 		// Log other errors as they might be actual issues
 		console.error('Worker tile request failed:', error);
-		throw error;
+		return null; // Return null instead of throwing
 	}
 }

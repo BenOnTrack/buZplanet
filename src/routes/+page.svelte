@@ -2,10 +2,9 @@
 	import MapView from '$lib/components/map/MapView.svelte';
 	import BottomNavigation from '$lib/components/nav/BottomNavigation.svelte';
 	import AuthDialog from '$lib/components/nav/AuthDialog.svelte';
-	import UploadDialog from '$lib/components/nav/UploadDialog.svelte';
+	import FileManagerDialog from '$lib/components/nav/FileManagerDialog.svelte';
 	import SettingsDialog from '$lib/components/nav/SettingsDialog.svelte';
 	import LoadingScreen from '$lib/components/LoadingScreen.svelte';
-	import { terminateWorker } from '$lib/utils/worker';
 	import { appInitializer } from '$lib/utils/app-initialization';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -72,7 +71,7 @@
 	});
 
 	// Clean up worker when component is destroyed
-	onDestroy(() => {
+	onDestroy(async () => {
 		// Save any pending app state before cleanup
 		if (typeof window !== 'undefined') {
 			// Trigger a final save of any pending state
@@ -83,7 +82,14 @@
 		if (unsubscribe) {
 			unsubscribe();
 		}
-		terminateWorker();
+
+		// Dynamically import to avoid static import issues
+		try {
+			const { terminateWorker } = await import('$lib/utils/worker');
+			terminateWorker();
+		} catch (error) {
+			console.warn('Failed to terminate worker:', error);
+		}
 	});
 
 	// Development testing functions
@@ -121,7 +127,7 @@
 		<LoadingScreen state={initState} showLogs={import.meta.env.DEV} />
 	{:else}
 		<AuthDialog />
-		<UploadDialog />
+		<FileManagerDialog />
 		<SettingsDialog />
 		<MapView ready={isAppReady} />
 		<BottomNavigation />

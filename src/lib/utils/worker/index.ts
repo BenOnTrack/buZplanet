@@ -146,8 +146,10 @@ export class WorkerManager {
 		return this.sendMessage('task', taskData);
 	}
 
-	async requestTile(source: string, z: number, x: number, y: number): Promise<ArrayBuffer> {
-		return this.sendMessage('tile-request', { source, z, x, y });
+	async requestTile(source: string, z: number, x: number, y: number): Promise<ArrayBuffer | null> {
+		const result = await this.sendMessage('tile-request', { source, z, x, y });
+		// Result can be null if no tile is found, which is normal
+		return result;
 	}
 
 	async listDatabases(): Promise<{ databases: any[]; totalCount: number; filenames: string[] }> {

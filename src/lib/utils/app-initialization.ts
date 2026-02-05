@@ -1,8 +1,9 @@
 /**
  * App initialization utility to ensure proper setup order
+ * Uses dynamic imports to avoid preventing worker module code splitting
  */
 
-import { getWorker } from '$lib/utils/worker';
+// Static imports for non-worker modules
 import { createProtocolHandler } from '$lib/utils/map/protocol-handler';
 import { appState } from '$lib/stores/AppState.svelte';
 import maplibregl from 'maplibre-gl';
@@ -97,6 +98,9 @@ class AppInitializer {
 
 			// Step 1: Initialize Worker (timeout after 3 seconds)
 			this.addLog('🔄 Initializing worker...');
+
+			// Dynamic import to avoid code splitting issues
+			const { getWorker } = await import('$lib/utils/worker');
 			const worker = getWorker();
 			this.addLog('✅ Worker instance created');
 
