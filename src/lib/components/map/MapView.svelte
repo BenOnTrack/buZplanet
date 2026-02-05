@@ -18,6 +18,7 @@
 	import BuildingVectorTileSource from '$lib/components/map/BuildingVectorTileSource.svelte';
 	import TransportationVectorTileSource from '$lib/components/map/TransportationVectorTileSource.svelte';
 	import PoiVectorTileSource from './PoiVectorTileSource.svelte';
+	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
 
 	interface Props {
 		ready?: boolean;
@@ -27,6 +28,10 @@
 
 	// Map instance reference
 	let mapInstance = $state<MapStore | undefined>();
+
+	// Selected feature drawer state
+	let selectedFeatureDrawerOpen = $state(false);
+	let selectedFeatures = $state<any[]>([]);
 
 	// Default map configuration - use AppState for initial values
 	let mapStyle: StyleSpecification = $state({
@@ -130,6 +135,25 @@
 				mapInstance.on('zoomend', updateMapState);
 				mapInstance.on('rotateend', updateMapState);
 				mapInstance.on('pitchend', updateMapState);
+
+				// Add click event handler to query features and open drawer
+				mapInstance.on('click', (e) => {
+					// Query rendered features at the click point
+					const features = mapInstance.queryRenderedFeatures(e.point);
+
+					// Filter features that have a name:en property
+					const namedFeatures = features.filter(
+						(feature) => feature.properties && feature.properties['name:en']
+					);
+
+					// Update selected features
+					selectedFeatures = namedFeatures;
+
+					// Open the drawer if we found features with names
+					if (namedFeatures.length > 0) {
+						selectedFeatureDrawerOpen = true;
+					}
+				});
 			}
 		});
 
@@ -241,6 +265,9 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Selected Feature Drawer -->
+<SelectedFeatureDrawer bind:open={selectedFeatureDrawerOpen} features={selectedFeatures} />
 
 <style>
 	.map-container {

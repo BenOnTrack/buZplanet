@@ -152,6 +152,15 @@ export class WorkerManager {
 		return result;
 	}
 
+	async scanDatabases(): Promise<{
+		totalFiles: number;
+		successfulDbs: number;
+		corruptedFiles: string[];
+		indexKeys: number;
+	}> {
+		return this.sendMessage('scan-databases');
+	}
+
 	async listDatabases(): Promise<{ databases: any[]; totalCount: number; filenames: string[] }> {
 		return this.sendMessage('list-databases');
 	}

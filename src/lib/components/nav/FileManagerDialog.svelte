@@ -7,6 +7,7 @@
 	import CloudArrowDown from 'phosphor-svelte/lib/CloudArrowDown';
 	import FileArchive from 'phosphor-svelte/lib/FileArchive';
 	import { opfsManager } from '$lib/utils/opfs';
+	import { getWorker } from '$lib/utils/worker/index.ts';
 
 	interface R2File {
 		key: string;
@@ -26,6 +27,8 @@
 	let uploadError = $state('');
 	let uploadSuccess = $state('');
 	let dialogOpen = $state(false);
+	let uploadProgress = $state(0);
+	let currentUploadFile = $state('');
 
 	// State for download functionality
 	let r2Files: R2File[] = $state([]);
@@ -36,6 +39,9 @@
 	let downloadSuccess = $state('');
 	let downloadingFiles = $state(new Set<string>());
 	let selectedTab = $state('upload');
+	let downloadProgress = $state(0);
+	let currentDownloadFile = $state('');
+	let allDownloadProgress = $state(0);
 
 	// Handle file selection
 	const handleFileChange = (event: Event) => {
@@ -59,6 +65,17 @@
 		}
 	};
 
+	// Refresh worker after upload/download
+	const refreshWorkerDatabases = async () => {
+		try {
+			const worker = getWorker();
+			await worker.sendMessage('scan-databases');
+			console.log('✅ Worker databases refreshed successfully');
+		} catch (error) {
+			console.error('❌ Failed to refresh worker databases:', error);
+		}
+	};
+
 	// Handle file upload to OPFS
 	const handleUpload = async (event: Event) => {
 		event.preventDefault();
@@ -71,20 +88,35 @@
 		isUploading = true;
 		uploadError = '';
 		uploadSuccess = '';
+		uploadProgress = 0;
+		currentUploadFile = '';
 
 		try {
 			const uploadedFiles: string[] = [];
 			const failedFiles: string[] = [];
+			const totalFiles = selectedFiles.length;
 
-			// Upload each file
+			// Upload each file with progress tracking
 			for (let i = 0; i < selectedFiles.length; i++) {
 				const file = selectedFiles[i];
+				currentUploadFile = file.name;
+				uploadProgress = Math.round((i / totalFiles) * 100);
+
 				try {
 					const filePath = await opfsManager.saveFile(file);
 					uploadedFiles.push(filePath);
 				} catch (fileError) {
 					failedFiles.push(file.name);
 				}
+			}
+
+			// Complete progress
+			uploadProgress = 100;
+			currentUploadFile = '';
+
+			// Refresh worker databases if any files uploaded successfully
+			if (uploadedFiles.length > 0) {
+				await refreshWorkerDatabases();
 			}
 
 			// Show results
@@ -109,12 +141,15 @@
 				setTimeout(() => {
 					dialogOpen = false;
 					uploadSuccess = '';
+					uploadProgress = 0;
 				}, 2000);
 			}
 		} catch (error) {
 			uploadError = `Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
 		} finally {
 			isUploading = false;
+			uploadProgress = 0;
+			currentUploadFile = '';
 		}
 	};
 
@@ -183,29 +218,71 @@
 		}
 	};
 
-	// Download a file from R2 to OPFS
+	// Download a file from R2 to OPFS with progress tracking
 	const downloadFile = async (file: FileComparisonResult) => {
 		if (downloadingFiles.has(file.filename)) return;
 
 		downloadingFiles.add(file.filename);
 		downloadError = '';
 		downloadSuccess = '';
+		downloadProgress = 0;
+		currentDownloadFile = file.filename;
 
 		try {
-			// Download from R2
+			// Start download from R2
 			const response = await fetch(`/api/download?file=${encodeURIComponent(file.r2File.key)}`);
 			if (!response.ok) {
 				throw new Error(`Failed to download file: ${response.status}`);
 			}
 
-			// Convert response to File object
-			const blob = await response.blob();
+			// Get content length for progress tracking
+			const contentLength = response.headers.get('Content-Length');
+			const totalBytes = contentLength ? parseInt(contentLength) : 0;
+
+			let downloadedBytes = 0;
+			const chunks: Uint8Array[] = [];
+
+			// Read response with progress tracking
+			const reader = response.body?.getReader();
+			if (!reader) throw new Error('Failed to get response reader');
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				chunks.push(value);
+				downloadedBytes += value.length;
+
+				// Update progress if we know total size
+				if (totalBytes > 0) {
+					downloadProgress = Math.round((downloadedBytes / totalBytes) * 100);
+				} else {
+					// Indeterminate progress - animate between 10-90%
+					downloadProgress = Math.min(90, 10 + (downloadedBytes / 1024 / 1024) * 5);
+				}
+			}
+
+			// Combine chunks into blob
+			const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+			const combined = new Uint8Array(totalLength);
+			let offset = 0;
+			for (const chunk of chunks) {
+				combined.set(chunk, offset);
+				offset += chunk.length;
+			}
+
+			const blob = new Blob([combined]);
 			const downloadedFile = new File([blob], file.filename, {
 				type: 'application/x-sqlite3'
 			});
 
 			// Save to OPFS
+			downloadProgress = 95; // Almost done
 			await opfsManager.saveFile(downloadedFile);
+			downloadProgress = 100;
+
+			// Refresh worker databases
+			await refreshWorkerDatabases();
 
 			// Update comparison state
 			fileComparison = fileComparison.map((f) =>
@@ -222,27 +299,72 @@
 			downloadError = `Failed to download ${file.filename}: ${error instanceof Error ? error.message : 'Unknown error'}`;
 		} finally {
 			downloadingFiles.delete(file.filename);
+			downloadProgress = 0;
+			currentDownloadFile = '';
 		}
 	};
 
-	// Download all missing files
+	// Download all missing files with overall progress tracking
 	const downloadAllMissing = async () => {
 		const missingFiles = fileComparison.filter((f) => !f.isInOPFS);
 		if (missingFiles.length === 0) return;
 
 		downloadError = '';
 		downloadSuccess = '';
+		allDownloadProgress = 0;
 
 		let successful = 0;
 		let failed = 0;
+		const totalFiles = missingFiles.length;
 
-		for (const file of missingFiles) {
+		for (let i = 0; i < missingFiles.length; i++) {
+			const file = missingFiles[i];
+			currentDownloadFile = file.filename;
+			allDownloadProgress = Math.round((i / totalFiles) * 100);
+
+			// Use the single download function but handle errors internally
+			downloadingFiles.add(file.filename);
+			downloadError = '';
+			downloadSuccess = '';
+			downloadProgress = 0;
+
 			try {
-				await downloadFile(file);
+				// Download from R2
+				const response = await fetch(`/api/download?file=${encodeURIComponent(file.r2File.key)}`);
+				if (!response.ok) {
+					throw new Error(`Failed to download file: ${response.status}`);
+				}
+
+				// Convert response to File object
+				const blob = await response.blob();
+				const downloadedFile = new File([blob], file.filename, {
+					type: 'application/x-sqlite3'
+				});
+
+				// Save to OPFS
+				await opfsManager.saveFile(downloadedFile);
+
+				// Update comparison state
+				fileComparison = fileComparison.map((f) =>
+					f.filename === file.filename ? { ...f, isInOPFS: true } : f
+				);
+
 				successful++;
-			} catch {
+			} catch (error) {
+				console.error(`Failed to download ${file.filename}:`, error);
 				failed++;
+			} finally {
+				downloadingFiles.delete(file.filename);
 			}
+		}
+
+		// Complete progress
+		allDownloadProgress = 100;
+		currentDownloadFile = '';
+
+		// Refresh worker databases if any files downloaded successfully
+		if (successful > 0) {
+			await refreshWorkerDatabases();
 		}
 
 		if (successful > 0 && failed === 0) {
@@ -253,6 +375,11 @@
 		} else {
 			downloadError = `Failed to download all ${failed} file${failed > 1 ? 's' : ''}`;
 		}
+
+		// Reset progress after delay
+		setTimeout(() => {
+			allDownloadProgress = 0;
+		}, 3000);
 	};
 
 	// Handle tab change
@@ -271,6 +398,8 @@
 			selectedFiles = null;
 			uploadError = '';
 			uploadSuccess = '';
+			uploadProgress = 0;
+			currentUploadFile = '';
 			const fileInput = document.getElementById('fileUpload') as HTMLInputElement;
 			if (fileInput) {
 				fileInput.value = '';
@@ -279,6 +408,9 @@
 			// Reset download state
 			downloadError = '';
 			downloadSuccess = '';
+			downloadProgress = 0;
+			currentDownloadFile = '';
+			allDownloadProgress = 0;
 			downloadingFiles.clear();
 		}
 	};
@@ -377,6 +509,24 @@
 								</div>
 							</div>
 
+							<!-- Upload Progress Bar -->
+							{#if isUploading}
+								<div class="mb-4 space-y-2">
+									<div class="flex items-center justify-between text-sm text-gray-600">
+										<span>
+											{currentUploadFile || 'Processing files...'}
+										</span>
+										<span>{uploadProgress}%</span>
+									</div>
+									<div class="h-2 w-full rounded-full bg-gray-200">
+										<div
+											class="h-2 rounded-full bg-blue-600 transition-all duration-300 ease-out"
+											style="width: {uploadProgress}%"
+										></div>
+									</div>
+								</div>
+							{/if}
+
 							<!-- Upload Status Messages -->
 							{#if uploadError}
 								<div class="mb-4 rounded-md border border-red-200 bg-red-50 p-3">
@@ -474,29 +624,41 @@
 												</div>
 											</div>
 											{#if !file.isInOPFS}
-												<button
-													type="button"
-													class="bg-dark hover:bg-dark/95 focus-visible:outline-dark inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-													disabled={downloadingFiles.has(file.filename)}
-													onclick={() => downloadFile(file)}
-													onkeydown={(e) => {
-														if (e.key === 'Enter' || e.key === ' ') {
-															e.preventDefault();
-															downloadFile(file);
-														}
-													}}
-													aria-label={`Download ${file.filename} to local storage`}
-												>
-													{#if downloadingFiles.has(file.filename)}
-														<div
-															class="h-4 w-4 animate-spin rounded-full border-b-2 border-white"
-														></div>
-														Downloading...
-													{:else}
-														<CloudArrowDown class="size-4" />
-														Download
+												<div class="flex flex-col gap-2">
+													<button
+														type="button"
+														class="bg-dark hover:bg-dark/95 focus-visible:outline-dark inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+														disabled={downloadingFiles.has(file.filename)}
+														onclick={() => downloadFile(file)}
+														onkeydown={(e) => {
+															if (e.key === 'Enter' || e.key === ' ') {
+																e.preventDefault();
+																downloadFile(file);
+															}
+														}}
+														aria-label={`Download ${file.filename} to local storage`}
+													>
+														{#if downloadingFiles.has(file.filename)}
+															<div
+																class="h-4 w-4 animate-spin rounded-full border-b-2 border-white"
+															></div>
+															Downloading...
+														{:else}
+															<CloudArrowDown class="size-4" />
+															Download
+														{/if}
+													</button>
+
+													<!-- Individual Download Progress Bar -->
+													{#if downloadingFiles.has(file.filename) && currentDownloadFile === file.filename && downloadProgress > 0}
+														<div class="h-1.5 w-full rounded-full bg-gray-200">
+															<div
+																class="h-1.5 rounded-full bg-blue-600 transition-all duration-300 ease-out"
+																style="width: {downloadProgress}%"
+															></div>
+														</div>
 													{/if}
-												</button>
+												</div>
 											{:else}
 												<span class="text-sm font-medium text-green-600">Downloaded</span>
 											{/if}
@@ -507,34 +669,54 @@
 								<!-- Download All Missing Button -->
 								{@const missingFiles = fileComparison.filter((f) => !f.isInOPFS)}
 								{#if missingFiles.length > 0}
-									<div
-										class="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3"
-									>
-										<div>
-											<p class="text-sm font-medium text-blue-900">
-												{missingFiles.length} file{missingFiles.length > 1 ? 's' : ''} not downloaded
-												yet
-											</p>
-											<p class="text-xs text-blue-700">
-												Download all missing files to local storage
-											</p>
-										</div>
-										<button
-											type="button"
-											class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-											disabled={downloadingFiles.size > 0}
-											onclick={downloadAllMissing}
-											onkeydown={(e) => {
-												if (e.key === 'Enter' || e.key === ' ') {
-													e.preventDefault();
-													downloadAllMissing();
-												}
-											}}
-											aria-label="Download all missing files to local storage"
+									<div class="space-y-3">
+										<div
+											class="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3"
 										>
-											<CloudArrowDown class="size-4" />
-											Download All ({missingFiles.length})
-										</button>
+											<div>
+												<p class="text-sm font-medium text-blue-900">
+													{missingFiles.length} file{missingFiles.length > 1 ? 's' : ''} not downloaded
+													yet
+												</p>
+												<p class="text-xs text-blue-700">
+													Download all missing files to local storage
+												</p>
+											</div>
+											<button
+												type="button"
+												class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+												disabled={downloadingFiles.size > 0}
+												onclick={downloadAllMissing}
+												onkeydown={(e) => {
+													if (e.key === 'Enter' || e.key === ' ') {
+														e.preventDefault();
+														downloadAllMissing();
+													}
+												}}
+												aria-label="Download all missing files to local storage"
+											>
+												<CloudArrowDown class="size-4" />
+												Download All ({missingFiles.length})
+											</button>
+										</div>
+
+										<!-- Overall Download Progress Bar -->
+										{#if allDownloadProgress > 0}
+											<div class="space-y-2">
+												<div class="flex items-center justify-between text-sm text-gray-600">
+													<span>
+														{currentDownloadFile || 'Processing files...'}
+													</span>
+													<span>{allDownloadProgress}%</span>
+												</div>
+												<div class="h-2 w-full rounded-full bg-gray-200">
+													<div
+														class="h-2 rounded-full bg-blue-600 transition-all duration-300 ease-out"
+														style="width: {allDownloadProgress}%"
+													></div>
+												</div>
+											</div>
+										{/if}
 									</div>
 								{/if}
 
