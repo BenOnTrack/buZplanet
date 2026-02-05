@@ -7,7 +7,7 @@
 	import CloudArrowDown from 'phosphor-svelte/lib/CloudArrowDown';
 	import FileArchive from 'phosphor-svelte/lib/FileArchive';
 	import { opfsManager } from '$lib/utils/opfs';
-	import { getWorker } from '$lib/utils/worker/index.ts';
+	import { getWorker } from '$lib/utils/worker/index';
 
 	interface R2File {
 		key: string;

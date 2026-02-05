@@ -15,6 +15,25 @@
 	let hasFeatures = $derived(features && features.length > 0);
 	let primaryFeature = $derived(features && features.length > 0 ? features[0] : null);
 	let featureCount = $derived(features ? features.length : 0);
+
+	// Helper function to get display name with fallbacks
+	function getDisplayName(feature: any): string {
+		if (!feature || !feature.properties) return 'Unknown Feature';
+
+		const props = feature.properties;
+
+		// Try name:en first
+		if (props['name:en']) return props['name:en'];
+
+		// Fallback to name
+		if (props.name) return props.name;
+
+		// Fallback to class
+		if (props.class) return props.class;
+
+		// Final fallback
+		return 'Unknown Feature';
+	}
 </script>
 
 <!-- Selected Feature Drawer -->
@@ -34,7 +53,7 @@
 					<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
 						<span>📍</span>
 						{#if hasFeatures}
-							{primaryFeature?.properties?.['name:en'] || 'Selected Feature'}
+							{getDisplayName(primaryFeature)}
 						{:else}
 							Selected Feature
 						{/if}
@@ -45,30 +64,25 @@
 					</Drawer.Close>
 				</div>
 
-				<p class="mb-6 text-gray-600">
-					{#if hasFeatures}
-						{featureCount} feature{featureCount === 1 ? '' : 's'} found at this location.
-					{:else}
-						No named features found at this location.
-					{/if}
-				</p>
-
 				<div class="space-y-4">
 					{#if hasFeatures}
 						{#each features as feature, index}
 							<div class="rounded-lg bg-gray-50 p-4">
 								<h3 class="mb-2 flex items-center gap-2 font-medium">
 									<span class="text-blue-500">{index === 0 ? '🎯' : '📌'}</span>
-									{feature.properties['name:en']}
+									{getDisplayName(feature)}
 								</h3>
 								<div class="space-y-1 text-sm text-gray-600">
 									<p><strong>Layer:</strong> {feature.layer?.id || 'Unknown'}</p>
 									<p><strong>Source:</strong> {feature.source || 'Unknown'}</p>
-									{#if feature.properties.type}
+									{#if feature.properties?.type}
 										<p><strong>Type:</strong> {feature.properties.type}</p>
 									{/if}
-									{#if feature.properties.class}
+									{#if feature.properties?.class}
 										<p><strong>Class:</strong> {feature.properties.class}</p>
+									{/if}
+									{#if feature.properties?.name && feature.properties.name !== feature.properties?.['name:en']}
+										<p><strong>Local Name:</strong> {feature.properties.name}</p>
 									{/if}
 								</div>
 							</div>

@@ -139,18 +139,17 @@
 				// Add click event handler to query features and open drawer
 				mapInstance.on('click', (e) => {
 					// Query rendered features at the click point
+					if (!mapInstance) return;
 					const features = mapInstance.queryRenderedFeatures(e.point);
 
-					// Filter features that have a name:en property
-					const namedFeatures = features.filter(
-						(feature) => feature.properties && feature.properties['name:en']
-					);
+					// Get only the top feature (first in array)
+					const topFeature = features.length > 0 ? features[0] : null;
 
-					// Update selected features
-					selectedFeatures = namedFeatures;
+					// Update selected features with only the top feature
+					selectedFeatures = topFeature ? [topFeature] : [];
 
-					// Open the drawer if we found features with names
-					if (namedFeatures.length > 0) {
+					// Open the drawer if we found a feature
+					if (topFeature) {
 						selectedFeatureDrawerOpen = true;
 					}
 				});
