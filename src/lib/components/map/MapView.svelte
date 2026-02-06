@@ -148,9 +148,12 @@
 					// Update selected features with only the top feature
 					selectedFeatures = topFeature ? [topFeature] : [];
 
-					// Open the drawer if we found a feature
+					// Open the drawer only if we found a feature, close it if no features
 					if (topFeature) {
 						selectedFeatureDrawerOpen = true;
+					} else {
+						// Close drawer when clicking on empty area
+						selectedFeatureDrawerOpen = false;
 					}
 				});
 			}

@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { Dialog, Label, Separator, Tabs } from 'bits-ui';
+	import { Dialog, Label, Tabs } from 'bits-ui';
 	import Upload from 'phosphor-svelte/lib/Upload';
 	import X from 'phosphor-svelte/lib/X';
 	import CloudArrowUp from 'phosphor-svelte/lib/CloudArrowUp';
-	import Download from 'phosphor-svelte/lib/Download';
 	import CloudArrowDown from 'phosphor-svelte/lib/CloudArrowDown';
 	import FileArchive from 'phosphor-svelte/lib/FileArchive';
 	import { opfsManager } from '$lib/utils/opfs';
@@ -38,7 +37,7 @@
 	let downloadError = $state('');
 	let downloadSuccess = $state('');
 	let downloadingFiles = $state(new Set<string>());
-	let selectedTab = $state('upload');
+	let selectedTab = $state('downloadLocal');
 	let downloadProgress = $state(0);
 	let currentDownloadFile = $state('');
 	let allDownloadProgress = $state(0);
@@ -74,6 +73,11 @@
 		} catch (error) {
 			console.error('❌ Failed to refresh worker databases:', error);
 		}
+	};
+
+	// Refresh the entire app to ensure tiles reload properly
+	const refreshApp = () => {
+		window.location.reload();
 	};
 
 	// Handle file upload to OPFS
@@ -117,6 +121,10 @@
 			// Refresh worker databases if any files uploaded successfully
 			if (uploadedFiles.length > 0) {
 				await refreshWorkerDatabases();
+				// Refresh app to ensure tiles reload properly
+				setTimeout(() => {
+					refreshApp();
+				}, 1000);
 			}
 
 			// Show results
@@ -137,12 +145,12 @@
 					fileInput.value = '';
 				}
 
-				// Close dialog after a short delay
+				// Close dialog after a short delay (app will refresh anyway)
 				setTimeout(() => {
 					dialogOpen = false;
 					uploadSuccess = '';
 					uploadProgress = 0;
-				}, 2000);
+				}, 1500);
 			}
 		} catch (error) {
 			uploadError = `Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -284,6 +292,11 @@
 			// Refresh worker databases
 			await refreshWorkerDatabases();
 
+			// Refresh app to ensure tiles reload properly
+			setTimeout(() => {
+				refreshApp();
+			}, 1000);
+
 			// Update comparison state
 			fileComparison = fileComparison.map((f) =>
 				f.filename === file.filename ? { ...f, isInOPFS: true } : f
@@ -365,6 +378,10 @@
 		// Refresh worker databases if any files downloaded successfully
 		if (successful > 0) {
 			await refreshWorkerDatabases();
+			// Refresh app to ensure tiles reload properly
+			setTimeout(() => {
+				refreshApp();
+			}, 1000);
 		}
 
 		if (successful > 0 && failed === 0) {
@@ -385,7 +402,7 @@
 	// Handle tab change
 	const handleTabChange = (value: string) => {
 		selectedTab = value;
-		if (value === 'download' && fileComparison.length === 0) {
+		if (value === 'downloadRemote' && fileComparison.length === 0) {
 			compareFiles();
 		}
 	};
@@ -473,21 +490,21 @@
 						class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background grid w-full grid-cols-2 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
 					>
 						<Tabs.Trigger
-							value="upload"
+							value="downloadLocal"
 							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
-							>Upload</Tabs.Trigger
+							>Download Local</Tabs.Trigger
 						>
 						<Tabs.Trigger
-							value="download"
+							value="downloadRemote"
 							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
-							>Download</Tabs.Trigger
+							>Download Remote</Tabs.Trigger
 						>
 					</Tabs.List>
-					<Tabs.Content value="upload" class="pt-3">
+					<Tabs.Content value="downloadLocal" class="pt-3">
 						<div class="max-h-[60vh] overflow-y-auto px-1">
 							<Dialog.Description class="text-foreground-alt mb-6 text-sm">
-								Upload .mbtiles files to your storage. You can select multiple .mbtiles files at
-								once.
+								Download .mbtiles files from your computer to local storage. You can select multiple
+								.mbtiles files at once.
 							</Dialog.Description>
 							<div class="flex flex-col items-start gap-1 pb-6">
 								<Label.Root for="fileUpload" class="text-sm font-medium"
@@ -509,7 +526,7 @@
 								</div>
 							</div>
 
-							<!-- Upload Progress Bar -->
+							<!-- Download Progress Bar -->
 							{#if isUploading}
 								<div class="mb-4 space-y-2">
 									<div class="flex items-center justify-between text-sm text-gray-600">
@@ -527,7 +544,7 @@
 								</div>
 							{/if}
 
-							<!-- Upload Status Messages -->
+							<!-- Download Status Messages -->
 							{#if uploadError}
 								<div class="mb-4 rounded-md border border-red-200 bg-red-50 p-3">
 									<p class="text-sm text-red-800">{uploadError}</p>
@@ -552,22 +569,22 @@
 											handleUpload(e);
 										}
 									}}
-									aria-label="Upload selected .mbtiles files to storage"
+									aria-label="Download selected .mbtiles files to local storage"
 								>
 									{#if isUploading}
-										Uploading...
+										Downloading...
 									{:else}
-										Upload
+										Download
 									{/if}
 								</button>
 							</div>
 						</div>
 					</Tabs.Content>
-					<Tabs.Content value="download" class="pt-3">
+					<Tabs.Content value="downloadRemote" class="pt-3">
 						<div class="max-h-[60vh] overflow-y-auto px-1">
 							<Dialog.Description class="text-foreground-alt mb-6 text-sm">
-								Download .mbtiles files from your cloud storage to local storage. Files already
-								stored locally are marked with a checkmark.
+								Download .mbtiles files from your cloud storage (Cloudflare R2) to local storage.
+								Files already stored locally are marked with a checkmark.
 							</Dialog.Description>
 
 							<!-- Loading State -->
