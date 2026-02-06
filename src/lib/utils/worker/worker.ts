@@ -7,6 +7,7 @@ export interface WorkerMessage {
 	type: string;
 	data?: any;
 	id?: string;
+	fileData?: ArrayBuffer;
 }
 
 export interface WorkerResponse extends WorkerMessage {
@@ -37,6 +38,110 @@ let opfsRoot: FileSystemDirectoryHandle | null = null;
 const dbIndex = new Map<string, DatabaseEntry[]>();
 const openDatabases = new Map<string, OpfsDatabase>();
 
+// OPFS file operations
+class WorkerOPFSManager {
+	private static instance: WorkerOPFSManager;
+	private root: FileSystemDirectoryHandle | null = null;
+
+	public static getInstance(): WorkerOPFSManager {
+		if (!WorkerOPFSManager.instance) {
+			WorkerOPFSManager.instance = new WorkerOPFSManager();
+		}
+		return WorkerOPFSManager.instance;
+	}
+
+	public async initialize(): Promise<void> {
+		if (!('storage' in navigator && 'getDirectory' in navigator.storage)) {
+			throw new Error('OPFS is not supported in this browser');
+		}
+
+		try {
+			this.root = await navigator.storage.getDirectory();
+			opfsRoot = this.root; // Set global reference
+		} catch (error) {
+			throw new Error(`Failed to initialize OPFS: ${error}`);
+		}
+	}
+
+	public async saveFile(
+		filename: string,
+		data: ArrayBuffer,
+		directory: string = ''
+	): Promise<string> {
+		if (!this.root) {
+			await this.initialize();
+		}
+
+		try {
+			// Use root directory or create/get subdirectory
+			const dirHandle = directory
+				? await this.root!.getDirectoryHandle(directory, { create: true })
+				: this.root!;
+
+			// Generate unique filename if file already exists
+			let finalFilename = filename;
+			let counter = 1;
+
+			while (await this.fileExists(dirHandle, finalFilename)) {
+				const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+				const ext = filename.match(/\.[^/.]+$/)?.[0] || '';
+				finalFilename = `${nameWithoutExt}_${counter}${ext}`;
+				counter++;
+			}
+
+			// Create file handle
+			const fileHandle = await dirHandle.getFileHandle(finalFilename, { create: true });
+
+			// Create writable stream and write file
+			const writable = await fileHandle.createWritable();
+			await writable.write(data);
+			await writable.close();
+
+			return directory ? `${directory}/${finalFilename}` : finalFilename;
+		} catch (error) {
+			throw new Error(`Failed to save file: ${error}`);
+		}
+	}
+
+	public async listFiles(directory: string = ''): Promise<string[]> {
+		if (!this.root) {
+			await this.initialize();
+		}
+
+		try {
+			// Use root directory or get subdirectory
+			const dirHandle = directory ? await this.root!.getDirectoryHandle(directory) : this.root!;
+			const files: string[] = [];
+
+			// TypeScript doesn't recognize entries() method but it exists in modern browsers
+			for await (const [name, handle] of (dirHandle as any).entries()) {
+				if (handle.kind === 'file') {
+					files.push(name);
+				}
+			}
+
+			return files;
+		} catch (error) {
+			// Directory doesn't exist or other error
+			return [];
+		}
+	}
+
+	private async fileExists(
+		dirHandle: FileSystemDirectoryHandle,
+		filename: string
+	): Promise<boolean> {
+		try {
+			await dirHandle.getFileHandle(filename);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+}
+
+const workerOPFS = WorkerOPFSManager.getInstance();
+
 // Listen for messages from the main thread
 self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 	const { type, data, id } = event.data;
@@ -55,6 +160,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 			case 'init':
 				// Initialize SQLite and OPFS
 				await initializeSqlite();
+				await workerOPFS.initialize();
 				// Check and log all OPFS .mbtiles files
 				const opfsFiles = await listOpfsMbtilesFiles();
 				postMessage({
@@ -141,6 +247,30 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 						totalCount: availableDbs.length,
 						filenames: availableDbs.map((db) => db.filename)
 					},
+					id
+				} satisfies WorkerResponse);
+				break;
+
+			case 'opfs-save-file':
+				// Save file to OPFS
+				const savedPath = await workerOPFS.saveFile(
+					data.filename,
+					data.fileData,
+					data.directory || ''
+				);
+				postMessage({
+					type: 'opfs-file-saved',
+					data: { savedPath },
+					id
+				} satisfies WorkerResponse);
+				break;
+
+			case 'opfs-list-files':
+				// List files in OPFS
+				const fileList = await workerOPFS.listFiles(data.directory || '');
+				postMessage({
+					type: 'opfs-files-listed',
+					data: { files: fileList },
 					id
 				} satisfies WorkerResponse);
 				break;

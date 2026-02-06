@@ -119,6 +119,12 @@ export class WorkerManager {
 		const id = this.generateMessageId();
 		const message: WorkerMessage = { type, data, id };
 
+		// Handle binary data transfer
+		const transferList: Transferable[] = [];
+		if (data && data.fileData instanceof ArrayBuffer) {
+			transferList.push(data.fileData);
+		}
+
 		return new Promise((resolve, reject) => {
 			// Set up timeout
 			const timeout = setTimeout(() => {
@@ -129,8 +135,12 @@ export class WorkerManager {
 			// Store pending message
 			this.pendingMessages.set(id, { resolve, reject, timeout });
 
-			// Send message
-			this.worker!.postMessage(message);
+			// Send message with transfers if needed
+			if (transferList.length > 0) {
+				this.worker!.postMessage(message, transferList);
+			} else {
+				this.worker!.postMessage(message);
+			}
 		});
 	}
 
@@ -163,6 +173,20 @@ export class WorkerManager {
 
 	async listDatabases(): Promise<{ databases: any[]; totalCount: number; filenames: string[] }> {
 		return this.sendMessage('list-databases');
+	}
+
+	// OPFS operations through worker
+	async saveFileToOPFS(
+		filename: string,
+		fileData: ArrayBuffer,
+		directory?: string
+	): Promise<string> {
+		return this.sendMessage('opfs-save-file', { filename, fileData, directory }, 30000); // 30s timeout for large files
+	}
+
+	async listOPFSFiles(directory?: string): Promise<string[]> {
+		const result = await this.sendMessage('opfs-list-files', { directory });
+		return result.files;
 	}
 
 	postMessage(type: string, data?: any): void {

@@ -5,7 +5,6 @@
 	import CloudArrowUp from 'phosphor-svelte/lib/CloudArrowUp';
 	import CloudArrowDown from 'phosphor-svelte/lib/CloudArrowDown';
 	import FileArchive from 'phosphor-svelte/lib/FileArchive';
-	import { opfsManager } from '$lib/utils/opfs';
 	import { getWorker } from '$lib/utils/worker/index';
 
 	interface R2File {
@@ -80,7 +79,7 @@
 		window.location.reload();
 	};
 
-	// Handle file upload to OPFS
+	// Handle file upload to OPFS via worker
 	const handleUpload = async (event: Event) => {
 		event.preventDefault();
 
@@ -96,6 +95,7 @@
 		currentUploadFile = '';
 
 		try {
+			const worker = getWorker();
 			const uploadedFiles: string[] = [];
 			const failedFiles: string[] = [];
 			const totalFiles = selectedFiles.length;
@@ -107,9 +107,14 @@
 				uploadProgress = Math.round((i / totalFiles) * 100);
 
 				try {
-					const filePath = await opfsManager.saveFile(file);
-					uploadedFiles.push(filePath);
+					// Convert file to ArrayBuffer for transfer
+					const arrayBuffer = await file.arrayBuffer();
+
+					// Send to worker for OPFS storage
+					const savedPath = await worker.saveFileToOPFS(file.name, arrayBuffer);
+					uploadedFiles.push(savedPath);
 				} catch (fileError) {
+					console.error(`Failed to upload ${file.name}:`, fileError);
 					failedFiles.push(file.name);
 				}
 			}
@@ -186,10 +191,11 @@
 		}
 	};
 
-	// Get files from OPFS
+	// Get files from OPFS via worker
 	const fetchOPFSFiles = async (): Promise<string[]> => {
 		try {
-			return await opfsManager.listFiles();
+			const worker = getWorker();
+			return await worker.listOPFSFiles();
 		} catch (error) {
 			console.error('Error fetching OPFS files:', error);
 			return [];
@@ -284,9 +290,10 @@
 				type: 'application/x-sqlite3'
 			});
 
-			// Save to OPFS
+			// Save to OPFS via worker
 			downloadProgress = 95; // Almost done
-			await opfsManager.saveFile(downloadedFile);
+			const worker = getWorker();
+			await worker.saveFileToOPFS(file.filename, combined.buffer);
 			downloadProgress = 100;
 
 			// Refresh worker databases
@@ -354,8 +361,10 @@
 					type: 'application/x-sqlite3'
 				});
 
-				// Save to OPFS
-				await opfsManager.saveFile(downloadedFile);
+				// Save to OPFS via worker
+				const worker = getWorker();
+				const arrayBuffer = await blob.arrayBuffer();
+				await worker.saveFileToOPFS(file.filename, arrayBuffer);
 
 				// Update comparison state
 				fileComparison = fileComparison.map((f) =>
