@@ -234,8 +234,8 @@ This project is private. All rights reserved.
 
 wrangler r2 bucket create mbtiles
 
-wrangler r2 object put mbtiles/basemap_asia_japan_kanto.mbtiles \
- --file /home/bmodave/coding/data/mbtiles/basemap_asia_japan_kanto.mbtiles \
+wrangler r2 object put mbtiles/transportation_asia_japan_kanto.mbtiles \
+ --file /home/bmodave/coding/data/mbtiles/transportation_asia_japan_kanto.mbtiles \
  --content-type application/x-sqlite3 \
  --cache-control "public, max-age=31536000, immutable" \
  --remote

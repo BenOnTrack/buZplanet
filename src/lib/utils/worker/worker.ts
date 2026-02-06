@@ -92,10 +92,28 @@ class WorkerOPFSManager {
 			// Create file handle
 			const fileHandle = await dirHandle.getFileHandle(finalFilename, { create: true });
 
-			// Create writable stream and write file
-			const writable = await fileHandle.createWritable();
-			await writable.write(data);
-			await writable.close();
+			// Safari iOS compatibility: check if createWritable is available
+			if ('createWritable' in fileHandle) {
+				// Modern browsers (Chrome, Firefox, desktop Safari)
+				const writable = await (fileHandle as any).createWritable();
+				await writable.write(data);
+				await writable.close();
+			} else {
+				// Safari iOS fallback: use createSyncAccessHandle if available
+				if ('createSyncAccessHandle' in fileHandle) {
+					const accessHandle = await (fileHandle as any).createSyncAccessHandle();
+					try {
+						accessHandle.truncate(0);
+						accessHandle.write(new Uint8Array(data), { at: 0 });
+						accessHandle.flush();
+					} finally {
+						accessHandle.close();
+					}
+				} else {
+					// Ultimate fallback: throw descriptive error
+					throw new Error('OPFS write operations not supported in this browser version');
+				}
+			}
 
 			return directory ? `${directory}/${finalFilename}` : finalFilename;
 		} catch (error) {
