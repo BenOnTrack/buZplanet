@@ -20,6 +20,7 @@
 	import TransportationVectorTileSource from '$lib/components/map/TransportationVectorTileSource.svelte';
 	import PoiVectorTileSource from './PoiVectorTileSource.svelte';
 	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
+	import SelectedFeatureGeojsonSource from './SelectedFeatureGeojsonSource.svelte';
 
 	interface Props {
 		ready?: boolean;
@@ -33,6 +34,28 @@
 	// Selected feature drawer state
 	let selectedFeatureDrawerOpen = $state(false);
 	let selectedFeature = $state<MapGeoJSONFeature | null>(null);
+	const selectedFeatureGeoJSON = $derived.by(() => {
+		if (!selectedFeature) {
+			return {
+				type: 'FeatureCollection',
+				features: []
+			};
+		}
+
+		// Use the actual selected feature data
+		return {
+			type: 'FeatureCollection',
+			features: [
+				{
+					id: selectedFeature.id,
+					type: 'Feature',
+					properties: selectedFeature.properties,
+					geometry: selectedFeature.geometry
+				}
+			]
+		};
+	});
+	$inspect(selectedFeatureGeoJSON);
 
 	// Default map configuration - use AppState for initial values
 	let mapStyle: StyleSpecification = $state({
@@ -257,6 +280,7 @@
 			<BasemapVectorTileSource />
 			<TransportationVectorTileSource />
 			<BuildingVectorTileSource />
+			<SelectedFeatureGeojsonSource {selectedFeatureGeoJSON} />
 			<PoiVectorTileSource />
 		</MapLibre>
 	{:else}

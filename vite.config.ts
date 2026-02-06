@@ -44,7 +44,11 @@ export default defineConfig({
 		}
 	},
 	optimizeDeps: {
-		exclude: ['@sqlite.org/sqlite-wasm']
+		exclude: ['@sqlite.org/sqlite-wasm'],
+		include: ['maplibre-gl'],
+		esbuildOptions: {
+			target: 'es2022'
+		}
 	},
 	// PWA configuration with version tracking
 	define: {
