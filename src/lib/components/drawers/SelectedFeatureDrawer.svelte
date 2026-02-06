@@ -4,6 +4,7 @@
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
 	import { featuresDB, type StoredFeature } from '$lib/stores/FeaturesDB.svelte.js';
 	import BookmarkDialog from '$lib/components/dialogs/BookmarkDialog.svelte';
+	import OpeningHoursDisplay from '$lib/components/ui/OpeningHoursDisplay.svelte';
 
 	let {
 		open = $bindable(false),
@@ -384,17 +385,21 @@
 							</div>
 
 							<!-- Feature details -->
-							<div class="space-y-1 text-sm text-gray-600">
-								<p><strong>Layer:</strong> {feature.layer?.id || 'Unknown'}</p>
-								<p><strong>Source:</strong> {feature.source || 'Unknown'}</p>
-								{#if feature.properties?.type}
-									<p><strong>Type:</strong> {feature.properties.type}</p>
+							<div class="space-y-2 text-sm">
+								{#if feature.properties?.opening_hours}
+									<OpeningHoursDisplay
+										openingHours={feature.properties.opening_hours}
+										showCurrentStatus={true}
+									/>
 								{/if}
-								{#if feature.properties?.name && feature.properties.name !== feature.properties?.['name:en']}
-									<p><strong>Local Name:</strong> {feature.properties.name}</p>
+								{#if feature.properties?.type}
+									<p class="text-gray-600"><strong>Type:</strong> {feature.properties.type}</p>
 								{/if}
 								{#if featureStatus.visitedDates.length > 0}
-									<p><strong>Visits:</strong> {formatVisitDates(featureStatus.visitedDates)}</p>
+									<p class="text-gray-600">
+										<strong>Visits:</strong>
+										{formatVisitDates(featureStatus.visitedDates)}
+									</p>
 								{/if}
 							</div>
 						</div>
