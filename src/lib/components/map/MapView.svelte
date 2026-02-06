@@ -8,7 +8,8 @@
 		ScaleControl,
 		type StyleSpecification,
 		type LngLatLike,
-		type Map as MapStore
+		type Map as MapStore,
+		type MapGeoJSONFeature
 	} from 'svelte-maplibre';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -31,7 +32,7 @@
 
 	// Selected feature drawer state
 	let selectedFeatureDrawerOpen = $state(false);
-	let selectedFeatures = $state<any[]>([]);
+	let selectedFeature = $state<MapGeoJSONFeature | null>(null);
 
 	// Default map configuration - use AppState for initial values
 	let mapStyle: StyleSpecification = $state({
@@ -145,8 +146,8 @@
 					// Get only the top feature (first in array)
 					const topFeature = features.length > 0 ? features[0] : null;
 
-					// Update selected features with only the top feature
-					selectedFeatures = topFeature ? [topFeature] : [];
+					// Update selected feature
+					selectedFeature = topFeature;
 
 					// Open the drawer only if we found a feature, close it if no features
 					if (topFeature) {
@@ -269,7 +270,7 @@
 </div>
 
 <!-- Selected Feature Drawer -->
-<SelectedFeatureDrawer bind:open={selectedFeatureDrawerOpen} features={selectedFeatures} />
+<SelectedFeatureDrawer bind:open={selectedFeatureDrawerOpen} feature={selectedFeature} />
 
 <style>
 	.map-container {

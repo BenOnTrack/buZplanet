@@ -5,20 +5,19 @@
 	import { featuresDB, type StoredFeature } from '$lib/stores/FeaturesDB.svelte.js';
 	import BookmarkDialog from '$lib/components/dialogs/BookmarkDialog.svelte';
 	import OpeningHoursDisplay from '$lib/components/ui/OpeningHoursDisplay.svelte';
+	import type { MapGeoJSONFeature } from 'svelte-maplibre';
 
 	let {
 		open = $bindable(false),
-		features = []
+		feature = null
 	}: {
 		open?: boolean;
-		features?: any[];
+		feature?: MapGeoJSONFeature | null;
 	} = $props();
 	let activeSnapPoint = $state<string | number>('200px');
 
 	// Derived values for display
-	let hasFeatures = $derived(features && features.length > 0);
-	let primaryFeature = $derived(features && features.length > 0 ? features[0] : null);
-	let featureCount = $derived(features ? features.length : 0);
+	let hasFeature = $derived(feature !== null && feature !== undefined);
 
 	// State for tracking feature status in database
 	let featureStatus = $state<{
@@ -34,21 +33,21 @@
 
 	// Watch for feature changes and update status
 	$effect(() => {
-		if (primaryFeature) {
+		if (feature) {
 			updateFeatureStatus();
 		}
 	});
 
 	// Update feature status from database
 	async function updateFeatureStatus() {
-		if (!primaryFeature) return;
+		if (!feature) return;
 
 		try {
 			featureStatus.loading = true;
 			await featuresDB.ensureInitialized();
 
 			// Get feature ID the same way as FeaturesDB
-			const featureId = getFeatureId(primaryFeature);
+			const featureId = getFeatureId(feature);
 			const storedFeature = await featuresDB.getFeatureById(featureId);
 
 			if (storedFeature) {
@@ -70,7 +69,7 @@
 	}
 
 	// Get feature ID (features always have unique IDs)
-	function getFeatureId(feature: any): string {
+	function getFeatureId(feature: MapGeoJSONFeature): string {
 		if (feature.id !== undefined && feature.id !== null) {
 			return String(feature.id);
 		}
@@ -96,8 +95,41 @@
 		}
 	}
 
+	// Helper function to format phone number for display
+	function formatPhoneNumber(phone: string): string {
+		// Basic formatting - could be enhanced based on region
+		return phone.trim();
+	}
+
+	// Helper function to check if URL is valid and format it
+	function formatWebsiteUrl(url: string): string {
+		if (!url) return '';
+		const trimmed = url.trim();
+		// Add protocol if missing
+		if (trimmed && !trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+			return `https://${trimmed}`;
+		}
+		return trimmed;
+	}
+
+	// Helper function to format wifi access info
+	function formatWifiStatus(internetAccess: string): { hasWifi: boolean; description: string } {
+		if (!internetAccess) return { hasWifi: false, description: 'Unknown' };
+
+		const access = internetAccess.toLowerCase().trim();
+		if (access === 'wlan' || access === 'wifi' || access === 'yes') {
+			return { hasWifi: true, description: 'WiFi available' };
+		} else if (access === 'no') {
+			return { hasWifi: false, description: 'No WiFi' };
+		} else if (access === 'customers' || access === 'customers_only') {
+			return { hasWifi: true, description: 'WiFi for customers' };
+		} else {
+			return { hasWifi: false, description: `Internet: ${access}` };
+		}
+	}
+
 	// Helper function to get display name with fallbacks for main title
-	function getDisplayName(feature: any): string {
+	function getDisplayName(feature: MapGeoJSONFeature | null): string {
 		if (!feature || !feature.properties) return 'Selected Feature';
 
 		const props = feature.properties;
@@ -116,7 +148,7 @@
 	}
 
 	// Helper function to get individual feature name (only if name exists)
-	function getFeatureName(feature: any): string | null {
+	function getFeatureName(feature: MapGeoJSONFeature | null): string | null {
 		if (!feature || !feature.properties) return null;
 
 		const props = feature.properties;
@@ -126,7 +158,7 @@
 	}
 
 	// Helper function to get classification data with formatting
-	function getClassificationData(feature: any): {
+	function getClassificationData(feature: MapGeoJSONFeature | null): {
 		class?: string;
 		subclass?: string;
 		category?: string;
@@ -142,13 +174,14 @@
 	}
 
 	// Check if feature has any classification data
-	function hasClassificationData(feature: any): boolean {
+	function hasClassificationData(feature: MapGeoJSONFeature | null): boolean {
 		const data = getClassificationData(feature);
 		return !!(data.class || data.subclass || data.category);
 	}
 
 	// Action button handlers
-	function handleBookmark(feature: any) {
+	function handleBookmark(feature: MapGeoJSONFeature | null) {
+		if (!feature) return;
 		// Open the bookmark dialog instead of toggling directly
 		bookmarkDialogOpen = true;
 	}
@@ -168,7 +201,8 @@
 		);
 	}
 
-	async function handleTodo(feature: any) {
+	async function handleTodo(feature: MapGeoJSONFeature | null) {
+		if (!feature) return;
 		// Only allow todo if feature is bookmarked
 		if (!featureStatus.bookmarked) {
 			console.warn('Cannot set todo status on unbookmarked feature');
@@ -203,7 +237,8 @@
 		}
 	}
 
-	async function handleVisited(feature: any) {
+	async function handleVisited(feature: MapGeoJSONFeature | null) {
+		if (!feature) return;
 		// Only allow visits if feature is bookmarked
 		if (!featureStatus.bookmarked) {
 			console.warn('Cannot add visit to unbookmarked feature');
@@ -227,7 +262,8 @@
 		}
 	}
 
-	function handleUpdate(feature: any) {
+	function handleUpdate(feature: MapGeoJSONFeature | null) {
+		if (!feature) return;
 		// TODO: Implement feature update/edit functionality
 		console.log('Update feature:', feature);
 	}
@@ -249,8 +285,8 @@
 				<div class="mb-4 flex items-center justify-between">
 					<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
 						<span>📍</span>
-						{#if hasFeatures}
-							{getDisplayName(primaryFeature)}
+						{#if hasFeature}
+							{getDisplayName(feature)}
 						{:else}
 							Selected Feature
 						{/if}
@@ -262,8 +298,7 @@
 				</div>
 
 				<div class="space-y-4">
-					{#if hasFeatures}
-						{@const feature = features[0]}
+					{#if hasFeature}
 						<div class="space-y-4">
 							<!-- Individual feature name (only if name exists and different from main title) -->
 							{#if getFeatureName(feature) && getFeatureName(feature) !== getDisplayName(feature)}
@@ -385,23 +420,62 @@
 							</div>
 
 							<!-- Feature details -->
-							<div class="space-y-2 text-sm">
-								{#if feature.properties?.opening_hours}
-									<OpeningHoursDisplay
-										openingHours={feature.properties.opening_hours}
-										showCurrentStatus={true}
-									/>
-								{/if}
-								{#if feature.properties?.type}
-									<p class="text-gray-600"><strong>Type:</strong> {feature.properties.type}</p>
-								{/if}
-								{#if featureStatus.visitedDates.length > 0}
-									<p class="text-gray-600">
-										<strong>Visits:</strong>
-										{formatVisitDates(featureStatus.visitedDates)}
-									</p>
-								{/if}
-							</div>
+							{#if feature}
+								<div class="space-y-2 text-sm">
+									{#if feature.properties?.opening_hours}
+										<OpeningHoursDisplay
+											openingHours={feature.properties.opening_hours}
+											showCurrentStatus={true}
+										/>
+									{/if}
+									{#if feature.properties?.website}
+										{@const formattedUrl = formatWebsiteUrl(feature.properties.website)}
+										<p class="text-gray-600">
+											<strong>Website:</strong>
+											<a
+												href={formattedUrl}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="ml-1 text-blue-600 underline hover:text-blue-800"
+											>
+												{feature.properties.website}
+											</a>
+											<span class="ml-1 text-xs">🔗</span>
+										</p>
+									{/if}
+									{#if feature.properties?.phone}
+										<p class="text-gray-600">
+											<strong>Phone:</strong>
+											<a
+												href="tel:{feature.properties.phone}"
+												class="ml-1 text-blue-600 hover:text-blue-800"
+											>
+												{formatPhoneNumber(feature.properties.phone)}
+											</a>
+											<span class="ml-1 text-xs">📞</span>
+										</p>
+									{/if}
+									{#if feature.properties?.internet_access}
+										{@const wifiInfo = formatWifiStatus(feature.properties.internet_access)}
+										<p class="text-gray-600">
+											<strong>WiFi:</strong>
+											<span class={wifiInfo.hasWifi ? 'text-green-600' : 'text-gray-500'}>
+												{wifiInfo.description}
+											</span>
+											<span class="ml-1 text-xs">{wifiInfo.hasWifi ? '📶' : '📵'}</span>
+										</p>
+									{/if}
+									{#if feature.properties?.type}
+										<p class="text-gray-600"><strong>Type:</strong> {feature.properties.type}</p>
+									{/if}
+									{#if featureStatus.visitedDates.length > 0}
+										<p class="text-gray-600">
+											<strong>Visits:</strong>
+											{formatVisitDates(featureStatus.visitedDates)}
+										</p>
+									{/if}
+								</div>
+							{/if}
 						</div>
 					{:else}
 						<div class="py-8 text-center">
@@ -416,11 +490,11 @@
 
 				<button
 					class="mt-8 h-12 flex-shrink-0 rounded-md font-medium text-white"
-					class:bg-black={hasFeatures}
-					class:bg-gray-400={!hasFeatures}
-					disabled={!hasFeatures}
+					class:bg-black={hasFeature}
+					class:bg-gray-400={!hasFeature}
+					disabled={!hasFeature}
 				>
-					{hasFeatures ? 'View Details' : 'No Features Selected'}
+					{hasFeature ? 'View Details' : 'No Features Selected'}
 				</button>
 			</div>
 		</Drawer.Content>
@@ -430,6 +504,6 @@
 <!-- Bookmark Dialog -->
 <BookmarkDialog
 	bind:open={bookmarkDialogOpen}
-	feature={primaryFeature}
+	{feature}
 	onBookmarkUpdated={handleBookmarkUpdated}
 />
