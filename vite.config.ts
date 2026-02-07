@@ -50,6 +50,12 @@ export default defineConfig({
 			target: 'es2022'
 		}
 	},
+	build: {
+		target: 'es2022',
+		commonjsOptions: {
+			transformMixedEsModules: true
+		}
+	},
 	// PWA configuration with version tracking
 	define: {
 		__DATE__: JSON.stringify(buildDate),
