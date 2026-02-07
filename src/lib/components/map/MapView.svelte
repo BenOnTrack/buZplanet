@@ -21,6 +21,7 @@
 	import PoiVectorTileSource from './PoiVectorTileSource.svelte';
 	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
 	import SelectedFeatureGeojsonSource from './SelectedFeatureGeojsonSource.svelte';
+	import { mapControl } from '$lib/stores/MapControl.svelte';
 
 	interface Props {
 		ready?: boolean;
@@ -31,9 +32,9 @@
 	// Map instance reference
 	let mapInstance = $state<MapStore | undefined>();
 
-	// Selected feature drawer state
-	let selectedFeatureDrawerOpen = $state(false);
-	let selectedFeature = $state<MapGeoJSONFeature | null>(null);
+	// Selected feature drawer state - use MapControl store
+	let selectedFeatureDrawerOpen = $derived(mapControl.selectedFeatureDrawerOpen);
+	let selectedFeature = $derived(mapControl.selectedFeature);
 	const selectedFeatureGeoJSON = $derived.by(() => {
 		if (!selectedFeature) {
 			return {
@@ -154,6 +155,9 @@
 		// Wait for map instance to be available
 		$effect(() => {
 			if (mapInstance) {
+				// Register map instance with MapControl
+				mapControl.setMapInstance(mapInstance);
+
 				// Add event handlers to update map state (but not save immediately)
 				mapInstance.on('moveend', updateMapState);
 				mapInstance.on('zoomend', updateMapState);
@@ -169,15 +173,12 @@
 					// Get only the top feature (first in array)
 					const topFeature = features.length > 0 ? features[0] : null;
 
-					// Update selected feature
-					selectedFeature = topFeature;
-
-					// Open the drawer only if we found a feature, close it if no features
+					// Update selected feature using MapControl
 					if (topFeature) {
-						selectedFeatureDrawerOpen = true;
+						mapControl.selectFeature(topFeature);
 					} else {
 						// Close drawer when clicking on empty area
-						selectedFeatureDrawerOpen = false;
+						mapControl.clearSelection();
 					}
 				});
 			}
@@ -294,7 +295,11 @@
 </div>
 
 <!-- Selected Feature Drawer -->
-<SelectedFeatureDrawer bind:open={selectedFeatureDrawerOpen} feature={selectedFeature} />
+<SelectedFeatureDrawer
+	open={selectedFeatureDrawerOpen}
+	feature={selectedFeature}
+	onOpenChange={(open) => mapControl.setSelectedFeatureDrawerOpen(open)}
+/>
 
 <style>
 	.map-container {

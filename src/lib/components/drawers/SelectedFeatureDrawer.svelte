@@ -9,11 +9,21 @@
 
 	let {
 		open = $bindable(false),
-		feature = null
+		feature = null,
+		onOpenChange = undefined
 	}: {
 		open?: boolean;
 		feature?: MapGeoJSONFeature | null;
+		onOpenChange?: (open: boolean) => void;
 	} = $props();
+
+	// Handle drawer open/close changes
+	function handleOpenChange(newOpen: boolean) {
+		open = newOpen;
+		if (onOpenChange) {
+			onOpenChange(newOpen);
+		}
+	}
 	let activeSnapPoint = $state<string | number>('200px');
 
 	// Derived values for display
@@ -312,7 +322,13 @@
 </script>
 
 <!-- Selected Feature Drawer -->
-<Drawer.Root bind:open snapPoints={['200px', '400px', 1]} bind:activeSnapPoint modal={false}>
+<Drawer.Root
+	bind:open
+	onOpenChange={handleOpenChange}
+	snapPoints={['200px', '400px', 1]}
+	bind:activeSnapPoint
+	modal={false}
+>
 	<Drawer.Overlay class="fixed inset-0 z-60 bg-black/40" style="pointer-events: none" />
 	<Drawer.Portal>
 		<Drawer.Content

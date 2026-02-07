@@ -2,7 +2,9 @@
 	import { Drawer } from 'vaul-svelte';
 	import { clsx } from 'clsx';
 	import { onMount } from 'svelte';
+	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
 	import { featuresDB, type StoredFeature, type BookmarkList } from '$lib/stores/FeaturesDB.svelte';
+	import { mapControl } from '$lib/stores/MapControl.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 	let activeSnapPoint = $state<string | number>('400px');
@@ -12,17 +14,40 @@
 	let searchQuery = $state('');
 	let selectedListIds = $state<string[]>([]);
 	let selectedTypes = $state<string[]>([]);
+	let selectedClasses = $state<string[]>([]);
+	let selectedSubclasses = $state<string[]>([]);
+	let selectedCategories = $state<string[]>([]);
 	let filtersExpanded = $state(false);
 
 	// Available filter options
 	let availableTypes = $derived.by(() => {
 		const types = new Set<string>();
+		let hasNoneType = false;
+
 		features.forEach((feature) => {
-			if (feature.bookmarked) types.add('bookmarked');
-			if (feature.todo) types.add('todo');
-			if (feature.visitedDates && feature.visitedDates.length > 0) types.add('visited');
+			const isBookmarked = feature.bookmarked;
+			const isTodo = feature.todo;
+			const isVisited = feature.visitedDates && feature.visitedDates.length > 0;
+
+			if (isBookmarked) types.add('bookmarked');
+			if (isTodo) types.add('todo');
+			if (isVisited) types.add('visited');
+
+			// Check if this feature has none of the above types
+			if (!isBookmarked && !isTodo && !isVisited) {
+				hasNoneType = true;
+			}
 		});
-		return Array.from(types);
+
+		if (hasNoneType) {
+			types.add('none');
+		}
+
+		return Array.from(types).sort((a, b) => {
+			// Sort order: bookmarked, todo, visited, none
+			const order: Record<string, number> = { bookmarked: 0, todo: 1, visited: 2, none: 3 };
+			return order[a] - order[b];
+		});
 	});
 
 	let availableLists = $derived.by(() => {
@@ -32,6 +57,36 @@
 			feature.listIds.forEach((listId) => listsWithFeatures.add(listId));
 		});
 		return bookmarkLists.filter((list) => listsWithFeatures.has(list.id));
+	});
+
+	let availableClasses = $derived.by(() => {
+		const classes = new Set<string>();
+		features.forEach((feature) => {
+			if (feature.class) {
+				classes.add(feature.class);
+			}
+		});
+		return Array.from(classes).sort();
+	});
+
+	let availableSubclasses = $derived.by(() => {
+		const subclasses = new Set<string>();
+		features.forEach((feature) => {
+			if (feature.subclass) {
+				subclasses.add(feature.subclass);
+			}
+		});
+		return Array.from(subclasses).sort();
+	});
+
+	let availableCategories = $derived.by(() => {
+		const categories = new Set<string>();
+		features.forEach((feature) => {
+			if (feature.category) {
+				categories.add(feature.category);
+			}
+		});
+		return Array.from(categories).sort();
 	});
 
 	// Filtered features based on search query and prefilters
@@ -56,11 +111,39 @@
 							return feature.todo;
 						case 'visited':
 							return feature.visitedDates && feature.visitedDates.length > 0;
+						case 'none':
+							// Feature must have NONE of the other types
+							return (
+								!feature.bookmarked &&
+								!feature.todo &&
+								(!feature.visitedDates || feature.visitedDates.length === 0)
+							);
 						default:
 							return true;
 					}
 				});
 			});
+		}
+
+		// Apply class prefilter (AND logic - feature must match ALL selected classes)
+		if (selectedClasses.length > 0) {
+			result = result.filter((feature) =>
+				selectedClasses.every((selectedClass) => feature.class === selectedClass)
+			);
+		}
+
+		// Apply subclass prefilter (AND logic - feature must match ALL selected subclasses)
+		if (selectedSubclasses.length > 0) {
+			result = result.filter((feature) =>
+				selectedSubclasses.every((selectedSubclass) => feature.subclass === selectedSubclass)
+			);
+		}
+
+		// Apply category prefilter (AND logic - feature must match ALL selected categories)
+		if (selectedCategories.length > 0) {
+			result = result.filter((feature) =>
+				selectedCategories.every((selectedCategory) => feature.category === selectedCategory)
+			);
 		}
 
 		// Apply text search
@@ -138,11 +221,28 @@
 		}
 	}
 
-	// Get feature's primary name
+	// Get feature's primary name (name:en first, then name, then formatted category)
 	function getFeatureName(feature: StoredFeature): string {
 		return (
-			feature.names.name || feature.names['name:en'] || Object.values(feature.names)[0] || 'Unnamed'
+			feature.names['name:en'] ||
+			feature.names.name ||
+			(feature.category ? formatFeatureProperty(feature.category) : null) ||
+			Object.values(feature.names)[0] ||
+			'Unnamed'
 		);
+	}
+
+	// Get feature's secondary name for display below primary name
+	function getFeatureSecondaryName(feature: StoredFeature): string | null {
+		const primaryName = getFeatureName(feature);
+		const regularName = feature.names.name;
+
+		// Only show the regular 'name' if it exists and is different from the primary name
+		if (regularName && regularName !== primaryName) {
+			return regularName;
+		}
+
+		return null;
 	}
 
 	// Get lists for a feature with their colors
@@ -171,6 +271,9 @@
 		searchQuery = '';
 		selectedListIds = [];
 		selectedTypes = [];
+		selectedClasses = [];
+		selectedSubclasses = [];
+		selectedCategories = [];
 	}
 
 	// Toggle type filter
@@ -191,9 +294,43 @@
 		}
 	}
 
+	// Toggle class filter
+	function toggleClassFilter(className: string) {
+		if (selectedClasses.includes(className)) {
+			selectedClasses = selectedClasses.filter((c) => c !== className);
+		} else {
+			selectedClasses = [...selectedClasses, className];
+		}
+	}
+
+	// Toggle subclass filter
+	function toggleSubclassFilter(subclassName: string) {
+		if (selectedSubclasses.includes(subclassName)) {
+			selectedSubclasses = selectedSubclasses.filter((s) => s !== subclassName);
+		} else {
+			selectedSubclasses = [...selectedSubclasses, subclassName];
+		}
+	}
+
+	// Toggle category filter
+	function toggleCategoryFilter(categoryName: string) {
+		if (selectedCategories.includes(categoryName)) {
+			selectedCategories = selectedCategories.filter((c) => c !== categoryName);
+		} else {
+			selectedCategories = [...selectedCategories, categoryName];
+		}
+	}
+
 	// Check if any filters are active
 	let hasActiveFilters = $derived.by(() => {
-		return searchQuery.trim() !== '' || selectedListIds.length > 0 || selectedTypes.length > 0;
+		return (
+			searchQuery.trim() !== '' ||
+			selectedListIds.length > 0 ||
+			selectedTypes.length > 0 ||
+			selectedClasses.length > 0 ||
+			selectedSubclasses.length > 0 ||
+			selectedCategories.length > 0
+		);
 	});
 
 	// Toggle filters visibility
@@ -210,13 +347,18 @@
 				return { icon: '✅', label: 'Todo' };
 			case 'visited':
 				return { icon: '📍', label: 'Visited' };
+			case 'none':
+				return { icon: '⚪', label: 'None' };
 			default:
 				return { icon: '?', label: 'Unknown' };
 		}
 	}
 
 	// Get count for a filter
-	function getFilterCount(type: 'type' | 'list', value: string): number {
+	function getFilterCount(
+		type: 'type' | 'list' | 'class' | 'subclass' | 'category',
+		value: string
+	): number {
 		if (type === 'type') {
 			return features.filter((f) => {
 				switch (value) {
@@ -226,13 +368,40 @@
 						return f.todo;
 					case 'visited':
 						return f.visitedDates && f.visitedDates.length > 0;
+					case 'none':
+						return !f.bookmarked && !f.todo && (!f.visitedDates || f.visitedDates.length === 0);
 					default:
 						return false;
 				}
 			}).length;
-		} else {
+		} else if (type === 'list') {
 			return features.filter((f) => f.listIds.includes(value)).length;
+		} else if (type === 'class') {
+			return features.filter((f) => f.class === value).length;
+		} else if (type === 'subclass') {
+			return features.filter((f) => f.subclass === value).length;
+		} else if (type === 'category') {
+			return features.filter((f) => f.category === value).length;
 		}
+		return 0;
+	}
+
+	// Handle feature row click - zoom to feature and open selected feature drawer
+	function handleFeatureRowClick(feature: StoredFeature, event: Event) {
+		// Prevent default if this was a button click or other interactive element
+		if (event.target instanceof HTMLElement) {
+			const interactiveElements = ['button', 'a', 'input', 'select', 'textarea'];
+			if (interactiveElements.includes(event.target.tagName.toLowerCase())) {
+				return;
+			}
+		}
+
+		// Use MapControl to zoom to and select the feature
+		mapControl.zoomToAndSelectStoredFeature(feature);
+
+		// Optionally close the features drawer to give full focus to the selected feature
+		// Comment this line if you want both drawers open simultaneously
+		open = false;
 	}
 </script>
 
@@ -441,6 +610,108 @@
 										</div>
 									</div>
 								{/if}
+
+								<!-- Class Filters -->
+								{#if availableClasses.length > 0}
+									<div>
+										<div class="mb-2 text-xs font-medium text-gray-600">Filter by Class:</div>
+										<div class="flex flex-wrap gap-2">
+											{#each availableClasses as className}
+												{@const count = getFilterCount('class', className)}
+												{@const isSelected = selectedClasses.includes(className)}
+												<button
+													onclick={() => toggleClassFilter(className)}
+													onkeydown={(e) => {
+														if (e.key === 'Enter' || e.key === ' ') {
+															e.preventDefault();
+															toggleClassFilter(className);
+														}
+													}}
+													class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none {isSelected
+														? 'border-blue-300 bg-blue-100 text-blue-800 shadow-sm'
+														: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}"
+													title="{formatFeatureProperty(className)} ({count} features)"
+													tabindex="0"
+												>
+													<span class="max-w-24 truncate font-medium"
+														>{formatFeatureProperty(className)}</span
+													>
+													<span class="bg-opacity-70 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs"
+														>{count}</span
+													>
+												</button>
+											{/each}
+										</div>
+									</div>
+								{/if}
+
+								<!-- Subclass Filters -->
+								{#if availableSubclasses.length > 0}
+									<div>
+										<div class="mb-2 text-xs font-medium text-gray-600">Filter by Subclass:</div>
+										<div class="flex flex-wrap gap-2">
+											{#each availableSubclasses as subclassName}
+												{@const count = getFilterCount('subclass', subclassName)}
+												{@const isSelected = selectedSubclasses.includes(subclassName)}
+												<button
+													onclick={() => toggleSubclassFilter(subclassName)}
+													onkeydown={(e) => {
+														if (e.key === 'Enter' || e.key === ' ') {
+															e.preventDefault();
+															toggleSubclassFilter(subclassName);
+														}
+													}}
+													class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none {isSelected
+														? 'border-blue-300 bg-blue-100 text-blue-800 shadow-sm'
+														: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}"
+													title="{formatFeatureProperty(subclassName)} ({count} features)"
+													tabindex="0"
+												>
+													<span class="max-w-24 truncate font-medium"
+														>{formatFeatureProperty(subclassName)}</span
+													>
+													<span class="bg-opacity-70 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs"
+														>{count}</span
+													>
+												</button>
+											{/each}
+										</div>
+									</div>
+								{/if}
+
+								<!-- Category Filters -->
+								{#if availableCategories.length > 0}
+									<div>
+										<div class="mb-2 text-xs font-medium text-gray-600">Filter by Category:</div>
+										<div class="flex flex-wrap gap-2">
+											{#each availableCategories as categoryName}
+												{@const count = getFilterCount('category', categoryName)}
+												{@const isSelected = selectedCategories.includes(categoryName)}
+												<button
+													onclick={() => toggleCategoryFilter(categoryName)}
+													onkeydown={(e) => {
+														if (e.key === 'Enter' || e.key === ' ') {
+															e.preventDefault();
+															toggleCategoryFilter(categoryName);
+														}
+													}}
+													class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none {isSelected
+														? 'border-blue-300 bg-blue-100 text-blue-800 shadow-sm'
+														: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}"
+													title="{formatFeatureProperty(categoryName)} ({count} features)"
+													tabindex="0"
+												>
+													<span class="max-w-24 truncate font-medium"
+														>{formatFeatureProperty(categoryName)}</span
+													>
+													<span class="bg-opacity-70 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs"
+														>{count}</span
+													>
+												</button>
+											{/each}
+										</div>
+									</div>
+								{/if}
 							</div>
 						{/if}
 					</div>
@@ -470,6 +741,14 @@
 					</div>
 				{:else}
 					<div class="overflow-x-auto">
+						<!-- Header instruction -->
+						<div class="mb-3 flex items-center justify-between">
+							<p class="text-xs text-gray-600">Click any row to zoom to the feature on the map</p>
+							<div class="flex items-center gap-1 text-xs text-gray-500">
+								<span>🔍</span>
+								<span>Clickable rows</span>
+							</div>
+						</div>
 						<table class="w-full text-sm">
 							<thead class="sticky top-0 z-10 bg-white">
 								<tr class="border-b border-gray-200">
@@ -491,13 +770,38 @@
 								{#each filteredFeatures as feature (feature.id)}
 									{@const featureLists = getFeatureLists(feature)}
 									{@const featureTypes = getFeatureTypes(feature)}
-									<tr class="transition-colors hover:bg-gray-50">
+									{@const secondaryName = getFeatureSecondaryName(feature)}
+									<tr
+										class="group cursor-pointer transition-colors hover:bg-blue-50 focus:bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none focus:ring-inset active:bg-blue-100"
+										onclick={(e) => handleFeatureRowClick(feature, e)}
+										onkeydown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												handleFeatureRowClick(feature, e);
+											}
+										}}
+										tabindex="0"
+										role="button"
+										aria-label="Select and zoom to {getFeatureName(feature)}"
+										title="Click to zoom to this feature on the map"
+									>
 										<td class="py-3 pr-4">
-											<div class="leading-tight font-medium text-gray-900">
-												{getFeatureName(feature)}
-											</div>
-											<div class="mt-1 text-xs text-gray-500">
-												{feature.source}{feature.sourceLayer ? `:${feature.sourceLayer}` : ''}
+											<div class="flex items-center gap-2">
+												<div class="flex-1">
+													<div class="leading-tight font-medium text-gray-900">
+														{getFeatureName(feature)}
+													</div>
+													<div class="mt-1 text-xs text-gray-500">
+														{#if secondaryName}
+															{secondaryName}
+														{/if}
+													</div>
+												</div>
+												<div
+													class="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100"
+												>
+													<span class="text-xs">🔍</span>
+												</div>
 											</div>
 										</td>
 										<td class="py-3 pr-2">
@@ -534,18 +838,27 @@
 											</div>
 										</td>
 										<td class="hidden py-3 pr-2 text-xs text-gray-600 sm:table-cell">
-											<div class="max-w-20 truncate" title={feature.class || '-'}>
-												{feature.class || '-'}
+											<div
+												class="max-w-20 truncate"
+												title={feature.class ? formatFeatureProperty(feature.class) : '-'}
+											>
+												{feature.class ? formatFeatureProperty(feature.class) : '-'}
 											</div>
 										</td>
 										<td class="hidden py-3 pr-2 text-xs text-gray-600 md:table-cell">
-											<div class="max-w-20 truncate" title={feature.subclass || '-'}>
-												{feature.subclass || '-'}
+											<div
+												class="max-w-20 truncate"
+												title={feature.subclass ? formatFeatureProperty(feature.subclass) : '-'}
+											>
+												{feature.subclass ? formatFeatureProperty(feature.subclass) : '-'}
 											</div>
 										</td>
 										<td class="hidden py-3 text-xs text-gray-600 lg:table-cell">
-											<div class="max-w-24 truncate" title={feature.category || '-'}>
-												{feature.category || '-'}
+											<div
+												class="max-w-24 truncate"
+												title={feature.category ? formatFeatureProperty(feature.category) : '-'}
+											>
+												{feature.category ? formatFeatureProperty(feature.category) : '-'}
 											</div>
 										</td>
 									</tr>
