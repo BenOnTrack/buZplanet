@@ -2,6 +2,7 @@ export interface OpeningHoursSchedule {
 	originalText: string;
 	is24_7: boolean;
 	isClosed: boolean;
+	isUnknown: boolean;
 	days: {
 		monday: TimeSlot[];
 		tuesday: TimeSlot[];
@@ -12,6 +13,8 @@ export interface OpeningHoursSchedule {
 		sunday: TimeSlot[];
 	};
 	notes: string[];
+	comments: string[];
+	warnings: string[];
 	error?: string;
 }
 
@@ -25,6 +28,7 @@ export function parseOpeningHours(openingHours: string): OpeningHoursSchedule {
 		originalText: openingHours.trim(),
 		is24_7: false,
 		isClosed: false,
+		isUnknown: false,
 		days: {
 			monday: [],
 			tuesday: [],
@@ -34,7 +38,9 @@ export function parseOpeningHours(openingHours: string): OpeningHoursSchedule {
 			saturday: [],
 			sunday: []
 		},
-		notes: []
+		notes: [],
+		comments: [],
+		warnings: []
 	};
 
 	if (!openingHours || openingHours.trim() === '') {
@@ -55,8 +61,21 @@ export function parseOpeningHours(openingHours: string): OpeningHoursSchedule {
 		return result;
 	}
 
-	if (trimmed.toLowerCase() === 'closed' || trimmed === 'off') {
+	// Handle various closed formats
+	if (/^(closed|off)$/i.test(trimmed)) {
 		result.isClosed = true;
+		return result;
+	}
+
+	// Handle unknown status
+	if (trimmed.toLowerCase() === 'unknown') {
+		result.isUnknown = true;
+		return result;
+	}
+
+	// Handle sunrise/sunset (simplified - just add as note)
+	if (/sunrise|sunset|dawn|dusk/i.test(trimmed)) {
+		result.notes.push(`Uses astronomical times: ${trimmed}`);
 		return result;
 	}
 
@@ -83,13 +102,18 @@ export function parseOpeningHours(openingHours: string): OpeningHoursSchedule {
 }
 
 function normalizeRuleSeparators(input: string): string {
+	// Handle fallback rule separator (||)
+	if (input.includes('||')) {
+		return input; // Keep as is for now, would need complex fallback logic
+	}
+
 	// If semicolons are already present, return as is
 	if (input.includes(';')) {
 		return input;
 	}
 
 	// For simple time-only formats, no normalization needed
-	const timeOnlyPattern = /^\d{2}:\d{2}-\d{2}:\d{2}(,\s*\d{2}:\d{2}-\d{2}:\d{2})*$/;
+	const timeOnlyPattern = /^\d{1,2}:\d{2}-\d{1,2}:\d{2}(,\s*\d{1,2}:\d{2}-\d{1,2}:\d{2})*$/;
 	if (timeOnlyPattern.test(input)) {
 		return input;
 	}
@@ -100,7 +124,7 @@ function normalizeRuleSeparators(input: string): string {
 	// First, handle cases where we have day ranges followed by times
 	// Pattern: "Mo-Fr 07:00-22:00, Sa-Su,PH 07:00-21:00"
 	const dayTimePattern =
-		/([A-Za-z]{2}(-[A-Za-z]{2})?([,\s]*[A-Za-z]{2}(-[A-Za-z]{2})?|[,\s]*PH|[,\s]*SH)*)\s+(\d{2}:\d{2}-\d{2}:\d{2})/g;
+		/([A-Za-z]{2}(-[A-Za-z]{2})?([,\s]*[A-Za-z]{2}(-[A-Za-z]{2})?|[,\s]*PH|[,\s]*SH)*)\s+(\d{1,2}:\d{2}-\d{1,2}:\d{2})/g;
 
 	let result = input;
 	const matches = [...input.matchAll(dayTimePattern)];
@@ -114,6 +138,91 @@ function normalizeRuleSeparators(input: string): string {
 }
 
 function parseRuleGroup(ruleGroup: string, result: OpeningHoursSchedule): void {
+	// Extract comments first (text in double quotes)
+	const commentMatch = ruleGroup.match(/"([^"]+)"/g);
+	if (commentMatch) {
+		commentMatch.forEach((comment) => {
+			result.comments.push(comment.slice(1, -1)); // Remove quotes
+		});
+		// Remove comments from rule for further processing
+		ruleGroup = ruleGroup.replace(/"[^"]+"/g, '').trim();
+	}
+
+	// Handle year ranges like "2020-2022: Mo-Fr 09:00-17:00"
+	const yearRangePattern = /^(\d{4}(?:-\d{4})?):?\s*(.+)$/;
+	const yearMatch = ruleGroup.match(yearRangePattern);
+	if (yearMatch) {
+		const years = yearMatch[1];
+		const remainingRule = yearMatch[2];
+		result.notes.push(`Years ${years}: applies to specified period`);
+		// Continue parsing the remaining rule
+		ruleGroup = remainingRule;
+	}
+
+	// Handle month ranges like "Jan-Mar: Mo-Fr 09:00-17:00" or "Mar-Dec Mo-Fr 09:00-17:00"
+	const monthRangePattern =
+		/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))\s*:?\s*(.+)$/i;
+	const monthMatch = ruleGroup.match(monthRangePattern);
+	if (monthMatch) {
+		const startMonth = monthMatch[1];
+		const endMonth = monthMatch[2] || startMonth;
+		const remainingRule = monthMatch[3];
+		if (endMonth && endMonth !== startMonth) {
+			result.notes.push(`${startMonth}-${endMonth}: seasonal hours apply`);
+		} else {
+			result.notes.push(`${startMonth}: special hours for this month`);
+		}
+		// Continue parsing the remaining rule
+		ruleGroup = remainingRule;
+	}
+
+	// Handle specific date exceptions like "Jan 1 off", "Dec 25 off", "Apr 1-3 off"
+	// Also handle formats like "1 Jan off", "25 Dec off", "1-3 Apr off"
+	const specificDateOffPattern =
+		/^(?:(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}(?:-\d{1,2})?)|(?:(\d{1,2}(?:-\d{1,2})?)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)))\s+(off|closed)$/i;
+	if (specificDateOffPattern.test(ruleGroup)) {
+		const match = ruleGroup.match(specificDateOffPattern);
+		if (match) {
+			const month = match[1] || match[4];
+			const dateRange = match[2] || match[3];
+			result.notes.push(`Closed on ${month} ${dateRange}`);
+		}
+		return;
+	}
+
+	// Handle specific date hours like "Jan 1 09:00-17:00", "Dec 24 09:00-14:00"
+	// Also handle formats like "1 Jan 09:00-17:00", "24 Dec 09:00-14:00"
+	const specificDateHoursPattern =
+		/^(?:(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}(?:-\d{1,2})?)|(\d{1,2}(?:-\d{1,2})?)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec))\s+(\d{2}:\d{2}-\d{2}:\d{2})$/i;
+	if (specificDateHoursPattern.test(ruleGroup)) {
+		const match = ruleGroup.match(specificDateHoursPattern);
+		if (match) {
+			const month = match[1] || match[4];
+			const dateRange = match[2] || match[3];
+			const hours = match[5];
+			result.notes.push(`${month} ${dateRange}: ${hours}`);
+		}
+		return;
+	}
+
+	// Handle week ranges like "week 1-53: Mo-Fr 09:00-17:00"
+	const weekPattern = /^week\s+(\d{1,2}(?:-\d{1,2})?)\s*:?\s*(.+)$/i;
+	const weekMatch = ruleGroup.match(weekPattern);
+	if (weekMatch) {
+		const weeks = weekMatch[1];
+		const remainingRule = weekMatch[2];
+		result.notes.push(`Week ${weeks}: special schedule applies`);
+		// Continue parsing the remaining rule
+		ruleGroup = remainingRule;
+	}
+
+	// Handle easter and variable date references
+	if (/easter/i.test(ruleGroup)) {
+		result.notes.push('Schedule varies with Easter dates');
+		result.warnings.push('Easter-based dates require calendar calculation');
+		return;
+	}
+
 	// Handle "PH off" or "SH off" (public holidays, school holidays)
 	if (ruleGroup.match(/^(PH|SH)\s+off$/i)) {
 		if (ruleGroup.startsWith('PH')) {
@@ -140,7 +249,7 @@ function parseRuleGroup(ruleGroup: string, result: OpeningHoursSchedule): void {
 	}
 
 	// Check if this is a time-only format (e.g., "09:00-18:30" or "09:00-12:00,14:00-18:30")
-	const timeOnlyPattern = /^\d{2}:\d{2}-\d{2}:\d{2}(,\s*\d{2}:\d{2}-\d{2}:\d{2})*$/;
+	const timeOnlyPattern = /^\d{1,2}:\d{2}-\d{1,2}:\d{2}(,\s*\d{1,2}:\d{2}-\d{1,2}:\d{2})*$/;
 	if (timeOnlyPattern.test(ruleGroup)) {
 		// Apply to all days of the week
 		const timeSlots = parseTimes(ruleGroup);
@@ -160,9 +269,16 @@ function parseRuleGroup(ruleGroup: string, result: OpeningHoursSchedule): void {
 	}
 
 	// Parse normal day/time rules
-	const dayTimeMatch = ruleGroup.match(/^([A-Za-z,\-\s]+)\s+(.+)$/);
+	const dayTimeMatch = ruleGroup.match(/^([A-Za-z0-9,\-\s\[\]]+)\s+(.+)$/);
 	if (!dayTimeMatch) {
-		throw new Error(`Invalid rule format: ${ruleGroup}`);
+		// If we can't parse it as a day/time rule and it wasn't handled above,
+		// try to extract any useful information
+		if (ruleGroup.includes('open')) {
+			result.notes.push(`Information: ${ruleGroup}`);
+		} else {
+			result.warnings.push(`Unparseable rule: ${ruleGroup}`);
+		}
+		return;
 	}
 
 	const daysPart = dayTimeMatch[1].trim();
@@ -225,6 +341,19 @@ function parseDays(daysPart: string): Array<keyof OpeningHoursSchedule['days']> 
 			continue;
 		}
 
+		// Handle nth weekday patterns like "Mo[1]" (first Monday), "Fr[-1]" (last Friday)
+		const nthWeekdayMatch = part.match(/^([A-Za-z]{2})\[([-]?\d+)\]$/);
+		if (nthWeekdayMatch) {
+			const dayAbbr = nthWeekdayMatch[1].toLowerCase();
+			const nth = nthWeekdayMatch[2];
+			const day = dayAbbreviations[dayAbbr];
+			if (day) {
+				// For now, just add the day (full nth weekday logic would be complex)
+				days.push(day);
+			}
+			continue;
+		}
+
 		// Check for range (e.g., "Mo-Fr", "mo-fr")
 		const rangeMatch = part.match(/^([A-Za-z]{2})-([A-Za-z]{2})$/);
 		if (rangeMatch) {
@@ -277,17 +406,49 @@ function parseDays(daysPart: string): Array<keyof OpeningHoursSchedule['days']> 
 function parseTimes(timesPart: string): TimeSlot[] {
 	const timeSlots: TimeSlot[] = [];
 
-	// Handle "off" (closed)
-	if (timesPart.toLowerCase() === 'off') {
+	// Handle "off" or "closed"
+	if (/^(off|closed)$/i.test(timesPart.toLowerCase())) {
 		return timeSlots; // Return empty array for closed days
+	}
+
+	// Handle "open" (assume 24 hours if no specific times)
+	if (timesPart.toLowerCase() === 'open') {
+		return [{ start: 0, end: 1440 }];
+	}
+
+	// Handle sunrise/sunset patterns (simplified - just return empty for now)
+	if (/sunrise|sunset|dawn|dusk/i.test(timesPart)) {
+		return timeSlots; // Would need astronomical calculation
 	}
 
 	// Split by comma for multiple time ranges
 	const timeRanges = timesPart.split(',').map((s) => s.trim());
 
 	for (const timeRange of timeRanges) {
-		const rangeMatch = timeRange.match(/^(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+		// Handle 24/7 within time ranges
+		if (timeRange === '24/7') {
+			timeSlots.push({ start: 0, end: 1440 });
+			continue;
+		}
+
+		// Handle open end times like "08:00+" (open from 8am onwards)
+		const openEndMatch = timeRange.match(/^(\d{1,2}:\d{2})\+$/);
+		if (openEndMatch) {
+			const startTime = parseTime(openEndMatch[1]);
+			timeSlots.push({ start: startTime, end: 1440 }); // Until end of day
+			continue;
+		}
+
+		// Standard time range
+		const rangeMatch = timeRange.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
 		if (!rangeMatch) {
+			// Try to handle single times (assume open until end of day)
+			const singleTimeMatch = timeRange.match(/^(\d{1,2}:\d{2})$/);
+			if (singleTimeMatch) {
+				const startTime = parseTime(singleTimeMatch[1]);
+				timeSlots.push({ start: startTime, end: 1440 });
+				continue;
+			}
 			throw new Error(`Invalid time range format: ${timeRange}`);
 		}
 
@@ -309,7 +470,7 @@ function parseTimes(timesPart: string): TimeSlot[] {
 }
 
 function parseTime(timeString: string): number {
-	const match = timeString.match(/^(\d{2}):(\d{2})$/);
+	const match = timeString.match(/^(\d{1,2}):(\d{2})$/);
 	if (!match) {
 		throw new Error(`Invalid time format: ${timeString}`);
 	}
@@ -317,8 +478,14 @@ function parseTime(timeString: string): number {
 	const hours = parseInt(match[1], 10);
 	const minutes = parseInt(match[2], 10);
 
-	if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+	// Allow hours up to 24 for end-of-day times (24:00 = midnight next day)
+	if (hours < 0 || hours > 24 || minutes < 0 || minutes > 59) {
 		throw new Error(`Invalid time values: ${timeString}`);
+	}
+
+	// Handle 24:00 as midnight of next day
+	if (hours === 24 && minutes === 0) {
+		return 1440; // 24 * 60 = 1440 minutes
 	}
 
 	return hours * 60 + minutes;
