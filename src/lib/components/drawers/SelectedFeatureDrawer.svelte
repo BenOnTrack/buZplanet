@@ -316,8 +316,43 @@
 
 	function handleUpdate(feature: MapGeoJSONFeature | null) {
 		if (!feature) return;
-		// TODO: Implement feature update/edit functionality
-		console.log('Update feature:', feature);
+
+		// Extract OSM type and ID from feature ID
+		const featureId = getFeatureId(feature);
+
+		// Skip if it's a fallback ID (not from OSM)
+		if (featureId.startsWith('fallback-')) {
+			console.warn('Cannot update feature with fallback ID:', featureId);
+			return;
+		}
+
+		// Get the first digit to determine type
+		const firstDigit = featureId.charAt(0);
+		const osmId = featureId.substring(1);
+
+		// Map first digit to OSM type
+		let osmType: string;
+		switch (firstDigit) {
+			case '1':
+				osmType = 'node';
+				break;
+			case '2':
+				osmType = 'way';
+				break;
+			case '3':
+				osmType = 'relation';
+				break;
+			default:
+				console.warn('Unknown OSM type for feature ID:', featureId);
+				return;
+		}
+
+		// Construct OpenStreetMap URL and open in new tab
+		const osmUrl = `https://www.openstreetmap.org/${osmType}/${osmId}`;
+		console.log('Opening OSM URL:', osmUrl);
+
+		// Open in new tab
+		window.open(osmUrl, '_blank', 'noopener,noreferrer');
 	}
 </script>
 

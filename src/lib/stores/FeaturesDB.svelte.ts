@@ -79,6 +79,9 @@ class FeaturesDB {
 		lists: 0 // Total number of bookmark lists
 	});
 
+	// Reactive trigger for bookmark changes - increment when bookmarks change
+	private _bookmarksVersion = $state(0);
+
 	constructor() {
 		if (browser) {
 			this.initializeDatabase();
@@ -94,6 +97,18 @@ class FeaturesDB {
 
 	get stats() {
 		return this._stats;
+	}
+
+	// Reactive trigger for bookmark changes
+	get bookmarksVersion(): number {
+		return this._bookmarksVersion;
+	}
+
+	/**
+	 * Trigger bookmark reactivity - call whenever bookmarks change
+	 */
+	private triggerBookmarkChange(): void {
+		this._bookmarksVersion++;
 	}
 
 	/**
@@ -334,6 +349,7 @@ class FeaturesDB {
 		});
 
 		await this.updateStats();
+		this.triggerBookmarkChange(); // Trigger reactivity
 		return storedFeature;
 	}
 
@@ -419,6 +435,29 @@ class FeaturesDB {
 	}
 
 	/**
+	 * Toggle todo status of a bookmarked feature
+	 */
+	async toggleTodo(mapFeature: any): Promise<StoredFeature> {
+		const featureId = this.getFeatureId(mapFeature);
+		let existingFeature = await this.getFeatureById(featureId);
+
+		if (existingFeature) {
+			// Only allow toggle todo on bookmarked features
+			if (!existingFeature.bookmarked) {
+				throw new Error('Cannot toggle todo status on unbookmarked feature');
+			}
+
+			// Toggle todo status
+			existingFeature.todo = !existingFeature.todo;
+			existingFeature.dateModified = Date.now();
+			return await this.updateFeature(existingFeature);
+		} else {
+			// Create new bookmarked feature with todo status
+			return await this.storeFeature(mapFeature, 'todo');
+		}
+	}
+
+	/**
 	 * Update an existing feature
 	 */
 	async updateFeature(feature: StoredFeature): Promise<StoredFeature> {
@@ -438,6 +477,7 @@ class FeaturesDB {
 		});
 
 		await this.updateStats();
+		this.triggerBookmarkChange(); // Trigger reactivity
 		return feature;
 	}
 
@@ -887,6 +927,7 @@ class FeaturesDB {
 		});
 
 		await this.updateStats();
+		this.triggerBookmarkChange(); // Trigger reactivity
 	}
 
 	/**
@@ -909,6 +950,7 @@ class FeaturesDB {
 		this._stats.bookmarked = 0;
 		this._stats.visited = 0;
 		this._stats.todo = 0;
+		this.triggerBookmarkChange(); // Trigger reactivity
 	}
 
 	/**
@@ -943,6 +985,7 @@ class FeaturesDB {
 		});
 
 		this._stats.lists = 0;
+		this.triggerBookmarkChange(); // Trigger reactivity
 	}
 
 	/**
@@ -983,6 +1026,7 @@ class FeaturesDB {
 		}
 
 		await this.updateStats();
+		this.triggerBookmarkChange(); // Trigger reactivity
 	}
 
 	// ==================== BOOKMARK LISTS METHODS ====================
@@ -1192,6 +1236,7 @@ class FeaturesDB {
 			}
 		}
 
+		this.triggerBookmarkChange(); // Trigger reactivity
 		return storedFeature;
 	}
 

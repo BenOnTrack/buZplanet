@@ -22,6 +22,10 @@
 	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
 	import SelectedFeatureGeojsonSource from './SelectedFeatureGeojsonSource.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
+	import BookmarksGeojsonSource from './BookmarksGeojsonSource.svelte';
+	import VisitedGeojsonSource from './VisitedGeojsonSource.svelte';
+	import TodoGeojsonSource from './TodoGeojsonSource.svelte';
+	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 
 	interface Props {
 		ready?: boolean;
@@ -57,6 +61,165 @@
 		};
 	});
 	$inspect(selectedFeatureGeoJSON);
+
+	// Bookmarks GeoJSON - reactive to bookmark changes
+	let bookmarksFeaturesGeoJSON = $state({
+		type: 'FeatureCollection' as const,
+		features: []
+	});
+
+	// Visited features GeoJSON - reactive to visit changes
+	let visitedFeaturesGeoJSON = $state({
+		type: 'FeatureCollection' as const,
+		features: []
+	});
+
+	// Todo features GeoJSON - reactive to todo changes
+	let todoFeaturesGeoJSON = $state({
+		type: 'FeatureCollection' as const,
+		features: []
+	});
+
+	// Effect to load bookmarks when database changes
+	$effect(() => {
+		(async () => {
+			// React to FeaturesDB initialization and bookmark changes
+			featuresDB.initialized && featuresDB.bookmarksVersion;
+
+			try {
+				await featuresDB.ensureInitialized();
+				const bookmarkedFeatures = await featuresDB.getBookmarkedFeatures();
+
+				// Convert stored features to GeoJSON format
+				const geoJSONFeatures = bookmarkedFeatures.map((storedFeature) => ({
+					id: storedFeature.id,
+					type: 'Feature' as const,
+					properties: {
+						// Include original feature properties
+						class: storedFeature.class,
+						subclass: storedFeature.subclass,
+						category: storedFeature.category,
+						// Include all names
+						...storedFeature.names,
+						// Add bookmark metadata
+						bookmarked: storedFeature.bookmarked,
+						listIds: storedFeature.listIds,
+						visitedDates: storedFeature.visitedDates,
+						todo: storedFeature.todo,
+						// Add source info for layer styling
+						source: storedFeature.source,
+						sourceLayer: storedFeature.sourceLayer
+					},
+					geometry: storedFeature.geometry
+				}));
+
+				bookmarksFeaturesGeoJSON = {
+					type: 'FeatureCollection' as const,
+					features: geoJSONFeatures as any
+				};
+			} catch (error) {
+				console.error('Error loading bookmarked features:', error);
+				bookmarksFeaturesGeoJSON = {
+					type: 'FeatureCollection',
+					features: []
+				};
+			}
+		})();
+	});
+
+	// Effect to load visited features when database changes
+	$effect(() => {
+		(async () => {
+			// React to FeaturesDB initialization and bookmark changes (visits are part of bookmarked features)
+			featuresDB.initialized && featuresDB.bookmarksVersion;
+
+			try {
+				await featuresDB.ensureInitialized();
+				const visitedFeatures = await featuresDB.getVisitedFeatures();
+
+				// Convert stored features to GeoJSON format
+				const geoJSONFeatures = visitedFeatures.map((storedFeature) => ({
+					id: storedFeature.id,
+					type: 'Feature' as const,
+					properties: {
+						// Include original feature properties
+						class: storedFeature.class,
+						subclass: storedFeature.subclass,
+						category: storedFeature.category,
+						// Include all names
+						...storedFeature.names,
+						// Add visit metadata
+						bookmarked: storedFeature.bookmarked,
+						listIds: storedFeature.listIds,
+						visitedDates: storedFeature.visitedDates,
+						todo: storedFeature.todo,
+						// Add source info for layer styling
+						source: storedFeature.source,
+						sourceLayer: storedFeature.sourceLayer
+					},
+					geometry: storedFeature.geometry
+				}));
+
+				visitedFeaturesGeoJSON = {
+					type: 'FeatureCollection' as const,
+					features: geoJSONFeatures as any
+				};
+			} catch (error) {
+				console.error('Error loading visited features:', error);
+				visitedFeaturesGeoJSON = {
+					type: 'FeatureCollection',
+					features: []
+				};
+			}
+		})();
+	});
+
+	// Effect to load todo features when database changes
+	$effect(() => {
+		(async () => {
+			// React to FeaturesDB initialization and bookmark changes (todos are part of bookmarked features)
+			featuresDB.initialized && featuresDB.bookmarksVersion;
+
+			try {
+				await featuresDB.ensureInitialized();
+				const todoFeatures = await featuresDB.getTodoFeatures();
+
+				// Convert stored features to GeoJSON format
+				const geoJSONFeatures = todoFeatures.map((storedFeature) => ({
+					id: storedFeature.id,
+					type: 'Feature' as const,
+					properties: {
+						// Include original feature properties
+						class: storedFeature.class,
+						subclass: storedFeature.subclass,
+						category: storedFeature.category,
+						// Include all names
+						...storedFeature.names,
+						// Add todo metadata
+						bookmarked: storedFeature.bookmarked,
+						listIds: storedFeature.listIds,
+						visitedDates: storedFeature.visitedDates,
+						todo: storedFeature.todo,
+						// Add source info for layer styling
+						source: storedFeature.source,
+						sourceLayer: storedFeature.sourceLayer
+					},
+					geometry: storedFeature.geometry
+				}));
+
+				todoFeaturesGeoJSON = {
+					type: 'FeatureCollection' as const,
+					features: geoJSONFeatures as any
+				};
+			} catch (error) {
+				console.error('Error loading todo features:', error);
+				todoFeaturesGeoJSON = {
+					type: 'FeatureCollection',
+					features: []
+				};
+			}
+		})();
+	});
 
 	// Default map configuration - use AppState for initial values
 	let mapStyle: StyleSpecification = $state({
@@ -106,11 +269,14 @@
 		}
 	}
 
-	// Initialize map style with current page origin
+	// Initialize FeaturesDB and map style
 	$effect(() => {
 		if (page.url?.origin) {
 			mapStyle = createMapStyle(page.url.origin);
 		}
+
+		// Ensure FeaturesDB is initialized
+		featuresDB.ensureInitialized();
 	});
 
 	// Handle viewport height changes for mobile browsers
@@ -283,6 +449,9 @@
 			<BuildingVectorTileSource />
 			<SelectedFeatureGeojsonSource {selectedFeatureGeoJSON} />
 			<PoiVectorTileSource />
+			<BookmarksGeojsonSource {bookmarksFeaturesGeoJSON} />
+			<TodoGeojsonSource {todoFeaturesGeoJSON} />
+			<VisitedGeojsonSource {visitedFeaturesGeoJSON} />
 		</MapLibre>
 	{:else}
 		<div class="map-placeholder">

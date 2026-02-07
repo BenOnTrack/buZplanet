@@ -30,77 +30,7 @@
 					</Drawer.Close>
 				</div>
 
-				<p class="mb-6 text-gray-600">
-					Plan and explore your next adventure with our trip planning tools.
-				</p>
-
-				<div class="space-y-4">
-					<div class="rounded-lg bg-gray-50 p-4">
-						<h3 class="mb-2 flex items-center gap-2 font-medium">
-							<span class="text-blue-500">📝</span>
-							Trip Planning
-						</h3>
-						<p class="text-sm text-gray-600">
-							Create detailed itineraries with destinations, activities, and budgets.
-						</p>
-					</div>
-
-					<div class="rounded-lg bg-gray-50 p-4">
-						<h3 class="mb-2 flex items-center gap-2 font-medium">
-							<span class="text-green-500">📸</span>
-							Trip Memories
-						</h3>
-						<p class="text-sm text-gray-600">
-							Capture and share your favorite moments from past adventures.
-						</p>
-					</div>
-
-					<div class="rounded-lg bg-gray-50 p-4">
-						<h3 class="mb-2 flex items-center gap-2 font-medium">
-							<span class="text-orange-500">🌍</span>
-							Destination Guides
-						</h3>
-						<p class="text-sm text-gray-600">
-							Discover hidden gems and local insights for your destinations.
-						</p>
-					</div>
-				</div>
-
-				<button class="mt-8 h-12 flex-shrink-0 rounded-md bg-black font-medium text-white">
-					Plan New Trip
-				</button>
-
-				<div class="mt-8">
-					<h2 class="mb-4 text-xl font-medium">Upcoming Trips</h2>
-					<div class="space-y-4">
-						<div>
-							<span class="block font-medium">Tokyo Adventure</span>
-							<span class="text-gray-600">March 15-22, 2024 • 7 days in Japan</span>
-						</div>
-						<div>
-							<span class="block font-medium">European Road Trip</span>
-							<span class="text-gray-600">June 10-30, 2024 • 3 weeks across 5 countries</span>
-						</div>
-						<div>
-							<span class="block font-medium">Bali Retreat</span>
-							<span class="text-gray-600">August 5-12, 2024 • Wellness and relaxation</span>
-						</div>
-					</div>
-				</div>
-
-				<div class="mt-12">
-					<figure>
-						<blockquote class="font-serif italic">
-							"The trip planning feature made organizing our family vacation so much easier. We
-							discovered places we never would have found otherwise!"
-						</blockquote>
-						<figcaption>
-							<span class="mt-2 block text-sm text-gray-600">
-								Sarah Johnson, Travel Enthusiast
-							</span>
-						</figcaption>
-					</figure>
-				</div>
+				<p class="mb-6 text-gray-600">coming soon...</p>
 			</div>
 		</Drawer.Content>
 	</Drawer.Portal>

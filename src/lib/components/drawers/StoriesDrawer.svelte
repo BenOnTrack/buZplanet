@@ -30,63 +30,7 @@
 					</Drawer.Close>
 				</div>
 
-				<p class="mb-6 text-gray-600">
-					Discover amazing stories and adventures from around the world.
-				</p>
-
-				<div class="space-y-4">
-					<div class="rounded-lg bg-gray-50 p-4">
-						<h3 class="mb-2 flex items-center gap-2 font-medium">
-							<span class="text-gold-500">🏆</span>
-							Featured Stories
-						</h3>
-						<p class="text-sm text-gray-600">
-							Handpicked tales of adventure, discovery, and human connection.
-						</p>
-					</div>
-
-					<div class="rounded-lg bg-gray-50 p-4">
-						<h3 class="mb-2 flex items-center gap-2 font-medium">
-							<span class="text-blue-500">🌍</span>
-							Travel Stories
-						</h3>
-						<p class="text-sm text-gray-600">
-							Journey through different cultures and breathtaking destinations.
-						</p>
-					</div>
-
-					<div class="rounded-lg bg-gray-50 p-4">
-						<h3 class="mb-2 flex items-center gap-2 font-medium">
-							<span class="text-red-500">❤️</span>
-							Personal Stories
-						</h3>
-						<p class="text-sm text-gray-600">
-							Heartfelt experiences and life-changing moments shared by our community.
-						</p>
-					</div>
-				</div>
-
-				<button class="mt-8 h-12 flex-shrink-0 rounded-md bg-black font-medium text-white">
-					Read Stories
-				</button>
-
-				<div class="mt-8">
-					<h2 class="mb-4 text-xl font-medium">Recent Stories</h2>
-					<div class="space-y-4">
-						<div>
-							<span class="block font-medium">The Mountain That Changed Everything</span>
-							<span class="text-gray-600">A journey of self-discovery in the Himalayas.</span>
-						</div>
-						<div>
-							<span class="block font-medium">Finding Home in Tokyo</span>
-							<span class="text-gray-600">An expat's tale of belonging in urban Japan.</span>
-						</div>
-						<div>
-							<span class="block font-medium">The Kindness of Strangers</span>
-							<span class="text-gray-600">How a flat tire led to lifelong friendships.</span>
-						</div>
-					</div>
-				</div>
+				<p class="mb-6 text-gray-600">coming soon...</p>
 			</div>
 		</Drawer.Content>
 	</Drawer.Portal>

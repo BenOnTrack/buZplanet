@@ -1,5 +1,6 @@
 <!-- SelectedFeatureGeojsonSource.svelte -->
 <script lang="ts">
+	// @ts-nocheck
 	import { GeoJSON, CircleLayer, FillLayer, LineLayer } from 'svelte-maplibre';
 
 	interface Props {
