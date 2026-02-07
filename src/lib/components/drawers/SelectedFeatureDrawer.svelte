@@ -30,6 +30,7 @@
 
 	// Dialog state
 	let bookmarkDialogOpen = $state(false);
+	let visitHistoryExpanded = $state(false);
 
 	// Watch for feature changes and update status
 	$effect(() => {
@@ -93,6 +94,17 @@
 		} else {
 			return `Visited ${uniqueDates.length} times (${uniqueDates[0]} to ${uniqueDates[uniqueDates.length - 1]})`;
 		}
+	}
+
+	// Helper function to format individual visit date and time
+	function formatVisitDateTime(timestamp: number): string {
+		const date = new Date(timestamp);
+		return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+	}
+
+	// Helper function to get sorted visit dates (most recent first)
+	function getSortedVisits(timestamps: number[]): number[] {
+		return [...timestamps].sort((a, b) => b - a);
 	}
 
 	// Helper function to format phone number for display
@@ -262,6 +274,36 @@
 		}
 	}
 
+	async function handleRemoveVisit(feature: MapGeoJSONFeature | null, visitTimestamp: number) {
+		if (!feature) return;
+
+		try {
+			featureStatus.loading = true;
+			await featuresDB.ensureInitialized();
+
+			const featureId = getFeatureId(feature);
+			let storedFeature = await featuresDB.getFeatureById(featureId);
+
+			if (storedFeature) {
+				// Remove the specific visit timestamp
+				storedFeature.visitedDates = storedFeature.visitedDates.filter(
+					(ts) => ts !== visitTimestamp
+				);
+				storedFeature = await featuresDB.updateFeature(storedFeature);
+				featureStatus.visitedDates = storedFeature.visitedDates;
+
+				console.log(
+					`Visit removed. Remaining visits: ${storedFeature.visitedDates.length}`,
+					storedFeature
+				);
+			}
+		} catch (error) {
+			console.error('Failed to remove visit:', error);
+		} finally {
+			featureStatus.loading = false;
+		}
+	}
+
 	function handleUpdate(feature: MapGeoJSONFeature | null) {
 		if (!feature) return;
 		// TODO: Implement feature update/edit functionality
@@ -313,7 +355,6 @@
 								<div class="grid grid-cols-3 gap-3">
 									<!-- Class -->
 									<div class="text-center">
-										<div class="mb-1 text-xs tracking-wide text-gray-500 uppercase">Class</div>
 										<div
 											class="flex min-h-[2rem] items-center justify-center rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900"
 										>
@@ -322,7 +363,6 @@
 									</div>
 									<!-- Subclass -->
 									<div class="text-center">
-										<div class="mb-1 text-xs tracking-wide text-gray-500 uppercase">Subclass</div>
 										<div
 											class="flex min-h-[2rem] items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-gray-900"
 										>
@@ -331,7 +371,6 @@
 									</div>
 									<!-- Category -->
 									<div class="text-center">
-										<div class="mb-1 text-xs tracking-wide text-gray-500 uppercase">Category</div>
 										<div
 											class="flex min-h-[2rem] items-center justify-center rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900"
 										>
@@ -469,10 +508,61 @@
 										<p class="text-gray-600"><strong>Type:</strong> {feature.properties.type}</p>
 									{/if}
 									{#if featureStatus.visitedDates.length > 0}
-										<p class="text-gray-600">
-											<strong>Visits:</strong>
-											{formatVisitDates(featureStatus.visitedDates)}
-										</p>
+										<div class="text-gray-600">
+											<div class="flex items-center justify-between">
+												<p>
+													<strong>Visits:</strong>
+													{formatVisitDates(featureStatus.visitedDates)}
+												</p>
+												{#if featureStatus.visitedDates.length > 1}
+													<button
+														class="rounded text-xs text-blue-600 underline hover:text-blue-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+														onclick={() => (visitHistoryExpanded = !visitHistoryExpanded)}
+														onkeydown={(e) => {
+															if (e.key === 'Enter' || e.key === ' ') {
+																e.preventDefault();
+																visitHistoryExpanded = !visitHistoryExpanded;
+															}
+														}}
+														aria-expanded={visitHistoryExpanded}
+													>
+														{visitHistoryExpanded ? 'Hide details' : 'Manage visits'}
+													</button>
+												{/if}
+											</div>
+
+											{#if visitHistoryExpanded && featureStatus.visitedDates.length > 0}
+												<div class="mt-3 space-y-2">
+													<h4 class="text-sm font-medium text-gray-700">Visit History:</h4>
+													<div class="max-h-32 space-y-2 overflow-y-auto">
+														{#each getSortedVisits(featureStatus.visitedDates) as visitTimestamp, index}
+															<div
+																class="flex items-center justify-between rounded bg-gray-50 px-2 py-1 text-xs"
+															>
+																<span class="text-gray-700">
+																	{formatVisitDateTime(visitTimestamp)}
+																</span>
+																<button
+																	class="rounded px-1 text-red-500 hover:text-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
+																	onclick={() => handleRemoveVisit(feature, visitTimestamp)}
+																	onkeydown={(e) => {
+																		if (e.key === 'Enter' || e.key === ' ') {
+																			e.preventDefault();
+																			handleRemoveVisit(feature, visitTimestamp);
+																		}
+																	}}
+																	disabled={featureStatus.loading}
+																	title="Remove this visit"
+																	aria-label={`Remove visit from ${formatVisitDateTime(visitTimestamp)}`}
+																>
+																	🗑️
+																</button>
+															</div>
+														{/each}
+													</div>
+												</div>
+											{/if}
+										</div>
 									{/if}
 								</div>
 							{/if}
@@ -487,15 +577,6 @@
 						</div>
 					{/if}
 				</div>
-
-				<button
-					class="mt-8 h-12 flex-shrink-0 rounded-md font-medium text-white"
-					class:bg-black={hasFeature}
-					class:bg-gray-400={!hasFeature}
-					disabled={!hasFeature}
-				>
-					{hasFeature ? 'View Details' : 'No Features Selected'}
-				</button>
 			</div>
 		</Drawer.Content>
 	</Drawer.Portal>
