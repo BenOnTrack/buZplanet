@@ -1,32 +1,63 @@
 <!-- SelectedFeatureGeojsonSource.svelte -->
 <script lang="ts">
-	import type { FeatureCollection } from 'geojson';
-	import { GeoJSON, CircleLayer } from 'svelte-maplibre';
+	import { GeoJSON, CircleLayer, FillLayer, LineLayer } from 'svelte-maplibre';
 
 	interface Props {
 		selectedFeatureGeoJSON: any;
 	}
 	let { selectedFeatureGeoJSON }: Props = $props();
 
-	// Determine circle radius based on geometry type
-	const circleRadius = $derived.by(() => {
+	// Determine geometry type for conditional rendering
+	const geometryType = $derived.by(() => {
 		const firstFeature = selectedFeatureGeoJSON.features[0];
-		const geometryType = firstFeature?.geometry?.type;
+		return firstFeature?.geometry?.type;
+	});
 
-		// Use radius 5 for polygons, 15 for points and other geometries
-		return geometryType === 'Polygon' || geometryType === 'MultiPolygon' ? 5 : 15;
+	const isPolygon = $derived.by(() => {
+		return geometryType === 'Polygon' || geometryType === 'MultiPolygon';
+	});
+
+	const isPoint = $derived.by(() => {
+		return geometryType === 'Point' || geometryType === 'MultiPoint';
 	});
 </script>
 
 <GeoJSON id="selectedFeatureSource" data={selectedFeatureGeoJSON}>
-	<CircleLayer
-		id="selectedFeature"
-		applyToClusters={false}
-		paint={{
-			'circle-radius': circleRadius,
-			'circle-color': '#007cbf',
-			'circle-stroke-width': 2,
-			'circle-stroke-color': '#ffffff'
-		}}
-	/>
+	{#if isPoint}
+		<CircleLayer
+			id="selectedFeature"
+			beforeLayerType="symbol"
+			applyToClusters={false}
+			paint={{
+				'circle-radius': 15,
+				'circle-color': '#007cbf',
+				'circle-stroke-width': 2,
+				'circle-stroke-color': '#ffffff'
+			}}
+		/>
+	{:else if isPolygon}
+		<FillLayer
+			id="selectedFeatureFill"
+			paint={{
+				'fill-color': '#007cbf',
+				'fill-opacity': 0.3
+			}}
+		/>
+		<LineLayer
+			id="selectedFeatureLine"
+			paint={{
+				'line-color': '#007cbf',
+				'line-width': 5
+			}}
+		/>
+	{:else}
+		<!-- Fallback for other geometry types (LineString, etc.) -->
+		<LineLayer
+			id="selectedFeatureLine"
+			paint={{
+				'line-color': '#007cbf',
+				'line-width': 5
+			}}
+		/>
+	{/if}
 </GeoJSON>
