@@ -338,14 +338,27 @@ class FeaturesDB {
 		// Generate searchable text
 		storedFeature.searchText = this.generateSearchText(storedFeature);
 
-		// Store in database
+		// Store in database with better error handling
 		const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.STORE_NAME);
 
 		await new Promise<void>((resolve, reject) => {
-			const request = store.put(storedFeature);
-			request.onsuccess = () => resolve();
-			request.onerror = () => reject(request.error);
+			try {
+				// Create a clean copy to ensure it can be cloned
+				const cleanStoredFeature = JSON.parse(JSON.stringify(storedFeature));
+				const request = store.put(cleanStoredFeature);
+				request.onsuccess = () => resolve();
+				request.onerror = () => {
+					console.error('IndexedDB store.put failed:', request.error);
+					console.error('Attempted to store feature:', cleanStoredFeature);
+					reject(request.error);
+				};
+			} catch (jsonError) {
+				console.error('Failed to serialize feature for storage:', jsonError);
+				console.error('Original feature object:', storedFeature);
+				console.error('Map feature input:', mapFeature);
+				reject(new Error(`Feature serialization failed: ${jsonError}`));
+			}
 		});
 
 		await this.updateStats();
@@ -471,9 +484,21 @@ class FeaturesDB {
 		const store = transaction.objectStore(this.STORE_NAME);
 
 		await new Promise<void>((resolve, reject) => {
-			const request = store.put(feature);
-			request.onsuccess = () => resolve();
-			request.onerror = () => reject(request.error);
+			try {
+				// Create a clean copy to ensure it can be cloned
+				const cleanFeature = JSON.parse(JSON.stringify(feature));
+				const request = store.put(cleanFeature);
+				request.onsuccess = () => resolve();
+				request.onerror = () => {
+					console.error('IndexedDB store.put failed in updateFeature:', request.error);
+					console.error('Attempted to update feature:', cleanFeature);
+					reject(request.error);
+				};
+			} catch (jsonError) {
+				console.error('Failed to serialize feature for update:', jsonError);
+				console.error('Feature object:', feature);
+				reject(new Error(`Feature serialization failed in update: ${jsonError}`));
+			}
 		});
 
 		await this.updateStats();

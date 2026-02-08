@@ -2,6 +2,8 @@
 // This worker runs in a separate thread and can communicate with the main thread
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { OpfsDatabase, Sqlite3Static } from '@sqlite.org/sqlite-wasm';
+import { VectorTile, type VectorTileFeature } from '@mapbox/vector-tile';
+import Protobuf from 'pbf';
 
 export interface WorkerMessage {
 	type: string;
@@ -289,6 +291,16 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 				postMessage({
 					type: 'opfs-files-listed',
 					data: { files: fileList },
+					id
+				} satisfies WorkerResponse);
+				break;
+
+			case 'search-features':
+				// Search for features across all mbtiles databases - NO LIMITS
+				const searchResults = await searchFeatures(data.query, data.limit || 10000); // Much higher default limit
+				postMessage({
+					type: 'search-results',
+					data: searchResults,
 					id
 				} satisfies WorkerResponse);
 				break;
@@ -836,3 +848,396 @@ postMessage({
 	type: 'ready',
 	data: 'Worker is ready'
 } satisfies WorkerResponse);
+
+// Search for features across all mbtiles databases
+export interface SearchResult {
+	id: string;
+	name: string;
+	class: string;
+	subclass?: string;
+	category?: string;
+	lng: number;
+	lat: number;
+	database: string;
+	layer: string;
+	zoom: number;
+	tileX: number;
+	tileY: number;
+}
+
+// Fast feature search (optimized from archived worker)
+async function searchFeatures(query: string, limit: number = 10000): Promise<SearchResult[]> {
+	if (!query || query.trim().length < 2) {
+		return [];
+	}
+
+	const normalizedQuery = normalizeForName(query.trim());
+	const results: SearchResult[] = [];
+	const seenIds = new Set<string>();
+
+	console.log(
+		`🔍 Starting FAST search for: "${query}" (normalized: "${normalizedQuery}"), limit: ${limit}`
+	);
+
+	// Define POI layers to search
+	const POI_SOURCE_LAYERS = [
+		'poi_attraction',
+		'poi_education',
+		'poi_entertainment',
+		'poi_facility',
+		'poi_food_and_drink',
+		'poi_healthcare',
+		'poi_leisure',
+		'poi_lodging',
+		'poi_natural',
+		'poi_place',
+		'poi_shop',
+		'poi_transportation'
+	];
+
+	// Constants optimized from archived worker
+	const MAX_RESULTS = limit;
+	const BATCH_SIZE = 500; // Process tiles in batches
+	const MAX_CONCURRENT_TILES = 8; // Limit concurrent tile processing
+	const ZOOM_LEVEL = 14; // Standard POI zoom level
+
+	// Process databases with controlled concurrency
+	const dbEntries = Array.from(openDatabases.entries());
+	const relevantDbs = dbEntries.filter(([filename]) => {
+		const filenameLower = filename.toLowerCase();
+		return (
+			filenameLower.includes('poi') ||
+			filenameLower.includes('place') ||
+			filenameLower.includes('osm') ||
+			filenameLower.includes('planet')
+		);
+	});
+
+	console.log(`📚 Found ${relevantDbs.length} relevant databases to search`);
+
+	// Process databases in parallel with controlled concurrency
+	for (const [filename, db] of relevantDbs) {
+		if (results.length >= MAX_RESULTS) break;
+
+		try {
+			console.log(`🗃️ Searching database: ${filename}`);
+
+			await processDatabaseForSearch(
+				db,
+				filename,
+				ZOOM_LEVEL,
+				POI_SOURCE_LAYERS,
+				normalizedQuery,
+				results,
+				seenIds,
+				BATCH_SIZE,
+				MAX_CONCURRENT_TILES,
+				MAX_RESULTS
+			);
+
+			console.log(
+				`✅ Completed ${filename}: ${results.filter((r) => r.database === filename).length} results`
+			);
+		} catch (error) {
+			console.error(`❌ Error searching ${filename}:`, error);
+			continue;
+		}
+	}
+
+	console.log(`🎉 Search completed: found ${results.length} total results`);
+
+	// Optimized sorting by relevance
+	results.sort((a, b) => {
+		const aName = a.name.toLowerCase();
+		const bName = b.name.toLowerCase();
+		const queryLower = normalizedQuery.toLowerCase();
+
+		// Exact matches first
+		if (aName === queryLower && bName !== queryLower) return -1;
+		if (aName !== queryLower && bName === queryLower) return 1;
+
+		// Starts with query
+		const aStarts = aName.startsWith(queryLower);
+		const bStarts = bName.startsWith(queryLower);
+		if (aStarts && !bStarts) return -1;
+		if (!aStarts && bStarts) return 1;
+
+		// Shorter names first for same relevance
+		return a.name.length - b.name.length;
+	});
+
+	return results.slice(0, limit);
+}
+
+// Convert tile coordinates to lng/lat (approximate center of tile)
+function tileToLngLat(x: number, y: number, zoom: number): { lng: number; lat: number } {
+	const n = Math.PI - (2 * Math.PI * y) / Math.pow(2, zoom);
+	return {
+		lng: (x / Math.pow(2, zoom)) * 360 - 180,
+		lat: (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
+	};
+}
+
+// Helper functions from archived worker
+function normalizeForName(s: string): string {
+	return s
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '');
+}
+
+// Optimized database processing (from archived worker)
+async function processDatabaseForSearch(
+	db: OpfsDatabase,
+	filename: string,
+	zoomLevel: number,
+	wantedLayers: string[],
+	normalizedQuery: string,
+	results: SearchResult[],
+	seenIds: Set<string>,
+	batchSize: number,
+	maxConcurrentTiles: number,
+	maxResults: number
+): Promise<void> {
+	let offset = 0;
+	let hasMore = true;
+	let dbTileRows = 0;
+
+	console.log(`[DB ${filename}] Starting optimized processing...`);
+
+	while (hasMore && results.length < maxResults) {
+		// Optimized query - removed ORDER BY for better performance
+		const stmt = db.prepare(`
+			SELECT tile_data, tile_column, tile_row
+			FROM tiles
+			WHERE zoom_level = ?
+			LIMIT ? OFFSET ?
+		`);
+
+		try {
+			stmt.bind([zoomLevel, batchSize, offset]);
+
+			// Collect tiles from this batch
+			const batchTiles: Array<{
+				tileData: Uint8Array;
+				x: number;
+				tmsY: number;
+			}> = [];
+
+			let batchCount = 0;
+			while (stmt.step() && results.length < maxResults) {
+				batchCount++;
+				dbTileRows++;
+
+				batchTiles.push({
+					tileData: stmt.get(0) as Uint8Array,
+					x: stmt.get(1) as number,
+					tmsY: stmt.get(2) as number
+				});
+			}
+
+			hasMore = batchCount === batchSize;
+			offset += batchCount;
+
+			// Process this batch with controlled concurrency
+			await processTileBatch(
+				batchTiles,
+				zoomLevel,
+				filename,
+				wantedLayers,
+				normalizedQuery,
+				results,
+				seenIds,
+				maxConcurrentTiles,
+				maxResults
+			);
+		} finally {
+			stmt.finalize();
+		}
+	}
+
+	console.log(
+		`[DB ${filename}] z=${zoomLevel} SUMMARY: ${dbTileRows} tiles, ${results.filter((r) => r.database === filename).length} matches`
+	);
+}
+
+// Process a batch of tiles with controlled concurrency
+async function processTileBatch(
+	tiles: Array<{ tileData: Uint8Array; x: number; tmsY: number }>,
+	zoomLevel: number,
+	filename: string,
+	wantedLayers: string[],
+	normalizedQuery: string,
+	results: SearchResult[],
+	seenIds: Set<string>,
+	maxConcurrentTiles: number,
+	maxResults: number
+): Promise<void> {
+	const activeTasks = new Set<Promise<void>>();
+
+	for (const { tileData, x, tmsY } of tiles) {
+		if (results.length >= maxResults) break;
+
+		// Wait if we have too many concurrent tile operations
+		while (activeTasks.size >= maxConcurrentTiles) {
+			await Promise.race(activeTasks);
+		}
+
+		const tileTask = processSingleTileOptimized(
+			tileData,
+			x,
+			tmsY,
+			zoomLevel,
+			filename,
+			wantedLayers,
+			normalizedQuery,
+			results,
+			seenIds,
+			maxResults
+		).finally(() => {
+			activeTasks.delete(tileTask);
+		});
+
+		activeTasks.add(tileTask);
+	}
+
+	// Wait for all remaining tasks in this batch
+	await Promise.all(activeTasks);
+}
+
+// Process a single tile with proper vector tile parsing (like archived worker)
+async function processSingleTileOptimized(
+	tileData: Uint8Array,
+	x: number,
+	tmsY: number,
+	zoomLevel: number,
+	filename: string,
+	wantedLayers: string[],
+	normalizedQuery: string,
+	results: SearchResult[],
+	seenIds: Set<string>,
+	maxResults: number
+): Promise<void> {
+	if (results.length >= maxResults) return;
+
+	try {
+		const n = 1 << zoomLevel;
+		const y = n - 1 - tmsY; // Convert from TMS to XYZ
+
+		// Decompress tile data (tilemaker always generates gzipped tiles)
+		const buffer = await gunzip(tileData);
+
+		// Parse vector tile using proper library (like archived worker)
+		const tile = new VectorTile(new Protobuf(buffer));
+
+		// Process each wanted layer
+		for (const sourceLayer of wantedLayers) {
+			if (results.length >= maxResults) break;
+
+			const layer = tile.layers[sourceLayer];
+			if (!layer) continue;
+
+			// Iterate through features in this layer
+			for (let i = 0; i < layer.length; i++) {
+				if (results.length >= maxResults) break;
+
+				const vectorTileFeature = layer.feature(i);
+				const props = vectorTileFeature.properties as Record<string, any>;
+
+				// Check name properties - prioritize name:en, fallback to name
+				const nameEn = props['name:en'];
+				const name = props['name'];
+
+				let isMatch = false;
+				let matchedName = '';
+
+				// Quick exit if no searchable properties
+				if (!name && !nameEn) continue;
+
+				// Check name:en first (preferred)
+				if (nameEn && fastMatchesQuery(nameEn, normalizedQuery)) {
+					isMatch = true;
+					matchedName = nameEn;
+				}
+				// If no match in name:en, check regular name
+				else if (name && fastMatchesQuery(name, normalizedQuery)) {
+					isMatch = true;
+					matchedName = name;
+				}
+
+				if (isMatch) {
+					// Convert to GeoJSON to get proper coordinates
+					const geojsonFeature = vectorTileFeature.toGeoJSON(x, y, zoomLevel);
+
+					// Extract coordinates from GeoJSON
+					let lng: number, lat: number;
+
+					if (geojsonFeature.geometry.type === 'Point') {
+						[lng, lat] = geojsonFeature.geometry.coordinates;
+					} else if (
+						geojsonFeature.geometry.type === 'LineString' ||
+						geojsonFeature.geometry.type === 'Polygon'
+					) {
+						// Use first coordinate for lines/polygons
+						const coords =
+							geojsonFeature.geometry.type === 'Polygon'
+								? geojsonFeature.geometry.coordinates[0][0]
+								: geojsonFeature.geometry.coordinates[0];
+						[lng, lat] = coords;
+					} else {
+						// Fallback: use tile center
+						const tileCenter = tileToLngLat(x, y, zoomLevel);
+						lng = tileCenter.lng;
+						lat = tileCenter.lat;
+					}
+
+					const fid = String(props['id'] || `${filename}:${sourceLayer}:${x}:${y}:${i}`);
+					const dedupKey = `${filename}|${sourceLayer}|${fid}`;
+
+					if (!seenIds.has(dedupKey)) {
+						seenIds.add(dedupKey);
+
+						// Extract class from layer name
+						const featureClass = sourceLayer.startsWith('poi_')
+							? sourceLayer.replace('poi_', '')
+							: 'poi';
+
+						results.push({
+							id: fid,
+							name: matchedName,
+							class: featureClass,
+							subclass: props['subclass'],
+							category: props['category'],
+							lng: lng,
+							lat: lat,
+							database: filename,
+							layer: sourceLayer,
+							zoom: zoomLevel,
+							tileX: x,
+							tileY: y
+						});
+					}
+				}
+			}
+		}
+	} catch (tileError) {
+		// Silently skip problematic tiles to maintain performance
+		// console.warn(`Error processing tile ${x}/${tmsY}:`, tileError);
+	}
+}
+
+// Fast and optimized search matching
+function fastMatchesQuery(target: string, normalizedQuery: string): boolean {
+	if (!target || !normalizedQuery) return false;
+
+	// Convert target to lowercase for case-insensitive search
+	const targetLower = target.toLowerCase();
+	const queryLower = normalizedQuery.toLowerCase();
+
+	// Fast path: direct substring match (most common case)
+	if (targetLower.includes(queryLower)) return true;
+
+	// Slower path: full normalization only when needed
+	const normalizedTarget = normalizeForName(target);
+	return normalizedTarget.includes(normalizedQuery);
+}

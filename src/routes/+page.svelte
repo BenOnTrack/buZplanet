@@ -5,6 +5,8 @@
 	import FileManagerDialog from '$lib/components/nav/FileManagerDialog.svelte';
 	import SettingsDialog from '$lib/components/nav/SettingsDialog.svelte';
 	import LoadingScreen from '$lib/components/LoadingScreen.svelte';
+	import SearchBar from '$lib/components/nav/SearchBar.svelte';
+	import SearchResultsDrawer from '$lib/components/drawers/SearchResultsDrawer.svelte';
 	import { appInitializer } from '$lib/utils/app-initialization';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -35,6 +37,47 @@
 
 	let isAppReady = $derived(initState.status === 'complete');
 	let showDebugPanel = $state(false);
+
+	// Search functionality
+	let searchQuery = $state('');
+	let searchResults = $state<any[]>([]);
+	let isSearching = $state(false);
+	let searchDrawerOpen = $state(false);
+
+	async function handleSearch(query: string) {
+		console.log('Searching for:', query);
+		isSearching = true;
+		searchDrawerOpen = true;
+
+		try {
+			const { getWorker } = await import('$lib/utils/worker');
+			const worker = getWorker();
+
+			// Search for features with much higher limit for comprehensive results
+			const results = await worker.searchFeatures(query, 5000); // 5000 results max
+			console.log('Search results:', results);
+
+			searchResults = results;
+
+			if (results.length === 0) {
+				console.log('No results found for:', query);
+			} else {
+				console.log(`Found ${results.length} results for "${query}"`);
+			}
+		} catch (error) {
+			console.error('Search error:', error);
+			searchResults = [];
+		} finally {
+			isSearching = false;
+		}
+	}
+
+	function handleClearSearch() {
+		console.log('Search cleared');
+		searchResults = [];
+		isSearching = false;
+		searchDrawerOpen = false; // Close search results drawer
+	}
 
 	// Subscribe to initialization state changes
 	let unsubscribe: (() => void) | null = null;
@@ -129,8 +172,27 @@
 		<AuthDialog />
 		<FileManagerDialog />
 		<SettingsDialog />
+
+		<!-- Search Bar -->
+		<div class="search-bar-container">
+			<SearchBar
+				bind:value={searchQuery}
+				onSearch={handleSearch}
+				onClear={handleClearSearch}
+				placeholder="Search places, addresses, points of interest..."
+			/>
+		</div>
+
 		<MapView ready={isAppReady} />
 		<BottomNavigation />
+
+		<!-- Search Results Drawer -->
+		<SearchResultsDrawer
+			bind:open={searchDrawerOpen}
+			results={searchResults}
+			{searchQuery}
+			{isSearching}
+		/>
 	{/if}
 
 	<!-- Worker Debug Panel - only show in development when app is ready -->
@@ -259,5 +321,38 @@
 	.log-entry.empty {
 		color: #666;
 		font-style: italic;
+	}
+
+	/* Search Bar Styling */
+	.search-bar-container {
+		position: fixed;
+		top: 20px;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 1000;
+		width: 100%;
+		max-width: 500px;
+		padding: 0 20px;
+		pointer-events: none;
+	}
+
+	.search-bar-container :global(.search-container) {
+		pointer-events: auto;
+	}
+
+	/* Responsive adjustments */
+	@media (max-width: 640px) {
+		.search-bar-container {
+			top: 16px;
+			padding: 0 16px;
+			max-width: calc(100vw - 32px);
+		}
+	}
+
+	/* Ensure search bar doesn't interfere with debug panel */
+	@media (min-width: 641px) {
+		.search-bar-container {
+			max-width: calc(100vw - 460px); /* Account for debug panel width */
+		}
 	}
 </style>

@@ -373,6 +373,103 @@ class MapControl {
 	}
 
 	/**
+	 * Create a MapGeoJSONFeature from a SearchResult
+	 * This creates a minimal but complete feature that can be bookmarked
+	 */
+	createMapFeatureFromSearchResult(searchResult: {
+		id: string;
+		name: string;
+		class: string;
+		subclass?: string;
+		category?: string;
+		lng: number;
+		lat: number;
+		database: string;
+		layer: string;
+		zoom?: number;
+		tileX?: number;
+		tileY?: number;
+	}): any {
+		// Create a completely clean, serializable GeoJSON feature
+		// Avoid any references that might not be cloneable by IndexedDB
+		const cleanFeature = {
+			id: String(searchResult.id), // Ensure string type
+			type: 'Feature' as const,
+			properties: {
+				// Primary name properties for display and search
+				name: String(searchResult.name || ''),
+				'name:en': String(searchResult.name || ''), // Default to same name for English
+
+				// Classification properties (ensure strings or undefined)
+				class: searchResult.class ? String(searchResult.class) : undefined,
+				subclass: searchResult.subclass ? String(searchResult.subclass) : undefined,
+				category: searchResult.category ? String(searchResult.category) : undefined,
+
+				// Mark as search result for debugging
+				_fromSearch: true
+			},
+			geometry: {
+				type: 'Point' as const,
+				coordinates: [Number(searchResult.lng), Number(searchResult.lat)]
+			},
+			// Map-specific properties (simple values only)
+			source: String(searchResult.database.replace(/\.mbtiles$/i, '')),
+			sourceLayer: String(searchResult.layer),
+			state: {}, // Empty object, fully cloneable
+			layer: { id: String(searchResult.layer) } // Simple object structure
+		};
+
+		// Return a clean object with no function references or complex objects
+		return JSON.parse(JSON.stringify(cleanFeature));
+	}
+
+	/**
+	 * Select a search result (converts to MapGeoJSONFeature and selects)
+	 */
+	selectSearchResult(searchResult: {
+		id: string;
+		name: string;
+		class: string;
+		subclass?: string;
+		category?: string;
+		lng: number;
+		lat: number;
+		database: string;
+		layer: string;
+		zoom?: number;
+		tileX?: number;
+		tileY?: number;
+	}) {
+		const mapFeature = this.createMapFeatureFromSearchResult(searchResult);
+		this.selectFeature(mapFeature);
+	}
+
+	/**
+	 * Zoom to and select a search result
+	 * This method both zooms to the location and triggers the selectedFeature
+	 */
+	zoomToAndSelectSearchResult(searchResult: {
+		id: string;
+		name: string;
+		class: string;
+		subclass?: string;
+		category?: string;
+		lng: number;
+		lat: number;
+		database: string;
+		layer: string;
+		zoom?: number;
+		tileX?: number;
+		tileY?: number;
+	}) {
+		// First zoom to the location
+		this.zoomToLocation(searchResult.lng, searchResult.lat, 16);
+
+		// Then select the feature (triggers selectedFeature and opens drawer)
+		this.selectSearchResult(searchResult);
+	}
+
+	/**
 	 * Calculate bounds from array of coordinates
 	 */
 	private calculateBounds(coordinates: number[][]): LngLatBoundsLike {
@@ -393,6 +490,27 @@ class MapControl {
 			[minLng, minLat],
 			[maxLng, maxLat]
 		] as LngLatBoundsLike;
+	}
+
+	/**
+	 * Zoom map to specific coordinates
+	 */
+	zoomToLocation(lng: number, lat: number, zoom: number = 16) {
+		if (!this.mapInstance) {
+			console.warn('Map instance not available');
+			return;
+		}
+
+		try {
+			this.mapInstance.flyTo({
+				center: [lng, lat],
+				zoom: zoom,
+				duration: 1000,
+				essential: true
+			});
+		} catch (error) {
+			console.error('Failed to zoom to location:', error);
+		}
 	}
 }
 

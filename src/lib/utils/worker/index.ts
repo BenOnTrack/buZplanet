@@ -189,6 +189,10 @@ export class WorkerManager {
 		return result.files;
 	}
 
+	async searchFeatures(query: string, limit?: number): Promise<any[]> {
+		return this.sendMessage('search-features', { query, limit }, 60000); // 60 second timeout for comprehensive search
+	}
+
 	postMessage(type: string, data?: any): void {
 		if (!this.worker) {
 			throw new Error('Worker not initialized');

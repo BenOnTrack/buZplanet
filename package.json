@@ -1,7 +1,7 @@
 {
 	"name": "buzplanet",
 	"private": true,
-	"version": "0.0.40",
+	"version": "0.0.41",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -42,9 +42,11 @@
 		"wrangler": "^4.60.0"
 	},
 	"dependencies": {
+		"@mapbox/vector-tile": "^2.0.4",
 		"@sqlite.org/sqlite-wasm": "^3.49.1-build4",
 		"bits-ui": "^2.15.5",
 		"p-defer": "^4.0.1",
+		"pbf": "^4.0.1",
 		"phosphor-svelte": "^3.1.0",
 		"svelte-maplibre": "^1.2.6",
 		"tailwindcss-animate": "^1.0.7",
