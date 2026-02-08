@@ -1,7 +1,7 @@
 {
 	"name": "buzplanet",
 	"private": true,
-	"version": "0.0.41",
+	"version": "0.0.42",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -15,7 +15,7 @@
 		"lint": "prettier --check .",
 		"format": "prettier --write .",
 		"gen": "wrangler types",
-		"deploy": "npm run version:patch && npm run build && wrangler deploy",
+		"deploy": "NODE_OPTIONS=--max-old-space-size=4096 npm run version:patch && npm run build && wrangler deploy",
 		"deploy:production": "npm run version:patch && npm run build && wrangler deploy --env production",
 		"version:patch": "node scripts/bump-version.mjs patch",
 		"version:minor": "node scripts/bump-version.mjs minor",
