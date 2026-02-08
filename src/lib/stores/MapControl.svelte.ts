@@ -27,10 +27,13 @@ class MapControl {
 	}
 
 	setSelectedFeatureDrawerOpen(open: boolean) {
-		this._selectedFeatureDrawerOpen = open;
-		// If drawer is being closed, also clear the selected feature
-		if (!open) {
-			this._selectedFeature = null;
+		// Only update if state is actually changing
+		if (this._selectedFeatureDrawerOpen !== open) {
+			this._selectedFeatureDrawerOpen = open;
+			// If drawer is being closed, also clear the selected feature
+			if (!open) {
+				this._selectedFeature = null;
+			}
 		}
 	}
 
@@ -48,16 +51,22 @@ class MapControl {
 	 * Select a feature and open the drawer
 	 */
 	selectFeature(feature: MapGeoJSONFeature) {
-		this._selectedFeature = feature;
-		this._selectedFeatureDrawerOpen = true;
+		// Only update if this is a different feature or drawer is closed
+		if (this._selectedFeature !== feature || !this._selectedFeatureDrawerOpen) {
+			this._selectedFeature = feature;
+			this._selectedFeatureDrawerOpen = true;
+		}
 	}
 
 	/**
 	 * Clear selected feature and close drawer
 	 */
 	clearSelection() {
-		this._selectedFeature = null;
-		this._selectedFeatureDrawerOpen = false;
+		// Only clear if there's actually something selected
+		if (this._selectedFeature !== null || this._selectedFeatureDrawerOpen !== false) {
+			this._selectedFeature = null;
+			this._selectedFeatureDrawerOpen = false;
+		}
 	}
 
 	/**

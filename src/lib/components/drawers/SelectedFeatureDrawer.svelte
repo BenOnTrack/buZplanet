@@ -19,12 +19,17 @@
 
 	// Handle drawer open/close changes
 	function handleOpenChange(newOpen: boolean) {
-		open = newOpen;
-		if (onOpenChange) {
-			onOpenChange(newOpen);
+		// Only trigger parent callback if this is a different state
+		if (newOpen !== open) {
+			if (onOpenChange) {
+				onOpenChange(newOpen);
+			}
 		}
 	}
 	let activeSnapPoint = $state<string | number>('200px');
+
+	// Derived state to use the correct open state
+	let drawerOpen = $derived(open);
 
 	// Derived values for display
 	let hasFeature = $derived(feature !== null && feature !== undefined);
@@ -358,7 +363,7 @@
 
 <!-- Selected Feature Drawer -->
 <Drawer.Root
-	bind:open
+	open={drawerOpen}
 	onOpenChange={handleOpenChange}
 	snapPoints={['200px', '400px', 1]}
 	bind:activeSnapPoint
