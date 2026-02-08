@@ -153,7 +153,10 @@ class AppInitializer {
 				}
 			}
 
-			// Step 4: Register Protocol Handlers (essential for map functionality)
+			// Step 4: Ensure default files are loaded into OPFS
+			await this.ensureDefaultFilesInOPFS(worker);
+
+			// Step 5: Register Protocol Handlers (essential for map functionality)
 			this.addLog('🔄 Registering MBTiles protocol handler...');
 			const protocolHandler = createProtocolHandler(worker);
 			maplibregl.addProtocol('mbtiles', protocolHandler);
@@ -161,7 +164,7 @@ class AppInitializer {
 			this.updateState({ status: 'protocol-ready' });
 
 			if (!fastMode) {
-				// Step 5: Scan and index databases (heavy operation - skip in fast mode)
+				// Step 6: Scan and index databases (heavy operation - skip in fast mode)
 				this.addLog('🔄 Scanning and indexing databases...');
 				this.updateState({ status: 'database-scanning' });
 
@@ -187,11 +190,11 @@ class AppInitializer {
 				});
 			}
 
-			// Step 6: Final verification (quick)
+			// Step 7: Final verification (quick)
 			const pingResponse = await worker.ping();
 			this.addLog(`✅ Ping response: ${pingResponse}`);
 
-			// Step 7: Complete
+			// Step 8: Complete
 			this.updateState({ status: 'complete' });
 			this.addLog('🎉 App initialization complete!');
 
@@ -215,6 +218,85 @@ class AppInitializer {
 				error: errorMsg
 			};
 		}
+	}
+
+	/**
+	 * Ensure default mbtiles files are loaded into OPFS
+	 */
+	private async ensureDefaultFilesInOPFS(worker: any): Promise<void> {
+		const defaultFiles = [
+			{
+				filename: 'coastline.mbtiles',
+				staticPath: '/coastline.mbtiles',
+				description: 'Coastline data'
+			}
+			// Add more default files here if needed
+			// {
+			// 	filename: 'basemap.mbtiles',
+			// 	staticPath: '/basemap.mbtiles',
+			// 	description: 'Base map data'
+			// }
+		];
+
+		for (const fileInfo of defaultFiles) {
+			try {
+				// Check if file already exists in OPFS
+				const opfsFiles = await worker.listOPFSFiles();
+				const fileExists = opfsFiles.includes(fileInfo.filename);
+
+				if (!fileExists) {
+					this.addLog(`🔄 Loading ${fileInfo.description} from static files...`);
+
+					// Fetch the file from static directory
+					const response = await fetch(fileInfo.staticPath);
+
+					if (!response.ok) {
+						if (response.status === 404) {
+							this.addLog(`⚠️ ${fileInfo.filename} not found in static files - skipping`);
+							continue;
+						} else {
+							throw new Error(
+								`Failed to fetch ${fileInfo.filename}: ${response.status} ${response.statusText}`
+							);
+						}
+					}
+
+					// Convert to ArrayBuffer
+					const arrayBuffer = await response.arrayBuffer();
+
+					// Validate file size
+					if (arrayBuffer.byteLength === 0) {
+						this.addLog(`⚠️ ${fileInfo.filename} is empty - skipping`);
+						continue;
+					}
+
+					this.addLog(
+						`📥 Downloading ${fileInfo.filename} (${this.formatFileSize(arrayBuffer.byteLength)})...`
+					);
+
+					// Save to OPFS via worker
+					const savedPath = await worker.saveFileToOPFS(fileInfo.filename, arrayBuffer);
+					this.addLog(`✅ ${fileInfo.description} saved to OPFS as ${savedPath}`);
+				} else {
+					this.addLog(`✅ ${fileInfo.description} already exists in OPFS`);
+				}
+			} catch (error) {
+				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+				this.addLog(`❌ Failed to load ${fileInfo.description}: ${errorMsg}`);
+				// Continue with other files - don't fail initialization
+			}
+		}
+	}
+
+	/**
+	 * Format file size for display
+	 */
+	private formatFileSize(bytes: number): string {
+		if (bytes === 0) return '0 Bytes';
+		const k = 1024;
+		const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 	}
 
 	/**

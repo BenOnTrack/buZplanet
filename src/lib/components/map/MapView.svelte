@@ -18,14 +18,15 @@
 	import BasemapVectorTileSource from '$lib/components/map/BasemapVectorTileSource.svelte';
 	import BuildingVectorTileSource from '$lib/components/map/BuildingVectorTileSource.svelte';
 	import TransportationVectorTileSource from '$lib/components/map/TransportationVectorTileSource.svelte';
-	import PoiVectorTileSource from './PoiVectorTileSource.svelte';
+	import PoiVectorTileSource from '$lib/components/map/PoiVectorTileSource.svelte';
 	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
-	import SelectedFeatureGeojsonSource from './SelectedFeatureGeojsonSource.svelte';
+	import SelectedFeatureGeojsonSource from '$lib/components/map/SelectedFeatureGeojsonSource.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
-	import BookmarksGeojsonSource from './BookmarksGeojsonSource.svelte';
-	import VisitedGeojsonSource from './VisitedGeojsonSource.svelte';
-	import TodoGeojsonSource from './TodoGeojsonSource.svelte';
+	import BookmarksGeojsonSource from '$lib/components/map/BookmarksGeojsonSource.svelte';
+	import VisitedGeojsonSource from '$lib/components/map/VisitedGeojsonSource.svelte';
+	import TodoGeojsonSource from '$lib/components/map/TodoGeojsonSource.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
+	import CoastlineVectorTileSource from '$lib/components/map/CoastlineVectorTileSource.svelte';
 
 	interface Props {
 		ready?: boolean;
@@ -444,6 +445,7 @@
 					'background-color': '#FBF2E7'
 				}}
 			></BackgroundLayer>
+			<CoastlineVectorTileSource />
 			<BasemapVectorTileSource />
 			<TransportationVectorTileSource />
 			<BuildingVectorTileSource />
