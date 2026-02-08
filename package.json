@@ -1,12 +1,12 @@
 {
 	"name": "buzplanet",
 	"private": true,
-	"version": "0.0.42",
+	"version": "0.0.43",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
 		"dev:vite": "vite dev",
-		"build": "vite build",
+		"build": "NODE_OPTIONS=--max-old-space-size=8192 vite build",
 		"build:dev": "vite build --mode development",
 		"preview": "wrangler dev --compatibility-date=2024-12-19 --compatibility-flags=nodejs_compat --port 4173",
 		"prepare": "husky",
@@ -15,7 +15,7 @@
 		"lint": "prettier --check .",
 		"format": "prettier --write .",
 		"gen": "wrangler types",
-		"deploy": "NODE_OPTIONS=--max-old-space-size=4096 npm run version:patch && npm run build && wrangler deploy",
+		"deploy": "NODE_OPTIONS=--max-old-space-size=8192 npm run version:patch && npm run build && wrangler deploy",
 		"deploy:production": "npm run version:patch && npm run build && wrangler deploy --env production",
 		"version:patch": "node scripts/bump-version.mjs patch",
 		"version:minor": "node scripts/bump-version.mjs minor",
