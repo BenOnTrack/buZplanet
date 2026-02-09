@@ -27,7 +27,13 @@ self.addEventListener('activate', (event) => {
 		}
 	}
 
-	event.waitUntil(deleteOldCaches());
+	event.waitUntil(
+		deleteOldCaches().then(() => {
+			console.log('Service Worker: Activated and old caches cleared');
+			// Claim all clients so the new SW takes control immediately
+			return self.clients.claim();
+		})
+	);
 });
 
 self.addEventListener('fetch', (event) => {
@@ -96,7 +102,15 @@ self.addEventListener('fetch', (event) => {
 // Handle messages from clients
 self.addEventListener('message', (event) => {
 	if (event.data && event.data.type === 'SKIP_WAITING') {
+		console.log('Service Worker: Received SKIP_WAITING message');
 		self.skipWaiting();
+
+		// Notify all clients that we're about to take control
+		self.clients.matchAll().then((clients) => {
+			clients.forEach((client) => {
+				client.postMessage({ type: 'SW_SKIP_WAITING' });
+			});
+		});
 	}
 });
 

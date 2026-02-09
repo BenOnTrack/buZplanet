@@ -7,6 +7,8 @@
 	import LoadingScreen from '$lib/components/LoadingScreen.svelte';
 	import SearchBar from '$lib/components/nav/SearchBar.svelte';
 	import SearchResultsDrawer from '$lib/components/drawers/SearchResultsDrawer.svelte';
+	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
+	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { appInitializer } from '$lib/utils/app-initialization';
 	import { zIndexClass } from '$lib/styles/z-index.js';
 	import { onMount, onDestroy } from 'svelte';
@@ -215,6 +217,13 @@
 			{searchQuery}
 			{isSearching}
 			{currentSearchingDatabase}
+		/>
+
+		<!-- Selected Feature Drawer - render after SearchResultsDrawer to ensure proper layering -->
+		<SelectedFeatureDrawer
+			open={mapControl.selectedFeatureDrawerOpen}
+			feature={mapControl.selectedFeature}
+			onOpenChange={(open) => mapControl.setSelectedFeatureDrawerOpen(open)}
 		/>
 	{/if}
 

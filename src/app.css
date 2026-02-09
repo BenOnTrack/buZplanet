@@ -4,6 +4,8 @@
 @import 'tailwindcss';
 @plugin 'tailwindcss-animate';
 
+@source '../**/*.{html,js,svelte,ts}';
+
 @custom-variant dark (&:is(.dark *));
 
 @font-face {

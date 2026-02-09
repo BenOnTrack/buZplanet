@@ -302,7 +302,10 @@
 			// Save to OPFS via worker
 			downloadProgress = 95; // Almost done
 			const worker = await getWorker();
-			await worker.saveFileToOPFS(file.filename, combined.buffer);
+			await worker.saveFileToOPFS(
+				file.filename,
+				combined.buffer.slice(combined.byteOffset, combined.byteOffset + combined.byteLength)
+			);
 			downloadProgress = 100;
 
 			// Refresh worker databases

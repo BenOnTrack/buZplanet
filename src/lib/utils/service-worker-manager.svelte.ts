@@ -28,9 +28,19 @@ export class ServiceWorkerManager {
 			// Listen for updates
 			this.registration.addEventListener('updatefound', this.handleUpdate.bind(this));
 
+			// Listen for service worker state changes
+			navigator.serviceWorker.addEventListener('controllerchange', () => {
+				// Reset update state when a new service worker takes control
+				this.updateAvailable = false;
+				console.log('New service worker is now controlling the app');
+			});
+
 			// Check if there's already an update waiting
 			if (this.registration.waiting) {
-				this.updateAvailable = true;
+				// Only show update if we have an active service worker (not first install)
+				if (navigator.serviceWorker.controller) {
+					this.updateAvailable = true;
+				}
 			}
 
 			return true;
@@ -56,13 +66,29 @@ export class ServiceWorkerManager {
 	}
 
 	async applyUpdate() {
-		if (!this.registration?.waiting) return;
+		if (!this.registration?.waiting) {
+			console.warn('No waiting service worker found');
+			this.updateAvailable = false;
+			return;
+		}
+
+		console.log('Applying service worker update...');
+
+		// Reset the update state immediately to prevent duplicate clicks
+		this.updateAvailable = false;
 
 		// Tell the waiting service worker to skip waiting and become active
 		this.registration.waiting.postMessage({ type: 'SKIP_WAITING' });
 
-		// Reload the page to get the new version
-		window.location.reload();
+		// Listen for the controllerchange event to know when the new SW is active
+		navigator.serviceWorker.addEventListener(
+			'controllerchange',
+			() => {
+				console.log('New service worker active, reloading page...');
+				window.location.reload();
+			},
+			{ once: true }
+		);
 	}
 
 	get hasUpdate() {

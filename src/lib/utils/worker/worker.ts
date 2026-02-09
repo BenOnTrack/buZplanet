@@ -4,6 +4,7 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { OpfsDatabase, Sqlite3Static } from '@sqlite.org/sqlite-wasm';
 import { VectorTile, type VectorTileFeature } from '@mapbox/vector-tile';
 import Protobuf from 'pbf';
+import { mergeTiles } from '$lib/utils/map/mergeTiles.js';
 
 export interface WorkerMessage {
 	type: string;
@@ -712,7 +713,7 @@ self.addEventListener('beforeunload', () => {
 	closeAllDatabases();
 });
 
-// Handle tile requests
+// Handle tile requests with vector tile merging
 async function handleTileRequest(
 	source: string,
 	z: number,
@@ -728,65 +729,19 @@ async function handleTileRequest(
 		// Find databases for the source
 		const sourceDbs = getDatabasesBySource(source);
 		if (sourceDbs.length === 0) {
-			// No database found for this source - this is normal, just return null
 			return null;
 		}
 
 		// Convert XYZ to TMS Y coordinate (MBTiles use TMS scheme)
 		const tmsY = (1 << z) - 1 - y;
 
-		// Try to get tile from databases (prioritize first match)
-		for (const dbEntry of sourceDbs) {
-			// Check if zoom level is within database range
-			if (dbEntry.minzoom !== undefined && z < dbEntry.minzoom) continue;
-			if (dbEntry.maxzoom !== undefined && z > dbEntry.maxzoom) continue;
-
-			try {
-				const stmt = dbEntry.db.prepare(
-					'SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?'
-				);
-
-				stmt.bind([z, x, tmsY]);
-
-				if (stmt.step()) {
-					const tileData = stmt.get(0) as Uint8Array;
-					stmt.finalize();
-
-					if (tileData && tileData.length > 0) {
-						// Check if tile is gzipped (common in MBTiles)
-						if (isGzipped(tileData)) {
-							// Decompress gzipped tile
-							const decompressed = await gunzip(tileData);
-							return decompressed;
-						} else {
-							// Return tile data as-is
-							const typedArray = tileData as Uint8Array;
-							// Create a new ArrayBuffer to ensure it's not SharedArrayBuffer
-							const buffer =
-								typedArray.buffer instanceof ArrayBuffer
-									? typedArray.buffer
-									: new ArrayBuffer(typedArray.byteLength);
-							if (!(typedArray.buffer instanceof ArrayBuffer)) {
-								new Uint8Array(buffer).set(typedArray);
-								return buffer;
-							}
-							return buffer.slice(
-								typedArray.byteOffset,
-								typedArray.byteOffset + typedArray.byteLength
-							);
-						}
-					}
-				} else {
-					stmt.finalize();
-				}
-			} catch (dbError) {
-				console.warn(`Error querying ${dbEntry.filename}:`, dbError);
-				continue;
-			}
+		// Special handling for basemap - merge multiple tiles
+		if (source.toLowerCase() === 'basemap' && sourceDbs.length > 1) {
+			return await mergeVectorTiles(sourceDbs, z, x, tmsY);
 		}
 
-		// No tile found in any database - return null
-		return null;
+		// For non-basemap or single database, use existing logic
+		return await getSingleTile(sourceDbs, z, x, tmsY);
 	} catch (error) {
 		// Log actual errors (not missing tiles/databases)
 		if (
@@ -796,34 +751,239 @@ async function handleTileRequest(
 		) {
 			console.error(`Tile request failed: ${source} ${z}/${x}/${y}:`, error);
 		}
-		// Return null instead of throwing error
 		return null;
 	}
 }
 
-// Get databases by source name - simplified and more flexible
+// Get single tile (existing logic)
+async function getSingleTile(
+	sourceDbs: DatabaseEntry[],
+	z: number,
+	x: number,
+	tmsY: number
+): Promise<ArrayBuffer | null> {
+	// Try to get tile from databases (fallback logic)
+	for (const dbEntry of sourceDbs) {
+		// Check if zoom level is within database range
+		if (dbEntry.minzoom !== undefined && z < dbEntry.minzoom) {
+			continue;
+		}
+		if (dbEntry.maxzoom !== undefined && z > dbEntry.maxzoom) {
+			continue;
+		}
+
+		try {
+			const stmt = dbEntry.db.prepare(
+				'SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?'
+			);
+
+			stmt.bind([z, x, tmsY]);
+
+			if (stmt.step()) {
+				const tileData = stmt.get(0) as Uint8Array;
+				stmt.finalize();
+
+				if (tileData && tileData.length > 0) {
+					// Decompress if needed and return
+					return await processRawTileData(tileData);
+				}
+			} else {
+				stmt.finalize();
+			}
+		} catch (dbError) {
+			console.warn(`Error querying ${dbEntry.filename} for tile z=${z} x=${x} y=${tmsY}:`, dbError);
+			continue;
+		}
+	}
+
+	return null;
+}
+
+// Process raw tile data (decompress if needed)
+async function processRawTileData(tileData: Uint8Array): Promise<ArrayBuffer> {
+	// Check if tile is gzipped (common in MBTiles)
+	if (isGzipped(tileData)) {
+		// Decompress gzipped tile
+		return await gunzip(tileData);
+	} else {
+		// Return tile data as-is
+		const typedArray = tileData as Uint8Array;
+		// Create a new ArrayBuffer to ensure it's not SharedArrayBuffer
+		const buffer =
+			typedArray.buffer instanceof ArrayBuffer
+				? typedArray.buffer
+				: new ArrayBuffer(typedArray.byteLength);
+		if (!(typedArray.buffer instanceof ArrayBuffer)) {
+			new Uint8Array(buffer).set(typedArray);
+			return buffer;
+		}
+		return buffer.slice(typedArray.byteOffset, typedArray.byteOffset + typedArray.byteLength);
+	}
+}
+
+// Merge multiple vector tiles into a single tile
+async function mergeVectorTiles(
+	sourceDbs: DatabaseEntry[],
+	z: number,
+	x: number,
+	tmsY: number
+): Promise<ArrayBuffer | null> {
+	// Collect raw tile data from all relevant databases
+	const tilesToMerge: { filename: string; data: ArrayBuffer }[] = [];
+
+	for (const dbEntry of sourceDbs) {
+		// Check if zoom level is within database range
+		if (dbEntry.minzoom !== undefined && z < dbEntry.minzoom) {
+			continue;
+		}
+		if (dbEntry.maxzoom !== undefined && z > dbEntry.maxzoom) {
+			continue;
+		}
+
+		try {
+			const stmt = dbEntry.db.prepare(
+				'SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?'
+			);
+			stmt.bind([z, x, tmsY]);
+
+			if (stmt.step()) {
+				const rawTileData = stmt.get(0) as Uint8Array;
+				stmt.finalize();
+
+				if (rawTileData && rawTileData.length > 0) {
+					// Process and decompress the tile data
+					const processedData = await processRawTileData(rawTileData);
+					tilesToMerge.push({
+						filename: dbEntry.filename,
+						data: processedData
+					});
+				}
+			} else {
+				stmt.finalize();
+			}
+		} catch (dbError) {
+			console.warn(`Error getting tile for merge from ${dbEntry.filename}:`, dbError);
+			continue;
+		}
+	}
+
+	// If no tiles to merge, return null
+	if (tilesToMerge.length === 0) {
+		return null;
+	}
+
+	// If only one tile, return it directly
+	if (tilesToMerge.length === 1) {
+		return tilesToMerge[0].data;
+	}
+
+	// Parse vector tiles and merge them
+	try {
+		return await mergeVectorTileData(tilesToMerge, z, x, tmsY);
+	} catch (error) {
+		console.error(`Vector tile merge failed:`, error);
+		// Fallback to first tile if merge fails
+		return tilesToMerge[0].data;
+	}
+}
+
+interface TileToMerge {
+	filename: string;
+	data: ArrayBuffer;
+}
+
+// Merge vector tile data using the existing mergeTiles function
+async function mergeVectorTileData(
+	tilesToMerge: TileToMerge[],
+	z: number,
+	x: number,
+	tmsY: number
+): Promise<ArrayBuffer> {
+	// Convert ArrayBuffers to Uint8Arrays for mergeTiles function
+	const tileArrays: Uint8Array[] = tilesToMerge.map(({ data }) => new Uint8Array(data));
+
+	try {
+		// Use the existing mergeTiles function
+		const mergedTile = await mergeTiles(tileArrays);
+
+		// Convert back to ArrayBuffer
+		return mergedTile.buffer.slice(
+			mergedTile.byteOffset,
+			mergedTile.byteOffset + mergedTile.byteLength
+		);
+	} catch (error) {
+		console.error(`mergeTiles() failed:`, error);
+		throw error;
+	}
+}
 function getDatabasesBySource(source: string): DatabaseEntry[] {
 	const matchingDbs: DatabaseEntry[] = [];
 	const sourceLower = source.toLowerCase();
 
-	// Check all open databases for matches
+	// Special handling for basemap - merge multiple basemap databases
+	if (sourceLower === 'basemap') {
+		// Look for any database that could be a basemap
+		const basemapPatterns = [
+			'basemap', // Direct match
+			'base-map', // Hyphenated
+			'base_map', // Underscore
+			'osm', // OpenStreetMap basemap
+			'planet', // Planet extracts often used as basemap
+			'world', // World basemap
+			'background' // Background layer
+		];
+
+		for (const [filename, db] of openDatabases) {
+			const filenameLower = filename.toLowerCase();
+
+			// Check if filename matches any basemap pattern
+			const isBasemap = basemapPatterns.some(
+				(pattern) =>
+					filenameLower.includes(pattern) ||
+					// Also check if it doesn't match other specific layer types
+					(!filenameLower.includes('poi') &&
+						!filenameLower.includes('building') &&
+						!filenameLower.includes('place') &&
+						!filenameLower.includes('transport') &&
+						!filenameLower.includes('amenity'))
+			);
+
+			if (isBasemap) {
+				// Get the database entry from our index but avoid duplicates
+				let foundInThisSource = false;
+				for (const [key, entries] of dbIndex.entries()) {
+					for (const entry of entries) {
+						if (entry.filename === filename && !matchingDbs.some((db) => db === entry)) {
+							matchingDbs.push(entry);
+							foundInThisSource = true;
+							break;
+						}
+					}
+					if (foundInThisSource) break; // Only add once per filename
+				}
+			}
+		}
+
+		return matchingDbs;
+	}
+
+	// For non-basemap sources, use exact/simple matching
 	for (const [filename, db] of openDatabases) {
 		const filenameLower = filename.toLowerCase();
 
 		// Simple matching: source name should be contained in filename
-		// This covers cases like:
-		// - poi.mbtiles -> poi
-		// - building_xyz.mbtiles -> building
-		// - basemap_osm.mbtiles -> basemap
 		if (filenameLower.includes(sourceLower)) {
-			// Get the database entry from our index
+			// Get the database entry from our index but avoid duplicates
+			let foundInThisSource = false;
 			for (const [key, entries] of dbIndex.entries()) {
 				for (const entry of entries) {
-					if (entry.filename === filename) {
+					if (entry.filename === filename && !matchingDbs.some((db) => db === entry)) {
 						matchingDbs.push(entry);
+						foundInThisSource = true;
 						break;
 					}
 				}
+				if (foundInThisSource) break; // Only add once per filename
 			}
 		}
 	}
@@ -963,27 +1123,7 @@ async function searchFeatures(
 
 			// Send progress update after each database if we have new results
 			if (options.onProgress && results.length > previousResultsCount) {
-				// Sort current results before sending progress update
-				const sortedResults = [...results].sort((a, b) => {
-					const aName = a.name.toLowerCase();
-					const bName = b.name.toLowerCase();
-					const queryLower = normalizedQuery.toLowerCase();
-
-					// Exact matches first
-					if (aName === queryLower && bName !== queryLower) return -1;
-					if (aName !== queryLower && bName === queryLower) return 1;
-
-					// Starts with query
-					const aStarts = aName.startsWith(queryLower);
-					const bStarts = bName.startsWith(queryLower);
-					if (aStarts && !bStarts) return -1;
-					if (!aStarts && bStarts) return 1;
-
-					// Shorter names first for same relevance
-					return a.name.length - b.name.length;
-				});
-
-				options.onProgress(sortedResults, false, filename);
+				options.onProgress([...results], false, filename);
 			}
 		} catch (error) {
 			console.error(`❌ Error searching ${filename}:`, error);
@@ -992,26 +1132,6 @@ async function searchFeatures(
 	}
 
 	console.log(`🎉 Search completed: found ${results.length} total results`);
-
-	// Optimized sorting by relevance
-	results.sort((a, b) => {
-		const aName = a.name.toLowerCase();
-		const bName = b.name.toLowerCase();
-		const queryLower = normalizedQuery.toLowerCase();
-
-		// Exact matches first
-		if (aName === queryLower && bName !== queryLower) return -1;
-		if (aName !== queryLower && bName === queryLower) return 1;
-
-		// Starts with query
-		const aStarts = aName.startsWith(queryLower);
-		const bStarts = bName.startsWith(queryLower);
-		if (aStarts && !bStarts) return -1;
-		if (!aStarts && bStarts) return 1;
-
-		// Shorter names first for same relevance
-		return a.name.length - b.name.length;
-	});
 
 	return results.slice(0, limit);
 }

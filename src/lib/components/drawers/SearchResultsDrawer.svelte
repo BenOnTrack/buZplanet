@@ -564,26 +564,6 @@
 				{/if}
 
 				{#if isSearching}
-					<div class="flex items-center justify-center py-8">
-						<div class="flex flex-col items-center gap-3 text-gray-500">
-							<div
-								class="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
-							></div>
-							{#if currentSearchingDatabase}
-								<div class="text-center">
-									<div class="font-medium">
-										Searching {getDatabaseDisplayName(currentSearchingDatabase)}
-									</div>
-									{#if results.length > 0}
-										<div class="text-sm text-blue-600">{results.length} results found so far</div>
-									{/if}
-								</div>
-							{:else}
-								<span>Starting search...</span>
-							{/if}
-						</div>
-					</div>
-
 					<!-- Show progressive results during search -->
 					{#if results.length > 0}
 						<div class="border-t border-gray-200 pt-4">
@@ -594,13 +574,22 @@
 									<span>Live results</span>
 								</div>
 							</div>
-							<div class="max-h-64 overflow-x-auto">
+							<div class="overflow-x-auto">
 								<table class="w-full text-sm">
 									<thead class="sticky top-0 z-10 bg-gray-50">
 										<tr class="border-b border-gray-200">
 											<th class="pr-4 pb-2 text-left font-medium text-gray-700">Name</th>
 											<th class="pr-2 pb-2 text-center font-medium text-gray-700">Type</th>
-											<th class="hidden pb-2 text-left font-medium text-gray-700 sm:table-cell"
+											<th class="hidden pr-2 pb-2 text-left font-medium text-gray-700 sm:table-cell"
+												>Class</th
+											>
+											<th class="hidden pr-2 pb-2 text-left font-medium text-gray-700 md:table-cell"
+												>Subclass</th
+											>
+											<th class="hidden pr-2 pb-2 text-left font-medium text-gray-700 lg:table-cell"
+												>Category</th
+											>
+											<th class="hidden pb-2 text-left font-medium text-gray-700 xl:table-cell"
 												>Source</th
 											>
 										</tr>
@@ -621,12 +610,17 @@
 												aria-label="Select and zoom to {result.name}"
 												title="Click to zoom to and select this feature on the map"
 											>
-												<td class="py-2 pr-4">
+												<td class="py-3 pr-4">
 													<div class="flex items-center gap-2">
 														<div class="flex-1">
-															<div class="text-xs leading-tight font-medium text-gray-900">
+															<div class="leading-tight font-medium text-gray-900">
 																{result.name}
 															</div>
+															{#if result.lng !== 0 && result.lat !== 0}
+																<div class="mt-1 text-xs text-gray-500">
+																	{result.lat.toFixed(4)}, {result.lng.toFixed(4)}
+																</div>
+															{/if}
 														</div>
 														<div
 															class="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100"
@@ -635,15 +629,39 @@
 														</div>
 													</div>
 												</td>
-												<td class="py-2 pr-2">
+												<td class="py-3 pr-2">
 													<div class="flex justify-center">
-														<span class="text-sm" title={result.class}>
+														<span class="text-lg" title={formatFeatureProperty(result.class)}>
 															{getClassIcon(result.class)}
 														</span>
 													</div>
 												</td>
-												<td class="hidden py-2 text-xs text-gray-600 sm:table-cell">
-													<div class="max-w-16 truncate" title={result.database}>
+												<td class="hidden py-3 pr-2 text-xs text-gray-600 sm:table-cell">
+													<div
+														class="max-w-20 truncate"
+														title={result.class ? formatFeatureProperty(result.class) : '-'}
+													>
+														{result.class ? formatFeatureProperty(result.class) : '-'}
+													</div>
+												</td>
+												<td class="hidden py-3 pr-2 text-xs text-gray-600 md:table-cell">
+													<div
+														class="max-w-20 truncate"
+														title={result.subclass ? formatFeatureProperty(result.subclass) : '-'}
+													>
+														{result.subclass ? formatFeatureProperty(result.subclass) : '-'}
+													</div>
+												</td>
+												<td class="hidden py-3 pr-2 text-xs text-gray-600 lg:table-cell">
+													<div
+														class="max-w-24 truncate"
+														title={result.category ? formatFeatureProperty(result.category) : '-'}
+													>
+														{result.category ? formatFeatureProperty(result.category) : '-'}
+													</div>
+												</td>
+												<td class="hidden py-3 text-xs text-gray-600 xl:table-cell">
+													<div class="max-w-20 truncate" title={result.database}>
 														{getDatabaseDisplayName(result.database)}
 													</div>
 												</td>
@@ -657,6 +675,21 @@
 									</div>
 								{/if}
 							</div>
+
+							<!-- Search status below table -->
+							{#if currentSearchingDatabase}
+								<div
+									class="mt-3 flex items-center justify-center gap-2 rounded-lg bg-blue-50 px-3 py-2"
+								>
+									<div
+										class="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
+									></div>
+									<span class="text-sm text-blue-700">
+										Searching {getDatabaseDisplayName(currentSearchingDatabase)}... ({results.length}
+										results so far)
+									</span>
+								</div>
+							{/if}
 						</div>
 					{/if}
 				{:else if filteredResults.length === 0 && results.length > 0 && hasActiveFilters}
@@ -751,7 +784,7 @@
 										</td>
 										<td class="py-3 pr-2">
 											<div class="flex justify-center">
-												<span class="text-lg" title={result.class}>
+												<span class="text-lg" title={formatFeatureProperty(result.class)}>
 													{getClassIcon(result.class)}
 												</span>
 											</div>

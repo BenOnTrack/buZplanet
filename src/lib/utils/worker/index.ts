@@ -175,7 +175,7 @@ export class WorkerManager {
 	}
 
 	async requestTile(source: string, z: number, x: number, y: number): Promise<ArrayBuffer | null> {
-		const result = await this.sendMessage('tile-request', { source, z, x, y });
+		const result = await this.sendMessage('tile-request', { source, z, x, y }, 10000); // Increased timeout to 10s
 		// Result can be null if no tile is found, which is normal
 		return result;
 	}

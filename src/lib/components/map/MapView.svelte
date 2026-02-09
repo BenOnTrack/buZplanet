@@ -19,7 +19,6 @@
 	import BuildingVectorTileSource from '$lib/components/map/BuildingVectorTileSource.svelte';
 	import TransportationVectorTileSource from '$lib/components/map/TransportationVectorTileSource.svelte';
 	import PoiVectorTileSource from '$lib/components/map/PoiVectorTileSource.svelte';
-	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
 	import SelectedFeatureGeojsonSource from '$lib/components/map/SelectedFeatureGeojsonSource.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import BookmarksGeojsonSource from '$lib/components/map/BookmarksGeojsonSource.svelte';
@@ -464,13 +463,6 @@
 		</div>
 	{/if}
 </div>
-
-<!-- Selected Feature Drawer -->
-<SelectedFeatureDrawer
-	open={selectedFeatureDrawerOpen}
-	feature={selectedFeature}
-	onOpenChange={(open) => mapControl.setSelectedFeatureDrawerOpen(open)}
-/>
 
 <style>
 	.map-container {

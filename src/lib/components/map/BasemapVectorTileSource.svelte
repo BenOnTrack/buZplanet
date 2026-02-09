@@ -15,7 +15,7 @@
 		id="basemap-park-fill-park"
 		sourceLayer={'park'}
 		beforeLayerType="symbol"
-		filter={['all', ['==', 'subclass', 'park']]}
+		filter={['all', ['has', 'subclass'], ['==', 'subclass', 'park']]}
 		paint={{
 			'fill-color': '#cae2cc',
 			'fill-opacity': 1
@@ -27,6 +27,7 @@
 		beforeLayerType="symbol"
 		filter={[
 			'all',
+			['has', 'subclass'],
 			['in', 'subclass', 'residential' as any, 'suburb' as any, 'neighbourhood' as any]
 		] as any}
 		paint={{
@@ -43,7 +44,12 @@
 		id="basemap-landuse-fill-farmland"
 		sourceLayer={'landuse'}
 		beforeLayerType="symbol"
-		filter={['all', ['==', '$type', 'Polygon'], ['==', 'subclass', 'farmland']]}
+		filter={[
+			'all',
+			['==', '$type', 'Polygon'],
+			['has', 'subclass'],
+			['==', 'subclass', 'farmland']
+		]}
 		paint={{
 			'fill-color': '#e3e6c3',
 			'fill-opacity': 1
@@ -53,7 +59,12 @@
 		id="basemap-landuse-fill-commercial"
 		sourceLayer={'landuse'}
 		beforeLayerType="symbol"
-		filter={['all', ['==', '$type', 'Polygon'], ['==', 'subclass', 'commercial']]}
+		filter={[
+			'all',
+			['==', '$type', 'Polygon'],
+			['has', 'subclass'],
+			['==', 'subclass', 'commercial']
+		]}
 		paint={{
 			'fill-color': 'hsla(0, 60%, 87%, 0.23)'
 		}}
@@ -65,6 +76,7 @@
 		filter={[
 			'all',
 			['==', '$type', 'Polygon'],
+			['has', 'subclass'],
 			['in', 'subclass', 'industrial' as any, 'garages' as any, 'dam' as any]
 		] as any}
 		paint={{
