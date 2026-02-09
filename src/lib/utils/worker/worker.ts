@@ -296,8 +296,23 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 				break;
 
 			case 'search-features':
-				// Search for features across all mbtiles databases - NO LIMITS
-				const searchResults = await searchFeatures(data.query, data.limit || 10000); // Much higher default limit
+				// Search for features across all mbtiles databases with progressive results
+				const searchResults = await searchFeatures(data.query, data.limit || 10000, {
+					onProgress: (results: SearchResult[], isComplete: boolean, currentDatabase?: string) => {
+						// Send progressive results to main thread
+						postMessage({
+							type: 'search-progress',
+							data: {
+								results,
+								isComplete,
+								currentDatabase,
+								total: results.length
+							},
+							id
+						} satisfies WorkerResponse);
+					}
+				});
+				// Final complete message
 				postMessage({
 					type: 'search-results',
 					data: searchResults,
@@ -866,7 +881,13 @@ export interface SearchResult {
 }
 
 // Fast feature search (optimized from archived worker)
-async function searchFeatures(query: string, limit: number = 10000): Promise<SearchResult[]> {
+async function searchFeatures(
+	query: string,
+	limit: number = 10000,
+	options: {
+		onProgress?: (results: SearchResult[], isComplete: boolean, currentDatabase?: string) => void;
+	} = {}
+): Promise<SearchResult[]> {
 	if (!query || query.trim().length < 2) {
 		return [];
 	}
@@ -922,6 +943,8 @@ async function searchFeatures(query: string, limit: number = 10000): Promise<Sea
 		try {
 			console.log(`🗃️ Searching database: ${filename}`);
 
+			const previousResultsCount = results.length;
+
 			await processDatabaseForSearch(
 				db,
 				filename,
@@ -935,9 +958,33 @@ async function searchFeatures(query: string, limit: number = 10000): Promise<Sea
 				MAX_RESULTS
 			);
 
-			console.log(
-				`✅ Completed ${filename}: ${results.filter((r) => r.database === filename).length} results`
-			);
+			const newResultsCount = results.filter((r) => r.database === filename).length;
+			console.log(`✅ Completed ${filename}: ${newResultsCount} results`);
+
+			// Send progress update after each database if we have new results
+			if (options.onProgress && results.length > previousResultsCount) {
+				// Sort current results before sending progress update
+				const sortedResults = [...results].sort((a, b) => {
+					const aName = a.name.toLowerCase();
+					const bName = b.name.toLowerCase();
+					const queryLower = normalizedQuery.toLowerCase();
+
+					// Exact matches first
+					if (aName === queryLower && bName !== queryLower) return -1;
+					if (aName !== queryLower && bName === queryLower) return 1;
+
+					// Starts with query
+					const aStarts = aName.startsWith(queryLower);
+					const bStarts = bName.startsWith(queryLower);
+					if (aStarts && !bStarts) return -1;
+					if (!aStarts && bStarts) return 1;
+
+					// Shorter names first for same relevance
+					return a.name.length - b.name.length;
+				});
+
+				options.onProgress(sortedResults, false, filename);
+			}
 		} catch (error) {
 			console.error(`❌ Error searching ${filename}:`, error);
 			continue;

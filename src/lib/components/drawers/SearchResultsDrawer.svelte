@@ -3,6 +3,7 @@
 	import { clsx } from 'clsx';
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
+	import { zIndexClass } from '$lib/styles/z-index.js';
 
 	interface SearchResult {
 		id: string;
@@ -23,12 +24,14 @@
 		open = $bindable(false),
 		results = [],
 		searchQuery = '',
-		isSearching = false
+		isSearching = false,
+		currentSearchingDatabase = undefined
 	}: {
 		open?: boolean;
 		results?: SearchResult[];
 		searchQuery?: string;
 		isSearching?: boolean;
+		currentSearchingDatabase?: string;
 	} = $props();
 
 	let activeSnapPoint = $state<string | number>('400px');
@@ -221,9 +224,8 @@
 			mapControl.zoomToAndSelectSearchResult(result);
 		}
 
-		// Optionally close the search results drawer to give full focus to the selected feature
-		// Comment this line if you want both drawers open simultaneously
-		open = false;
+		// Keep the drawer open so users can continue browsing search results
+		// The drawer will only be closed when the user explicitly closes it
 	}
 
 	// Get database display name (remove .mbtiles extension)
@@ -267,10 +269,15 @@
 
 <!-- Search Results Drawer -->
 <Drawer.Root bind:open snapPoints={['400px', '600px', 1]} bind:activeSnapPoint modal={false}>
-	<Drawer.Overlay class="fixed inset-0 z-60 bg-black/40" style="pointer-events: none" />
+	<Drawer.Overlay
+		class="fixed inset-0 {zIndexClass('DRAWER_OVERLAY')} bg-black/40"
+		style="pointer-events: none"
+	/>
 	<Drawer.Portal>
 		<Drawer.Content
-			class="border-b-none fixed right-0 bottom-0 left-0 z-60 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class="border-b-none fixed right-0 bottom-0 left-0 {zIndexClass(
+				'DRAWER_CONTENT'
+			)} mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
 		>
 			<div
 				class={clsx('flex w-full flex-col p-4 pt-5', {
@@ -292,7 +299,12 @@
 				<div class="mb-4">
 					<p class="text-sm text-gray-600">
 						{#if isSearching}
-							Searching...
+							{#if currentSearchingDatabase}
+								Searching {getDatabaseDisplayName(currentSearchingDatabase)}... ({results.length} results
+								so far)
+							{:else}
+								Starting search...
+							{/if}
 						{:else if searchQuery}
 							{hasActiveFilters
 								? `${filteredResults.length} of ${results.length} results for "${searchQuery}"`
@@ -304,6 +316,10 @@
 								>
 									Clear filters
 								</button>
+							{/if}
+							<!-- Show search completion indicator -->
+							{#if results.length > 0}
+								<span class="ml-2 text-xs text-green-600">✓ Complete</span>
 							{/if}
 						{:else}
 							Enter a search query to find places
@@ -549,13 +565,100 @@
 
 				{#if isSearching}
 					<div class="flex items-center justify-center py-8">
-						<div class="flex items-center gap-2 text-gray-500">
+						<div class="flex flex-col items-center gap-3 text-gray-500">
 							<div
-								class="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
+								class="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
 							></div>
-							<span>Searching databases...</span>
+							{#if currentSearchingDatabase}
+								<div class="text-center">
+									<div class="font-medium">
+										Searching {getDatabaseDisplayName(currentSearchingDatabase)}
+									</div>
+									{#if results.length > 0}
+										<div class="text-sm text-blue-600">{results.length} results found so far</div>
+									{/if}
+								</div>
+							{:else}
+								<span>Starting search...</span>
+							{/if}
 						</div>
 					</div>
+
+					<!-- Show progressive results during search -->
+					{#if results.length > 0}
+						<div class="border-t border-gray-200 pt-4">
+							<div class="mb-3 flex items-center justify-between">
+								<p class="text-xs font-medium text-blue-600">Results found so far:</p>
+								<div class="flex items-center gap-1 text-xs text-gray-500">
+									<span>🔄</span>
+									<span>Live results</span>
+								</div>
+							</div>
+							<div class="max-h-64 overflow-x-auto">
+								<table class="w-full text-sm">
+									<thead class="sticky top-0 z-10 bg-gray-50">
+										<tr class="border-b border-gray-200">
+											<th class="pr-4 pb-2 text-left font-medium text-gray-700">Name</th>
+											<th class="pr-2 pb-2 text-center font-medium text-gray-700">Type</th>
+											<th class="hidden pb-2 text-left font-medium text-gray-700 sm:table-cell"
+												>Source</th
+											>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-gray-100">
+										{#each filteredResults.slice(0, 20) as result (result.id)}
+											<tr
+												class="group cursor-pointer transition-colors hover:bg-blue-50 focus:bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none focus:ring-inset active:bg-blue-100"
+												onclick={(e) => handleResultRowClick(result, e)}
+												onkeydown={(e) => {
+													if (e.key === 'Enter' || e.key === ' ') {
+														e.preventDefault();
+														handleResultRowClick(result, e);
+													}
+												}}
+												tabindex="0"
+												role="button"
+												aria-label="Select and zoom to {result.name}"
+												title="Click to zoom to and select this feature on the map"
+											>
+												<td class="py-2 pr-4">
+													<div class="flex items-center gap-2">
+														<div class="flex-1">
+															<div class="text-xs leading-tight font-medium text-gray-900">
+																{result.name}
+															</div>
+														</div>
+														<div
+															class="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100"
+														>
+															<span class="text-xs">🔍</span>
+														</div>
+													</div>
+												</td>
+												<td class="py-2 pr-2">
+													<div class="flex justify-center">
+														<span class="text-sm" title={result.class}>
+															{getClassIcon(result.class)}
+														</span>
+													</div>
+												</td>
+												<td class="hidden py-2 text-xs text-gray-600 sm:table-cell">
+													<div class="max-w-16 truncate" title={result.database}>
+														{getDatabaseDisplayName(result.database)}
+													</div>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+								{#if filteredResults.length > 20}
+									<div class="border-t bg-gray-50 py-2 text-center text-xs text-gray-500">
+										Showing first 20 of {filteredResults.length} results. Search will continue...
+									</div>
+								{/if}
+							</div>
+						</div>
+					{/if}
 				{:else if filteredResults.length === 0 && results.length > 0 && hasActiveFilters}
 					<div class="flex flex-col items-center justify-center py-8 text-gray-500">
 						<span class="mb-2 text-2xl">🔍</span>

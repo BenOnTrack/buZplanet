@@ -5,7 +5,8 @@
 	import CloudArrowUp from 'phosphor-svelte/lib/CloudArrowUp';
 	import CloudArrowDown from 'phosphor-svelte/lib/CloudArrowDown';
 	import FileArchive from 'phosphor-svelte/lib/FileArchive';
-	import { getWorker } from '$lib/utils/worker/index';
+	// Dynamic import to avoid code splitting issues
+	let workerModule: any = null;
 
 	interface R2File {
 		key: string;
@@ -63,10 +64,18 @@
 		}
 	};
 
+	// Dynamically import and get worker
+	const getWorker = async () => {
+		if (!workerModule) {
+			workerModule = await import('$lib/utils/worker/index');
+		}
+		return workerModule.getWorker();
+	};
+
 	// Refresh worker after upload/download
 	const refreshWorkerDatabases = async () => {
 		try {
-			const worker = getWorker();
+			const worker = await getWorker();
 			await worker.sendMessage('scan-databases');
 			console.log('✅ Worker databases refreshed successfully');
 		} catch (error) {
@@ -95,7 +104,7 @@
 		currentUploadFile = '';
 
 		try {
-			const worker = getWorker();
+			const worker = await getWorker();
 			const uploadedFiles: string[] = [];
 			const failedFiles: string[] = [];
 			const totalFiles = selectedFiles.length;
@@ -194,7 +203,7 @@
 	// Get files from OPFS via worker
 	const fetchOPFSFiles = async (): Promise<string[]> => {
 		try {
-			const worker = getWorker();
+			const worker = await getWorker();
 			return await worker.listOPFSFiles();
 		} catch (error) {
 			console.error('Error fetching OPFS files:', error);
@@ -292,7 +301,7 @@
 
 			// Save to OPFS via worker
 			downloadProgress = 95; // Almost done
-			const worker = getWorker();
+			const worker = await getWorker();
 			await worker.saveFileToOPFS(file.filename, combined.buffer);
 			downloadProgress = 100;
 
@@ -362,7 +371,7 @@
 				});
 
 				// Save to OPFS via worker
-				const worker = getWorker();
+				const worker = await getWorker();
 				const arrayBuffer = await blob.arrayBuffer();
 				await worker.saveFileToOPFS(file.filename, arrayBuffer);
 

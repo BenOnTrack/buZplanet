@@ -8,6 +8,7 @@
 	import SearchBar from '$lib/components/nav/SearchBar.svelte';
 	import SearchResultsDrawer from '$lib/components/drawers/SearchResultsDrawer.svelte';
 	import { appInitializer } from '$lib/utils/app-initialization';
+	import { zIndexClass } from '$lib/styles/z-index.js';
 	import { onMount, onDestroy } from 'svelte';
 
 	// Import dev tools in development
@@ -43,30 +44,50 @@
 	let searchResults = $state<any[]>([]);
 	let isSearching = $state(false);
 	let searchDrawerOpen = $state(false);
+	let currentSearchingDatabase = $state<string | undefined>(undefined);
 
 	async function handleSearch(query: string) {
 		console.log('Searching for:', query);
 		isSearching = true;
 		searchDrawerOpen = true;
+		searchResults = []; // Clear previous results
+		currentSearchingDatabase = undefined;
 
 		try {
 			const { getWorker } = await import('$lib/utils/worker');
 			const worker = getWorker();
 
-			// Search for features with much higher limit for comprehensive results
-			const results = await worker.searchFeatures(query, 5000); // 5000 results max
-			console.log('Search results:', results);
+			// Search for features with progressive results
+			const finalResults = await worker.searchFeatures(
+				query,
+				5000, // 5000 results max
+				// Progress callback for streaming results
+				(progressData) => {
+					const { results, isComplete, currentDatabase, total } = progressData;
 
-			searchResults = results;
+					// Update search results progressively
+					searchResults = results;
+					currentSearchingDatabase = currentDatabase;
 
-			if (results.length === 0) {
+					console.log(
+						`🔄 Progress: ${total} results from ${currentDatabase || 'unknown'} (complete: ${isComplete})`
+					);
+				}
+			);
+
+			// Final results (should be same as last progress update)
+			searchResults = finalResults;
+			currentSearchingDatabase = undefined;
+
+			if (finalResults.length === 0) {
 				console.log('No results found for:', query);
 			} else {
-				console.log(`Found ${results.length} results for "${query}"`);
+				console.log(`✅ Search complete: ${finalResults.length} total results for "${query}"`);
 			}
 		} catch (error) {
 			console.error('Search error:', error);
 			searchResults = [];
+			currentSearchingDatabase = undefined;
 		} finally {
 			isSearching = false;
 		}
@@ -77,6 +98,7 @@
 		searchResults = [];
 		isSearching = false;
 		searchDrawerOpen = false; // Close search results drawer
+		currentSearchingDatabase = undefined;
 	}
 
 	// Subscribe to initialization state changes
@@ -174,7 +196,7 @@
 		<SettingsDialog />
 
 		<!-- Search Bar -->
-		<div class="search-bar-container">
+		<div class="search-bar-container {zIndexClass('SEARCH_BAR')}">
 			<SearchBar
 				bind:value={searchQuery}
 				onSearch={handleSearch}
@@ -192,12 +214,13 @@
 			results={searchResults}
 			{searchQuery}
 			{isSearching}
+			{currentSearchingDatabase}
 		/>
 	{/if}
 
 	<!-- Worker Debug Panel - only show in development when app is ready -->
 	{#if import.meta.env.DEV && isAppReady}
-		<div class="worker-debug-panel">
+		<div class="worker-debug-panel {zIndexClass('DEBUG_PANEL')}">
 			<button
 				class="debug-toggle"
 				onclick={() => (showDebugPanel = !showDebugPanel)}
@@ -244,7 +267,6 @@
 		position: fixed;
 		top: 20px;
 		right: 20px;
-		z-index: 10000;
 		font-family: monospace;
 		font-size: 12px;
 	}
@@ -329,28 +351,64 @@
 		top: 20px;
 		left: 50%;
 		transform: translateX(-50%);
-		z-index: 1000;
 		width: 100%;
 		max-width: 500px;
 		padding: 0 20px;
 		pointer-events: none;
+		/* Ensure visibility above map controls */
+		opacity: 1 !important;
+		visibility: visible !important;
+		/* Force above MapLibre controls which typically use z-index 1 */
+		z-index: 200 !important;
 	}
 
 	.search-bar-container :global(.search-container) {
 		pointer-events: auto;
 	}
 
+	/* Override MapLibre control z-index globally */
+	:global(.maplibregl-ctrl) {
+		z-index: 5 !important; /* Lower than search bar */
+	}
+
+	:global(.maplibregl-ctrl-group) {
+		z-index: 5 !important; /* Lower than search bar */
+	}
+
 	/* Responsive adjustments */
-	@media (max-width: 640px) {
+	@media (max-width: 768px) {
 		.search-bar-container {
 			top: 16px;
+			padding: 0 20px;
+			max-width: 380px;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.search-bar-container {
+			top: 14px;
 			padding: 0 16px;
-			max-width: calc(100vw - 32px);
+			max-width: 320px;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.search-bar-container {
+			top: 12px;
+			padding: 0 12px;
+			max-width: 280px;
+		}
+	}
+
+	@media (max-width: 360px) {
+		.search-bar-container {
+			padding: 0 10px;
+			max-width: 240px;
 		}
 	}
 
 	/* Ensure search bar doesn't interfere with debug panel */
-	@media (min-width: 641px) {
+	@media (min-width: 769px) {
 		.search-bar-container {
 			max-width: calc(100vw - 460px); /* Account for debug panel width */
 		}

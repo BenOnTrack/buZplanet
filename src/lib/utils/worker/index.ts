@@ -10,6 +10,7 @@ export class WorkerManager {
 			resolve: (value: any) => void;
 			reject: (reason?: any) => void;
 			timeout?: NodeJS.Timeout;
+			onProgress?: (data: any) => void; // Add progress callback support
 		}
 	>();
 	private isReady = false;
@@ -55,6 +56,18 @@ export class WorkerManager {
 		// Handle messages with IDs (responses to requests)
 		if (id && this.pendingMessages.has(id)) {
 			const pending = this.pendingMessages.get(id)!;
+
+			// Handle progress messages (don't resolve yet, just call progress callback)
+			if (type === 'search-progress' && pending.onProgress) {
+				try {
+					pending.onProgress(data);
+				} catch (progressError) {
+					console.error('Progress callback error:', progressError);
+				}
+				return; // Don't resolve the promise yet
+			}
+
+			// Handle final response (resolve or reject)
 			this.pendingMessages.delete(id);
 
 			// Clear timeout if it exists
@@ -109,7 +122,12 @@ export class WorkerManager {
 		}
 	}
 
-	async sendMessage(type: string, data?: any, timeoutMs: number = 5000): Promise<any> {
+	async sendMessage(
+		type: string,
+		data?: any,
+		timeoutMs: number = 5000,
+		onProgress?: (data: any) => void
+	): Promise<any> {
 		if (!this.worker) {
 			throw new Error('Worker not initialized');
 		}
@@ -132,8 +150,8 @@ export class WorkerManager {
 				reject(new Error(`Worker message timeout: ${type}`));
 			}, timeoutMs);
 
-			// Store pending message
-			this.pendingMessages.set(id, { resolve, reject, timeout });
+			// Store pending message with progress callback
+			this.pendingMessages.set(id, { resolve, reject, timeout, onProgress });
 
 			// Send message with transfers if needed
 			if (transferList.length > 0) {
@@ -189,8 +207,22 @@ export class WorkerManager {
 		return result.files;
 	}
 
-	async searchFeatures(query: string, limit?: number): Promise<any[]> {
-		return this.sendMessage('search-features', { query, limit }, 60000); // 60 second timeout for comprehensive search
+	async searchFeatures(
+		query: string,
+		limit?: number,
+		onProgress?: (data: {
+			results: any[];
+			isComplete: boolean;
+			currentDatabase?: string;
+			total: number;
+		}) => void
+	): Promise<any[]> {
+		return this.sendMessage(
+			'search-features',
+			{ query, limit },
+			60000, // 60 second timeout for comprehensive search
+			onProgress
+		);
 	}
 
 	postMessage(type: string, data?: any): void {

@@ -2,6 +2,7 @@
 	import FeaturesDrawer from '$lib/components/drawers/FeaturesDrawer.svelte';
 	import StoriesDrawer from '$lib/components/drawers/StoriesDrawer.svelte';
 	import TripsDrawer from '$lib/components/drawers/TripsDrawer.svelte';
+	import { zIndexClass } from '$lib/styles/z-index.js';
 
 	// State for tracking which drawer is open (null if none)
 	let currentOpenDrawer = $state<string | null>(null);
@@ -73,7 +74,7 @@
 	}
 </script>
 
-<div class="bottom-nav">
+<div class="bottom-nav {zIndexClass('BOTTOM_NAV')}">
 	<nav class="flex h-full w-full items-center" aria-label="Main navigation">
 		<div class="grid h-full w-full grid-cols-3 gap-0">
 			{#each navigationItems as item}
@@ -102,7 +103,6 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		z-index: 1000;
 		background: hsl(var(--background) / 0.95);
 		backdrop-filter: blur(10px);
 		-webkit-backdrop-filter: blur(10px);

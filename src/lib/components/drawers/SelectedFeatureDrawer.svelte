@@ -5,6 +5,7 @@
 	import { featuresDB, type StoredFeature } from '$lib/stores/FeaturesDB.svelte.js';
 	import BookmarkDialog from '$lib/components/dialogs/BookmarkDialog.svelte';
 	import OpeningHoursDisplay from '$lib/components/ui/OpeningHoursDisplay.svelte';
+	import { zIndexClass } from '$lib/styles/z-index.js';
 	import type { MapGeoJSONFeature } from 'svelte-maplibre';
 
 	let {
@@ -19,17 +20,14 @@
 
 	// Handle drawer open/close changes
 	function handleOpenChange(newOpen: boolean) {
-		// Only trigger parent callback if this is a different state
-		if (newOpen !== open) {
-			if (onOpenChange) {
-				onOpenChange(newOpen);
-			}
+		// Update the bindable open prop directly
+		open = newOpen;
+		// Call parent callback if provided
+		if (onOpenChange) {
+			onOpenChange(newOpen);
 		}
 	}
 	let activeSnapPoint = $state<string | number>('200px');
-
-	// Derived state to use the correct open state
-	let drawerOpen = $derived(open);
 
 	// Derived values for display
 	let hasFeature = $derived(feature !== null && feature !== undefined);
@@ -48,9 +46,18 @@
 	let visitHistoryExpanded = $state(false);
 
 	// Watch for feature changes and update status
+	// Also reset state when feature becomes null
 	$effect(() => {
 		if (feature) {
 			updateFeatureStatus();
+		} else {
+			// Reset state when no feature is selected
+			featureStatus.bookmarked = false;
+			featureStatus.listIds = [];
+			featureStatus.visitedDates = [];
+			featureStatus.todo = false;
+			featureStatus.loading = false;
+			visitHistoryExpanded = false;
 		}
 	});
 
@@ -60,7 +67,11 @@
 
 		try {
 			featureStatus.loading = true;
-			await featuresDB.ensureInitialized();
+
+			// Ensure database is initialized
+			if (!featuresDB.initialized) {
+				await featuresDB.ensureInitialized();
+			}
 
 			// Get feature ID the same way as FeaturesDB
 			const featureId = getFeatureId(feature);
@@ -79,6 +90,11 @@
 			}
 		} catch (error) {
 			console.error('Failed to update feature status:', error);
+			// Reset to safe defaults on error
+			featureStatus.bookmarked = false;
+			featureStatus.listIds = [];
+			featureStatus.visitedDates = [];
+			featureStatus.todo = false;
 		} finally {
 			featureStatus.loading = false;
 		}
@@ -236,9 +252,15 @@
 			return;
 		}
 
+		// Prevent double-clicks
+		if (featureStatus.loading) return;
+
 		try {
 			featureStatus.loading = true;
-			await featuresDB.ensureInitialized();
+
+			if (!featuresDB.initialized) {
+				await featuresDB.ensureInitialized();
+			}
 
 			const featureId = getFeatureId(feature);
 			let storedFeature = await featuresDB.getFeatureById(featureId);
@@ -272,13 +294,19 @@
 			return;
 		}
 
+		// Prevent double-clicks
+		if (featureStatus.loading) return;
+
 		try {
 			featureStatus.loading = true;
-			await featuresDB.ensureInitialized();
+
+			if (!featuresDB.initialized) {
+				await featuresDB.ensureInitialized();
+			}
 
 			// Always add a new visit (no toggling)
 			const storedFeature = await featuresDB.addVisit(feature);
-			featureStatus.visitedDates = storedFeature.visitedDates;
+			featureStatus.visitedDates = storedFeature.visitedDates || [];
 
 			const visitCount = storedFeature.visitedDates.length;
 			console.log(`Feature visited! Total visits: ${visitCount}`, storedFeature);
@@ -292,20 +320,26 @@
 	async function handleRemoveVisit(feature: MapGeoJSONFeature | null, visitTimestamp: number) {
 		if (!feature) return;
 
+		// Prevent double-clicks
+		if (featureStatus.loading) return;
+
 		try {
 			featureStatus.loading = true;
-			await featuresDB.ensureInitialized();
+
+			if (!featuresDB.initialized) {
+				await featuresDB.ensureInitialized();
+			}
 
 			const featureId = getFeatureId(feature);
 			let storedFeature = await featuresDB.getFeatureById(featureId);
 
 			if (storedFeature) {
 				// Remove the specific visit timestamp
-				storedFeature.visitedDates = storedFeature.visitedDates.filter(
+				storedFeature.visitedDates = (storedFeature.visitedDates || []).filter(
 					(ts) => ts !== visitTimestamp
 				);
 				storedFeature = await featuresDB.updateFeature(storedFeature);
-				featureStatus.visitedDates = storedFeature.visitedDates;
+				featureStatus.visitedDates = storedFeature.visitedDates || [];
 
 				console.log(
 					`Visit removed. Remaining visits: ${storedFeature.visitedDates.length}`,
@@ -363,16 +397,21 @@
 
 <!-- Selected Feature Drawer -->
 <Drawer.Root
-	open={drawerOpen}
+	{open}
 	onOpenChange={handleOpenChange}
 	snapPoints={['200px', '400px', 1]}
 	bind:activeSnapPoint
 	modal={false}
 >
-	<Drawer.Overlay class="fixed inset-0 z-60 bg-black/40" style="pointer-events: none" />
+	<Drawer.Overlay
+		class="fixed inset-0 {zIndexClass('SELECTED_FEATURE_DRAWER_OVERLAY')} bg-black/40"
+		style="pointer-events: none; z-index: 90 !important;"
+	/>
 	<Drawer.Portal>
 		<Drawer.Content
-			class="border-b-none fixed right-0 bottom-0 left-0 z-60 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class="border-b-none fixed right-0 bottom-0 left-0 {zIndexClass(
+				'SELECTED_FEATURE_DRAWER_CONTENT'
+			)} mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
 		>
 			<div
 				class={clsx('flex w-full flex-col p-4 pt-5', {

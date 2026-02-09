@@ -5,6 +5,7 @@
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
 	import { featuresDB, type StoredFeature, type BookmarkList } from '$lib/stores/FeaturesDB.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
+	import { zIndexClass } from '$lib/styles/z-index.js';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 	let activeSnapPoint = $state<string | number>('400px');
@@ -407,10 +408,15 @@
 
 <!-- Features Drawer -->
 <Drawer.Root bind:open snapPoints={['400px', '600px', 1]} bind:activeSnapPoint modal={false}>
-	<Drawer.Overlay class="fixed inset-0 z-60 bg-black/40" style="pointer-events: none" />
+	<Drawer.Overlay
+		class="fixed inset-0 {zIndexClass('DRAWER_OVERLAY')} bg-black/40"
+		style="pointer-events: none"
+	/>
 	<Drawer.Portal>
 		<Drawer.Content
-			class="border-b-none fixed right-0 bottom-0 left-0 z-60 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class="border-b-none fixed right-0 bottom-0 left-0 {zIndexClass(
+				'DRAWER_CONTENT'
+			)} mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
 		>
 			<div
 				class={clsx('flex w-full flex-col p-4 pt-5', {
