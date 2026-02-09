@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { Dialog, Separator, Tabs } from 'bits-ui';
-	import X from 'phosphor-svelte/lib/X';
-	import Gear from 'phosphor-svelte/lib/Gear';
+	import { Dialog, Tabs } from 'bits-ui';
 	import ColorsSettings from '$lib/components/settings/ColorsSettings.svelte';
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 </script>
 
 <Dialog.Root>
@@ -19,7 +18,7 @@
 		}}
 		aria-label="Open settings dialog"
 	>
-		<Gear class="size-5" />
+		<PropertyIcon key={'description'} value={'settings'} size={20} />
 	</Dialog.Trigger>
 	<Dialog.Portal>
 		<Dialog.Overlay
@@ -36,21 +35,21 @@
 
 			<div class="pt-6">
 				<Tabs.Root
-					value="colors"
+					value="language"
 					class="rounded-card border-muted bg-background-alt shadow-card w-full border p-3"
 				>
 					<Tabs.List
 						class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background grid w-full grid-cols-3 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
 					>
 						<Tabs.Trigger
+							value="language"
+							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+							>Language</Tabs.Trigger
+						>
+						<Tabs.Trigger
 							value="colors"
 							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
 							>Colors</Tabs.Trigger
-						>
-						<Tabs.Trigger
-							value="tab2"
-							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
-							>Tab2</Tabs.Trigger
 						>
 						<Tabs.Trigger
 							value="tab3"
@@ -63,7 +62,7 @@
 							<ColorsSettings />
 						</div>
 					</Tabs.Content>
-					<Tabs.Content value="tab2" class="pt-3 select-none">
+					<Tabs.Content value="language" class="pt-3 select-none">
 						<div class="max-h-[60vh] overflow-y-auto p-4">
 							<h4 class="mb-2 text-[20px] leading-none font-semibold tracking-[-0.01em]">
 								Tab 2 Content
@@ -86,7 +85,7 @@
 				class="focus-visible:ring-foreground focus-visible:ring-offset-background absolute top-5 right-5 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
 			>
 				<div>
-					<X class="text-foreground size-5" />
+					<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
 					<span class="sr-only">Close</span>
 				</div>
 			</Dialog.Close>

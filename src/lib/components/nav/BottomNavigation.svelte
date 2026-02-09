@@ -3,6 +3,7 @@
 	import StoriesDrawer from '$lib/components/drawers/StoriesDrawer.svelte';
 	import TripsDrawer from '$lib/components/drawers/TripsDrawer.svelte';
 	import { zIndexClass } from '$lib/styles/z-index.js';
+	import PropertyIcon from '../ui/PropertyIcon.svelte';
 
 	// State for tracking which drawer is open (null if none)
 	let currentOpenDrawer = $state<string | null>(null);
@@ -36,19 +37,19 @@
 		{
 			id: 'stories',
 			label: 'Stories',
-			icon: '📚',
+			icon: 'stories',
 			ariaLabel: 'Open stories drawer'
 		},
 		{
 			id: 'trips',
 			label: 'Trips',
-			icon: '🗺️',
+			icon: 'trips',
 			ariaLabel: 'Open trips drawer'
 		},
 		{
 			id: 'features',
 			label: 'Features',
-			icon: '⭐',
+			icon: 'features',
 			ariaLabel: 'Open features drawer'
 		}
 	];
@@ -85,7 +86,7 @@
 					onclick={() => openDrawer(item.id)}
 					onkeydown={(e) => handleKeyDown(e, item.id)}
 				>
-					<span class="text-xl" aria-hidden="true">{item.icon}</span>
+					<PropertyIcon key={'description'} value={item.icon} size={20} color={'black'} />
 					<span class="text-xs font-medium">{item.label}</span>
 				</button>
 			{/each}

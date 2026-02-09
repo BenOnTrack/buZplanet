@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Dialog, Label, Separator } from 'bits-ui';
-	import X from 'phosphor-svelte/lib/X';
 	import type { BookmarkList } from '$lib/stores/FeaturesDB.svelte.js';
+	import PropertyIcon from '../ui/PropertyIcon.svelte';
 
 	let {
 		open = $bindable(false),
@@ -221,7 +221,7 @@
 				class="focus-visible:ring-foreground focus-visible:ring-offset-background absolute top-5 right-5 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
 			>
 				<div>
-					<X class="text-foreground size-5" />
+					<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
 					<span class="sr-only">Close</span>
 				</div>
 			</Dialog.Close>

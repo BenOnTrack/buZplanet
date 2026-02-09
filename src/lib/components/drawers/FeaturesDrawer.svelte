@@ -6,6 +6,7 @@
 	import { featuresDB, type StoredFeature, type BookmarkList } from '$lib/stores/FeaturesDB.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { zIndexClass } from '$lib/styles/z-index.js';
+	import PropertyIcon from '../ui/PropertyIcon.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 	let activeSnapPoint = $state<string | number>('400px');
@@ -430,8 +431,8 @@
 						Saved Features
 					</Drawer.Title>
 					<Drawer.Close class="text-gray-500 hover:text-gray-700">
+						<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
 						<span class="sr-only">Close</span>
-						<span aria-hidden="true" class="text-xl">✕</span>
 					</Drawer.Close>
 				</div>
 
@@ -747,14 +748,6 @@
 					</div>
 				{:else}
 					<div class="overflow-x-auto">
-						<!-- Header instruction -->
-						<div class="mb-3 flex items-center justify-between">
-							<p class="text-xs text-gray-600">Click any row to zoom to the feature on the map</p>
-							<div class="flex items-center gap-1 text-xs text-gray-500">
-								<span>🔍</span>
-								<span>Clickable rows</span>
-							</div>
-						</div>
 						<table class="w-full text-sm">
 							<thead class="sticky top-0 z-10 bg-white">
 								<tr class="border-b border-gray-200">
@@ -848,7 +841,8 @@
 												class="max-w-20 truncate"
 												title={feature.class ? formatFeatureProperty(feature.class) : '-'}
 											>
-												{feature.class ? formatFeatureProperty(feature.class) : '-'}
+												<PropertyIcon key={'class'} value={feature.class} size={20} color="black" />
+												<!-- {feature.class ? formatFeatureProperty(feature.class) : '-'} -->
 											</div>
 										</td>
 										<td class="hidden py-3 pr-2 text-xs text-gray-600 md:table-cell">
@@ -856,7 +850,13 @@
 												class="max-w-20 truncate"
 												title={feature.subclass ? formatFeatureProperty(feature.subclass) : '-'}
 											>
-												{feature.subclass ? formatFeatureProperty(feature.subclass) : '-'}
+												<PropertyIcon
+													key={'subclass'}
+													value={feature.subclass}
+													size={20}
+													color="black"
+												/>
+												<!-- {feature.subclass ? formatFeatureProperty(feature.subclass) : '-'} -->
 											</div>
 										</td>
 										<td class="hidden py-3 text-xs text-gray-600 lg:table-cell">
@@ -864,7 +864,13 @@
 												class="max-w-24 truncate"
 												title={feature.category ? formatFeatureProperty(feature.category) : '-'}
 											>
-												{feature.category ? formatFeatureProperty(feature.category) : '-'}
+												<PropertyIcon
+													key={'category'}
+													value={feature.category}
+													size={20}
+													color="black"
+												/>
+												<!-- {feature.category ? formatFeatureProperty(feature.category) : '-'} -->
 											</div>
 										</td>
 									</tr>

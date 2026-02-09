@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { MagnifyingGlass, X } from 'phosphor-svelte';
+	import { MagnifyingGlass } from 'phosphor-svelte';
+	import PropertyIcon from '../ui/PropertyIcon.svelte';
 
 	// Props
 	let {
@@ -76,7 +77,7 @@
 					onkeydown={(e) => e.key === 'Enter' && handleClear()}
 					aria-label="Clear search"
 				>
-					<X size={16} />
+					<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
 				</button>
 			{/if}
 		</div>

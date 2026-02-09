@@ -7,6 +7,7 @@
 	import OpeningHoursDisplay from '$lib/components/ui/OpeningHoursDisplay.svelte';
 	import { zIndexClass } from '$lib/styles/z-index.js';
 	import type { MapGeoJSONFeature } from 'svelte-maplibre';
+	import PropertyIcon from '../ui/PropertyIcon.svelte';
 
 	let {
 		open = $bindable(false),
@@ -429,8 +430,8 @@
 						{/if}
 					</Drawer.Title>
 					<Drawer.Close class="text-gray-500 hover:text-gray-700">
+						<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
 						<span class="sr-only">Close</span>
-						<span aria-hidden="true" class="text-xl">✕</span>
 					</Drawer.Close>
 				</div>
 
@@ -490,8 +491,12 @@
 									onclick={() => handleBookmark(feature)}
 									disabled={featureStatus.loading}
 								>
-									<span class="text-lg">{featureStatus.bookmarked ? '🔖' : '📑'}</span>
-									<span>{featureStatus.bookmarked ? 'Bookmarked' : 'Bookmark'}</span>
+									<PropertyIcon
+										key={'description'}
+										value={featureStatus.bookmarked ? 'bookmark_true' : 'bookmark_false'}
+										size={20}
+										color={featureStatus.bookmarked ? 'border-blue-300' : 'black'}
+									/>
 								</button>
 								<button
 									class={clsx(
@@ -508,8 +513,12 @@
 									onclick={() => handleTodo(feature)}
 									disabled={featureStatus.loading || !featureStatus.bookmarked}
 								>
-									<span class="text-lg">{featureStatus.todo ? '✅' : '📝'}</span>
-									<span>{featureStatus.todo ? 'In Todo' : 'Todo'}</span>
+									<PropertyIcon
+										key={'description'}
+										value={featureStatus.todo ? 'todo_true' : 'todo_false'}
+										size={20}
+										color={featureStatus.todo ? 'border-red-300' : 'black'}
+									/>
 								</button>
 								<button
 									class={clsx(
@@ -527,10 +536,17 @@
 									onclick={() => handleVisited(feature)}
 									disabled={featureStatus.loading || !featureStatus.bookmarked}
 								>
-									<span class="text-lg">{featureStatus.visitedDates.length > 0 ? '✅' : '👀'}</span>
+									<PropertyIcon
+										key={'description'}
+										value={featureStatus.visitedDates.length !== 0
+											? 'visited_true'
+											: 'visited_false'}
+										size={20}
+										color={featureStatus.bookmarked ? 'border-green-300' : 'black'}
+									/>
 									<span>
 										{#if featureStatus.visitedDates.length === 0}
-											Visit
+											Never Visited
 										{:else if featureStatus.visitedDates.length === 1}
 											Visited 1x
 										{:else}
@@ -548,7 +564,7 @@
 									onclick={() => handleUpdate(feature)}
 									disabled={featureStatus.loading}
 								>
-									<span class="text-lg">🔄</span>
+									<PropertyIcon key={'description'} value={'update'} size={20} color={'black'} />
 									<span>Update</span>
 								</button>
 							</div>

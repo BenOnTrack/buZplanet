@@ -2,6 +2,7 @@
 	import { Drawer } from 'vaul-svelte';
 	import { clsx } from 'clsx';
 	import { zIndexClass } from '$lib/styles/z-index.js';
+	import PropertyIcon from '../ui/PropertyIcon.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 	let activeSnapPoint = $state<string | number>('200px');
@@ -31,8 +32,8 @@
 						Stories
 					</Drawer.Title>
 					<Drawer.Close class="text-gray-500 hover:text-gray-700">
+						<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
 						<span class="sr-only">Close</span>
-						<span aria-hidden="true" class="text-xl">✕</span>
 					</Drawer.Close>
 				</div>
 

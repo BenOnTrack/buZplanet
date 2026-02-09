@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { Dialog, Label, Tabs } from 'bits-ui';
-	import Upload from 'phosphor-svelte/lib/Upload';
-	import X from 'phosphor-svelte/lib/X';
 	import CloudArrowUp from 'phosphor-svelte/lib/CloudArrowUp';
 	import CloudArrowDown from 'phosphor-svelte/lib/CloudArrowDown';
 	import FileArchive from 'phosphor-svelte/lib/FileArchive';
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	// Dynamic import to avoid code splitting issues
 	let workerModule: any = null;
 
@@ -486,7 +485,7 @@
 		}}
 		aria-label="Open upload dialog"
 	>
-		<Upload class="size-5" />
+		<PropertyIcon key={'description'} value={'download'} size={20} />
 	</Dialog.Trigger>
 	<Dialog.Portal>
 		<Dialog.Overlay
@@ -805,7 +804,7 @@
 				class="focus-visible:ring-foreground focus-visible:ring-offset-background absolute top-5 right-5 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
 			>
 				<div>
-					<X class="text-foreground size-5" />
+					<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
 					<span class="sr-only">Close</span>
 				</div>
 			</Dialog.Close>

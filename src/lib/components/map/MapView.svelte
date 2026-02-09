@@ -451,8 +451,8 @@
 			<SelectedFeatureGeojsonSource {selectedFeatureGeoJSON} />
 			<PoiVectorTileSource />
 			<BookmarksGeojsonSource {bookmarksFeaturesGeoJSON} />
-			<TodoGeojsonSource {todoFeaturesGeoJSON} />
 			<VisitedGeojsonSource {visitedFeaturesGeoJSON} />
+			<TodoGeojsonSource {todoFeaturesGeoJSON} />
 		</MapLibre>
 	{:else}
 		<div class="map-placeholder">

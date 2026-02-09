@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { Dialog, Label, Separator } from 'bits-ui';
 	import LockKeyOpen from 'phosphor-svelte/lib/LockKeyOpen';
-	import X from 'phosphor-svelte/lib/X';
-	import Plus from 'phosphor-svelte/lib/Plus';
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 </script>
 
 <Dialog.Root>
 	<Dialog.Trigger
-		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-4 left-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
+		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-4 left-4 z-30 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
 		onclick={(e) => {
 			// Handle click
 		}}
@@ -19,7 +18,7 @@
 		}}
 		aria-label="Open dialog"
 	>
-		<Plus class="size-5" />
+		<PropertyIcon key={'description'} value={'authentication'} size={20} />
 	</Dialog.Trigger>
 	<Dialog.Portal>
 		<Dialog.Overlay
@@ -60,7 +59,7 @@
 				class="focus-visible:ring-foreground focus-visible:ring-offset-background absolute top-5 right-5 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
 			>
 				<div>
-					<X class="text-foreground size-5" />
+					<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
 					<span class="sr-only">Close</span>
 				</div>
 			</Dialog.Close>
