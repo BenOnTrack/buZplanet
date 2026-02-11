@@ -1,13 +1,6 @@
 import type { AddProtocolAction } from 'maplibre-gl';
 import type { WorkerManager } from '$lib/utils/worker';
 
-interface TileRequest {
-	source: string;
-	z: number;
-	x: number;
-	y: number;
-}
-
 export function createProtocolHandler(workerManager: WorkerManager): AddProtocolAction {
 	return async ({ url, type }) => {
 		// Handle non-tile requests

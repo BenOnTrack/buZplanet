@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { InitializationState } from '$lib/utils/app-initialization';
+	import { Z_INDEX } from '$lib/styles/z-index';
 
 	interface Props {
 		state: InitializationState;
@@ -94,7 +94,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 9999;
+		z-index: 700;
 		color: white;
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 	}

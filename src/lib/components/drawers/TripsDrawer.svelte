@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Drawer } from 'vaul-svelte';
 	import { clsx } from 'clsx';
-	import { zIndexClass } from '$lib/styles/z-index.js';
-	import PropertyIcon from '../ui/PropertyIcon.svelte';
+	import { Z_INDEX } from '$lib/styles/z-index';
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 	let activeSnapPoint = $state<string | number>('200px');
@@ -11,14 +11,13 @@
 <!-- Trips Drawer -->
 <Drawer.Root bind:open snapPoints={['200px', '400px', 1]} bind:activeSnapPoint modal={false}>
 	<Drawer.Overlay
-		class="fixed inset-0 {zIndexClass('DRAWER_OVERLAY')} bg-black/40"
-		style="pointer-events: none"
+		class="fixed inset-0 bg-black/40"
+		style="pointer-events: none;z-index: {Z_INDEX.DRAWER_OVERLAY}"
 	/>
 	<Drawer.Portal>
 		<Drawer.Content
-			class="border-b-none fixed right-0 bottom-0 left-0 {zIndexClass(
-				'DRAWER_CONTENT'
-			)} mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class="border-b-none fixed right-0 bottom-0 left-0 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
 		>
 			<div
 				class={clsx('flex w-full flex-col p-4 pt-5', {

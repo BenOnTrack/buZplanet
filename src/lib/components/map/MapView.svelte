@@ -26,7 +26,7 @@
 	import TodoGeojsonSource from '$lib/components/map/TodoGeojsonSource.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import CoastlineVectorTileSource from '$lib/components/map/CoastlineVectorTileSource.svelte';
-
+	import { Z_INDEX } from '$lib/styles/z-index';
 	interface Props {
 		ready?: boolean;
 	}
@@ -331,7 +331,7 @@
 				mapInstance.on('pitchend', updateMapState);
 
 				// Add click event handler to query features and open drawer
-				mapInstance.on('click', (e) => {
+				mapInstance.on('click', async (e) => {
 					// Query rendered features at the click point
 					if (!mapInstance) return;
 					const features = mapInstance.queryRenderedFeatures(e.point);
@@ -341,7 +341,7 @@
 
 					// Update selected feature using MapControl
 					if (topFeature) {
-						mapControl.selectFeature(topFeature);
+						await handleFeatureClick(topFeature);
 					} else {
 						// Close drawer when clicking on empty area
 						mapControl.clearSelection();
@@ -367,6 +367,139 @@
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
 		};
 	});
+
+	/**
+	 * Handle feature click - merge GeoJSON feature data with original vector tile data
+	 */
+	async function handleFeatureClick(clickedFeature: MapGeoJSONFeature) {
+		try {
+			// Check if this is from a GeoJSON source (bookmarks/visited/todo)
+			const isGeoJSONSource = ['bookmarksSource', 'visitedSource', 'todoSource'].includes(
+				clickedFeature.source
+			);
+
+			if (isGeoJSONSource && clickedFeature.id) {
+				console.log('🔍 Clicked on GeoJSON feature, merging with original data...', clickedFeature);
+
+				// Get stored feature data from database
+				const storedFeature = await featuresDB.getFeatureById(String(clickedFeature.id));
+
+				if (storedFeature) {
+					console.log('✅ Found stored feature data:', storedFeature);
+
+					// Query the original vector tile feature to get all properties
+					const originalFeature = await queryOriginalVectorTileFeature(storedFeature);
+
+					if (originalFeature) {
+						console.log('✅ Found original vector tile feature:', originalFeature);
+
+						// Add stored feature metadata to the original feature's properties
+						originalFeature.properties = {
+							// Start with original properties
+							...originalFeature.properties,
+							// Add stored feature metadata
+							bookmarked: storedFeature.bookmarked,
+							listIds: storedFeature.listIds,
+							visitedDates: storedFeature.visitedDates,
+							todo: storedFeature.todo,
+							dateCreated: storedFeature.dateCreated,
+							dateModified: storedFeature.dateModified
+						};
+
+						console.log(
+							'✅ Using enhanced original feature with stored metadata:',
+							originalFeature
+						);
+						mapControl.selectFeature(originalFeature);
+						return;
+					} else {
+						console.warn('⚠️ Could not find original vector tile feature, using GeoJSON feature');
+					}
+				} else {
+					console.warn('⚠️ Could not find stored feature data for ID:', clickedFeature.id);
+				}
+			}
+
+			// Fallback: use the clicked feature as-is
+			console.log('📍 Using clicked feature as-is:', clickedFeature);
+			mapControl.selectFeature(clickedFeature);
+		} catch (error) {
+			console.error('❌ Error handling feature click:', error);
+			// Fallback: use the clicked feature as-is
+			mapControl.selectFeature(clickedFeature);
+		}
+	}
+
+	/**
+	 * Query the original vector tile feature for a stored feature
+	 */
+	async function queryOriginalVectorTileFeature(
+		storedFeature: StoredFeature
+	): Promise<MapGeoJSONFeature | null> {
+		if (!mapInstance) return null;
+
+		try {
+			const sourceId = storedFeature.source;
+			const sourceLayer = storedFeature.sourceLayer;
+			const featureId = storedFeature.id;
+
+			console.log(
+				`🔍 Querying original feature from source: ${sourceId}${sourceLayer ? ', sourceLayer: ' + sourceLayer : ''}, ID: ${featureId}`
+			);
+
+			// Query all features from the vector tile source
+			const queryOptions: any = {
+				zoom: 14 // Specify zoom level for vector tile query
+			};
+			if (sourceLayer) {
+				queryOptions.sourceLayer = sourceLayer;
+			}
+
+			const allFeatures = mapInstance.querySourceFeatures(sourceId, queryOptions);
+			console.log(
+				`📊 Found ${allFeatures.length} total features in source${sourceLayer ? '/layer ' + sourceLayer : ''}`
+			);
+
+			// Look for our specific feature by ID
+			const targetFeature = allFeatures.find((f) => String(f.id) === String(featureId));
+
+			if (targetFeature) {
+				console.log('✅ Found original vector tile feature:', targetFeature);
+				return targetFeature as MapGeoJSONFeature;
+			} else {
+				console.warn(`❌ Feature ID ${featureId} not found in ${allFeatures.length} features`);
+
+				// Try coordinate-based query as fallback
+				if (storedFeature.geometry?.type === 'Point') {
+					const coordinates = storedFeature.geometry.coordinates as [number, number];
+					const point = mapInstance.project(coordinates);
+					const renderedFeatures = mapInstance.queryRenderedFeatures(point);
+
+					console.log(`🔄 Trying coordinate-based query at [${coordinates[0]}, ${coordinates[1]}]`);
+					console.log(`📊 Found ${renderedFeatures.length} rendered features at coordinate`);
+
+					// Find matching feature by ID and exclude GeoJSON sources
+					const originalFeature = renderedFeatures.find(
+						(feature) =>
+							String(feature.id) === String(featureId) &&
+							!['bookmarksSource', 'visitedSource', 'todoSource', 'selectedFeatureSource'].includes(
+								feature.source
+							)
+					);
+
+					if (originalFeature) {
+						console.log('✅ Found original feature via coordinate query:', originalFeature);
+						return originalFeature as MapGeoJSONFeature;
+					}
+				}
+
+				return null;
+			}
+		} catch (error) {
+			console.error('❌ Error querying original vector tile feature:', error);
+			return null;
+		}
+	}
 
 	// Map keyboard handler for accessibility
 	function handleKeydown(event: KeyboardEvent) {
@@ -475,7 +608,7 @@
 		height: calc(100dvh - 76px); /* Account for bottom navigation */
 		height: calc(var(--vh, 1vh) * 100 - 76px); /* Fallback for older browsers */
 		overflow: hidden;
-		z-index: 0;
+		z-index: 0; /* zIndexClass('MAP'); */
 		/* Prevent scrolling and bouncing on mobile */
 		-webkit-overflow-scrolling: touch;
 		overscroll-behavior: none;

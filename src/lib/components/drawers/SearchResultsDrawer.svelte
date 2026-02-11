@@ -3,23 +3,11 @@
 	import { clsx } from 'clsx';
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
-	import { zIndexClass } from '$lib/styles/z-index.js';
-	import PropertyIcon from '../ui/PropertyIcon.svelte';
-
-	interface SearchResult {
-		id: string;
-		name: string;
-		class: string;
-		subclass?: string;
-		category?: string;
-		lng: number;
-		lat: number;
-		database: string;
-		layer: string;
-		zoom?: number;
-		tileX?: number;
-		tileY?: number;
-	}
+	import { Z_INDEX } from '$lib/styles/z-index';
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+	import Filters from '$lib/components/ui/Filters.svelte';
+	import FeaturesTable from '$lib/components/table/FeaturesTable.svelte';
+	import { featuresDB } from '$lib/stores/FeaturesDB.svelte.js';
 
 	let {
 		open = $bindable(false),
@@ -37,19 +25,98 @@
 
 	let activeSnapPoint = $state<string | number>('400px');
 	let filteredResults = $state<SearchResult[]>([]);
+	let allStoredFeatures = $state<StoredFeature[]>([]);
+	let bookmarkLists = $state<BookmarkList[]>([]);
 	let localSearchQuery = $state('');
 	let selectedClasses = $state<string[]>([]);
 	let selectedSubclasses = $state<string[]>([]);
 	let selectedCategories = $state<string[]>([]);
-	let selectedDatabases = $state<string[]>([]);
+	let selectedTypes = $state<string[]>([]);
+	let selectedListIds = $state<string[]>([]);
 	let filtersExpanded = $state(false);
 
 	// Update filtered results when results or filters change
 	$effect(() => {
-		filteredResults = applyFilters(results);
+		filteredResults = applyFilters(deduplicateResults(results));
 	});
 
-	// Available filter options
+	// Deduplicate results by feature.id (keep first occurrence)
+	function deduplicateResults(results: SearchResult[]): SearchResult[] {
+		const seenIds = new Set<string>();
+		const uniqueResults: SearchResult[] = [];
+
+		for (const result of results) {
+			if (!seenIds.has(result.id)) {
+				seenIds.add(result.id);
+				uniqueResults.push(result);
+			}
+		}
+
+		return uniqueResults;
+	}
+
+	// Load stored features for matching
+	$effect(() => {
+		if (featuresDB.initialized && open) {
+			loadStoredFeatures();
+			loadBookmarkLists();
+		}
+	});
+
+	async function loadStoredFeatures() {
+		try {
+			allStoredFeatures = await featuresDB.exportFeatures();
+		} catch (error) {
+			console.error('Failed to load stored features for matching:', error);
+			allStoredFeatures = [];
+		}
+	}
+
+	async function loadBookmarkLists() {
+		try {
+			bookmarkLists = await featuresDB.getAllBookmarkLists();
+		} catch (error) {
+			console.error('Failed to load bookmark lists:', error);
+			bookmarkLists = [];
+		}
+	}
+
+	// Available filter options based on enhanced results
+	let availableTypes = $derived.by(() => {
+		const types = new Set<string>();
+		enhancedResults.forEach((result) => {
+			if (result.types) {
+				result.types.forEach((type) => types.add(type));
+			}
+			// Also add 'none' if there are results without types
+			if (!result.types || result.types.length === 0) {
+				types.add('none');
+			}
+		});
+		return Array.from(types).sort((a, b) => {
+			// Sort order: bookmarked, todo, visited, none
+			const order: Record<string, number> = { bookmarked: 0, todo: 1, visited: 2, none: 3 };
+			return order[a] - order[b];
+		});
+	});
+
+	let availableLists = $derived.by(() => {
+		const listMap = new Map<string, { name: string; color: string }>();
+		enhancedResults.forEach((result) => {
+			if (result.lists) {
+				result.lists.forEach((list) => {
+					listMap.set(list.id, { name: list.name, color: list.color });
+				});
+			}
+		});
+		return Array.from(listMap.entries())
+			.map(([id, data]) => ({
+				id,
+				name: data.name,
+				color: data.color
+			}))
+			.sort((a, b) => a.name.localeCompare(b.name));
+	});
 	let availableClasses = $derived.by(() => {
 		const classes = new Set<string>();
 		results.forEach((result) => {
@@ -80,16 +147,6 @@
 		return Array.from(categories).sort();
 	});
 
-	let availableDatabases = $derived.by(() => {
-		const databases = new Set<string>();
-		results.forEach((result) => {
-			if (result.database) {
-				databases.add(result.database);
-			}
-		});
-		return Array.from(databases).sort();
-	});
-
 	function applyFilters(results: SearchResult[]): SearchResult[] {
 		let filtered = [...results];
 
@@ -97,8 +154,13 @@
 		if (localSearchQuery.trim()) {
 			const query = localSearchQuery.toLowerCase().trim();
 			filtered = filtered.filter((result) => {
+				// Search through all name properties
+				const nameMatches = Object.values(result.names).some((name) =>
+					name.toLowerCase().includes(query)
+				);
+
 				return (
-					result.name.toLowerCase().includes(query) ||
+					nameMatches ||
 					result.class?.toLowerCase().includes(query) ||
 					result.subclass?.toLowerCase().includes(query) ||
 					result.category?.toLowerCase().includes(query) ||
@@ -126,13 +188,39 @@
 			);
 		}
 
-		// Apply database filter
-		if (selectedDatabases.length > 0) {
-			filtered = filtered.filter((result) => selectedDatabases.includes(result.database));
+		return filtered;
+	}
+
+	// Apply additional filters to enhanced results (types and lists)
+	let finalFilteredResults = $derived.by(() => {
+		let filtered = enhancedResults;
+
+		// Apply type filters
+		if (selectedTypes.length > 0) {
+			filtered = filtered.filter((result) => {
+				return selectedTypes.some((selectedType) => {
+					if (selectedType === 'none') {
+						// Show results with no types
+						return !result.types || result.types.length === 0;
+					} else {
+						// Show results that have this type
+						return result.types && result.types.includes(selectedType as any);
+					}
+				});
+			});
+		}
+
+		// Apply list filters
+		if (selectedListIds.length > 0) {
+			filtered = filtered.filter((result) => {
+				return selectedListIds.some((selectedListId) => {
+					return result.lists && result.lists.some((list) => list.id === selectedListId);
+				});
+			});
 		}
 
 		return filtered;
-	}
+	});
 
 	// Clear all filters
 	function clearAllFilters() {
@@ -140,10 +228,36 @@
 		selectedClasses = [];
 		selectedSubclasses = [];
 		selectedCategories = [];
-		selectedDatabases = [];
+		selectedTypes = [];
+		selectedListIds = [];
 	}
 
 	// Toggle filter functions
+	function toggleFilter(type: string, value: string) {
+		if (type === 'class') {
+			toggleClassFilter(value);
+		} else if (type === 'subclass') {
+			toggleSubclassFilter(value);
+		} else if (type === 'category') {
+			toggleCategoryFilter(value);
+		} else if (type === 'type') {
+			toggleTypeFilter(value);
+		} else if (type === 'list') {
+			toggleListFilter(value);
+		}
+	}
+
+	function clearSearch(type: string) {
+		if (type === 'search') {
+			localSearchQuery = '';
+		}
+	}
+
+	function handleSearchChange(type: string, value: string) {
+		if (type === 'search') {
+			localSearchQuery = value;
+		}
+	}
 	function toggleClassFilter(className: string) {
 		if (selectedClasses.includes(className)) {
 			selectedClasses = selectedClasses.filter((c) => c !== className);
@@ -168,11 +282,21 @@
 		}
 	}
 
-	function toggleDatabaseFilter(databaseName: string) {
-		if (selectedDatabases.includes(databaseName)) {
-			selectedDatabases = selectedDatabases.filter((d) => d !== databaseName);
+	// Toggle type filter
+	function toggleTypeFilter(type: string) {
+		if (selectedTypes.includes(type)) {
+			selectedTypes = selectedTypes.filter((t) => t !== type);
 		} else {
-			selectedDatabases = [...selectedDatabases, databaseName];
+			selectedTypes = [...selectedTypes, type];
+		}
+	}
+
+	// Toggle list filter
+	function toggleListFilter(listId: string) {
+		if (selectedListIds.includes(listId)) {
+			selectedListIds = selectedListIds.filter((id) => id !== listId);
+		} else {
+			selectedListIds = [...selectedListIds, listId];
 		}
 	}
 
@@ -183,30 +307,156 @@
 			selectedClasses.length > 0 ||
 			selectedSubclasses.length > 0 ||
 			selectedCategories.length > 0 ||
-			selectedDatabases.length > 0
+			selectedTypes.length > 0 ||
+			selectedListIds.length > 0
 		);
 	});
 
-	// Toggle filters visibility
-	function toggleFilters() {
-		filtersExpanded = !filtersExpanded;
-	}
+	// Create filters array for the Filters component
+	let filters = $derived.by(() => {
+		const filterGroups: FilterGroup[] = [];
+
+		// Search filter
+		filterGroups.push({
+			type: 'search' as const,
+			label: 'Refine results',
+			placeholder: 'Further filter these results...',
+			searchValue: localSearchQuery,
+			selectedValues: []
+		});
+
+		// Type filters (only show if there are types available)
+		if (availableTypes.length > 0) {
+			filterGroups.push({
+				type: 'type' as const,
+				label: 'Filter by Type',
+				options: availableTypes.map((type) => ({
+					value: type,
+					count: getFilterCount('type', type)
+				})),
+				selectedValues: selectedTypes
+			});
+		}
+
+		// List filters (only show if there are lists available)
+		if (availableLists.length > 0) {
+			filterGroups.push({
+				type: 'list' as const,
+				label: 'Filter by List',
+				options: availableLists.map((list) => ({
+					value: list.id,
+					label: list.name,
+					color: list.color,
+					count: getFilterCount('list', list.id)
+				})),
+				selectedValues: selectedListIds
+			});
+		}
+
+		// Class filters
+		if (availableClasses.length > 0) {
+			filterGroups.push({
+				type: 'class' as const,
+				label: 'Filter by Class',
+				options: availableClasses.map((className) => ({
+					value: className,
+					count: getFilterCount('class', className)
+				})),
+				selectedValues: selectedClasses
+			});
+		}
+
+		// Subclass filters
+		if (availableSubclasses.length > 0) {
+			filterGroups.push({
+				type: 'subclass' as const,
+				label: 'Filter by Subclass',
+				options: availableSubclasses.map((subclassName) => ({
+					value: subclassName,
+					count: getFilterCount('subclass', subclassName)
+				})),
+				selectedValues: selectedSubclasses
+			});
+		}
+
+		// Category filters
+		if (availableCategories.length > 0) {
+			filterGroups.push({
+				type: 'category' as const,
+				label: 'Filter by Category',
+				options: availableCategories.map((categoryName) => ({
+					value: categoryName,
+					count: getFilterCount('category', categoryName)
+				})),
+				selectedValues: selectedCategories
+			});
+		}
+
+		return filterGroups;
+	});
 
 	// Get count for a filter
 	function getFilterCount(
-		type: 'class' | 'subclass' | 'category' | 'database',
+		type: 'class' | 'subclass' | 'category' | 'type' | 'list',
 		value: string
 	): number {
 		if (type === 'class') {
-			return results.filter((r) => r.class === value).length;
+			return deduplicateResults(results).filter((r) => r.class === value).length;
 		} else if (type === 'subclass') {
-			return results.filter((r) => r.subclass === value).length;
+			return deduplicateResults(results).filter((r) => r.subclass === value).length;
 		} else if (type === 'category') {
-			return results.filter((r) => r.category === value).length;
-		} else if (type === 'database') {
-			return results.filter((r) => r.database === value).length;
+			return deduplicateResults(results).filter((r) => r.category === value).length;
+		} else if (type === 'type') {
+			return enhancedResults.filter((r) => {
+				if (value === 'none') {
+					return !r.types || r.types.length === 0;
+				} else {
+					return r.types && r.types.includes(value as any);
+				}
+			}).length;
+		} else if (type === 'list') {
+			return enhancedResults.filter((r) => r.lists && r.lists.some((list) => list.id === value))
+				.length;
 		}
 		return 0;
+	}
+
+	// Match search results with stored features based on feature ID (using deduplicated results)
+	let enhancedResults = $derived.by(() => {
+		return filteredResults.map((searchResult) => {
+			const storedFeature = allStoredFeatures.find((stored) => stored.id === searchResult.id);
+			return {
+				...searchResult,
+				types: storedFeature ? getStoredFeatureTypes(storedFeature) : [],
+				lists: storedFeature ? getStoredFeatureLists(storedFeature) : [],
+				isFromSearch: true,
+				searchResult,
+				storedFeature
+			};
+		});
+	});
+
+	// Get feature types for stored features
+	function getStoredFeatureTypes(feature: StoredFeature): ('bookmarked' | 'todo' | 'visited')[] {
+		const types: ('bookmarked' | 'todo' | 'visited')[] = [];
+		if (feature.bookmarked) types.push('bookmarked');
+		if (feature.todo) types.push('todo');
+		if (feature.visitedDates && feature.visitedDates.length > 0) types.push('visited');
+		return types;
+	}
+
+	// Get feature lists for stored features (with actual bookmark lists data)
+	function getStoredFeatureLists(
+		feature: StoredFeature
+	): { id: string; name: string; color: string }[] {
+		return feature.listIds.map((listId) => {
+			const list = bookmarkLists.find((l) => l.id === listId);
+			return {
+				id: listId,
+				name: list?.name || 'Unknown List',
+				color: list?.color || '#6b7280'
+			};
+		});
 	}
 
 	// Handle result row click - zoom to location and select feature
@@ -228,57 +478,18 @@
 		// Keep the drawer open so users can continue browsing search results
 		// The drawer will only be closed when the user explicitly closes it
 	}
-
-	// Get database display name (remove .mbtiles extension)
-	function getDatabaseDisplayName(filename: string): string {
-		return filename.replace(/\.mbtiles$/i, '');
-	}
-
-	// Get class icon based on class type
-	function getClassIcon(className: string): string {
-		switch (className.toLowerCase()) {
-			case 'attraction':
-				return '🎢';
-			case 'education':
-				return '🎓';
-			case 'entertainment':
-				return '🎭';
-			case 'facility':
-				return '🏢';
-			case 'food_and_drink':
-				return '🍽️';
-			case 'healthcare':
-				return '🏥';
-			case 'leisure':
-				return '⚽';
-			case 'lodging':
-				return '🏨';
-			case 'natural':
-				return '🌲';
-			case 'place':
-				return '📍';
-			case 'shop':
-				return '🛍️';
-			case 'transportation':
-				return '🚇';
-			case 'poi':
-			default:
-				return '📍';
-		}
-	}
 </script>
 
 <!-- Search Results Drawer -->
 <Drawer.Root bind:open snapPoints={['400px', '600px', 1]} bind:activeSnapPoint modal={false}>
 	<Drawer.Overlay
-		class="fixed inset-0 {zIndexClass('DRAWER_OVERLAY')} bg-black/40"
-		style="pointer-events: none"
+		class="fixed inset-0 bg-black/40"
+		style="pointer-events: none;z-index: {Z_INDEX.DRAWER_OVERLAY}"
 	/>
 	<Drawer.Portal>
 		<Drawer.Content
-			class="border-b-none fixed right-0 bottom-0 left-0 {zIndexClass(
-				'DRAWER_CONTENT'
-			)} mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class="border-b-none fixed right-0 bottom-0 left-0 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			style="pointer-events: none;z-index: {Z_INDEX.DRAWER_CONTENT}"
 		>
 			<div
 				class={clsx('flex w-full flex-col p-4 pt-5', {
@@ -301,15 +512,15 @@
 					<p class="text-sm text-gray-600">
 						{#if isSearching}
 							{#if currentSearchingDatabase}
-								Searching {getDatabaseDisplayName(currentSearchingDatabase)}... ({results.length} results
+								Searching {currentSearchingDatabase.replace(/\.mbtiles$/i, '')}... ({results.length} results
 								so far)
 							{:else}
 								Starting search...
 							{/if}
 						{:else if searchQuery}
 							{hasActiveFilters
-								? `${filteredResults.length} of ${results.length} results for "${searchQuery}"`
-								: `${results.length} results for "${searchQuery}"`}
+								? `${finalFilteredResults.length} of ${deduplicateResults(results).length} results for "${searchQuery}"`
+								: `${deduplicateResults(results).length} results for "${searchQuery}"`}
 							{#if hasActiveFilters}
 								<button
 									onclick={clearAllFilters}
@@ -330,238 +541,15 @@
 
 				{#if !isSearching && results.length > 0}
 					<!-- Filters Section -->
-					<div class="mb-4 rounded-lg border border-gray-200 bg-gray-50">
-						<!-- Filters Header -->
-						<div class="flex items-center justify-between p-3">
-							<button
-								onclick={toggleFilters}
-								onkeydown={(e) => {
-									if (e.key === 'Enter' || e.key === ' ') {
-										e.preventDefault();
-										toggleFilters();
-									}
-								}}
-								class="flex items-center gap-2 rounded-lg p-1 transition-colors hover:bg-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-								tabindex="0"
-								aria-expanded={filtersExpanded}
-								aria-controls="filters-content"
-							>
-								<span class="text-base">🔧</span>
-								<span class="font-medium text-gray-900">Filters</span>
-								{#if hasActiveFilters}
-									<span class="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800"
-										>Active</span
-									>
-								{/if}
-								<span
-									class="ml-1 text-gray-400 transition-transform duration-200 {filtersExpanded
-										? 'rotate-180'
-										: ''}"
-								>
-									▼
-								</span>
-							</button>
-
-							{#if hasActiveFilters}
-								<button
-									onclick={clearAllFilters}
-									onkeydown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											clearAllFilters();
-										}
-									}}
-									class="rounded px-2 py-1 text-xs text-blue-600 hover:text-blue-800 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-									tabindex="0"
-									title="Clear all filters"
-								>
-									Clear all
-								</button>
-							{/if}
-						</div>
-
-						<!-- Filters Content -->
-						{#if filtersExpanded}
-							<div id="filters-content" class="space-y-3 px-3 pb-3">
-								<!-- Local Search -->
-								<div>
-									<label
-										for="local-search-input"
-										class="mb-2 block text-xs font-medium text-gray-600">Refine results:</label
-									>
-									<div class="relative">
-										<input
-											id="local-search-input"
-											bind:value={localSearchQuery}
-											type="text"
-											placeholder="Further filter these results..."
-											class="w-full rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-10 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none"
-										/>
-										<div
-											class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"
-										>
-											<span class="text-gray-400">🔍</span>
-										</div>
-										{#if localSearchQuery}
-											<button
-												onclick={() => {
-													localSearchQuery = '';
-												}}
-												onkeydown={(e) => {
-													if (e.key === 'Enter' || e.key === ' ') {
-														e.preventDefault();
-														localSearchQuery = '';
-													}
-												}}
-												class="absolute inset-y-0 right-0 flex items-center rounded pr-3 text-gray-400 hover:text-gray-600 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-												tabindex="0"
-												title="Clear search"
-											>
-												<span class="text-sm">✕</span>
-											</button>
-										{/if}
-									</div>
-								</div>
-
-								<!-- Database Filters -->
-								{#if availableDatabases.length > 0}
-									<div>
-										<div class="mb-2 text-xs font-medium text-gray-600">Filter by Source:</div>
-										<div class="flex flex-wrap gap-2">
-											{#each availableDatabases as database}
-												{@const count = getFilterCount('database', database)}
-												{@const isSelected = selectedDatabases.includes(database)}
-												<button
-													onclick={() => toggleDatabaseFilter(database)}
-													onkeydown={(e) => {
-														if (e.key === 'Enter' || e.key === ' ') {
-															e.preventDefault();
-															toggleDatabaseFilter(database);
-														}
-													}}
-													class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none {isSelected
-														? 'border-blue-300 bg-blue-100 text-blue-800 shadow-sm'
-														: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}"
-													title="{getDatabaseDisplayName(database)} ({count} results)"
-													tabindex="0"
-												>
-													<span class="max-w-24 truncate font-medium"
-														>{getDatabaseDisplayName(database)}</span
-													>
-													<span class="bg-opacity-70 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs"
-														>{count}</span
-													>
-												</button>
-											{/each}
-										</div>
-									</div>
-								{/if}
-
-								<!-- Class Filters -->
-								{#if availableClasses.length > 0}
-									<div>
-										<div class="mb-2 text-xs font-medium text-gray-600">Filter by Class:</div>
-										<div class="flex flex-wrap gap-2">
-											{#each availableClasses as className}
-												{@const count = getFilterCount('class', className)}
-												{@const isSelected = selectedClasses.includes(className)}
-												<button
-													onclick={() => toggleClassFilter(className)}
-													onkeydown={(e) => {
-														if (e.key === 'Enter' || e.key === ' ') {
-															e.preventDefault();
-															toggleClassFilter(className);
-														}
-													}}
-													class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none {isSelected
-														? 'border-blue-300 bg-blue-100 text-blue-800 shadow-sm'
-														: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}"
-													title="{formatFeatureProperty(className)} ({count} results)"
-													tabindex="0"
-												>
-													<span class="text-base">{getClassIcon(className)}</span>
-													<span class="max-w-20 truncate font-medium"
-														>{formatFeatureProperty(className)}</span
-													>
-													<span class="bg-opacity-70 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs"
-														>{count}</span
-													>
-												</button>
-											{/each}
-										</div>
-									</div>
-								{/if}
-
-								<!-- Subclass Filters -->
-								{#if availableSubclasses.length > 0}
-									<div>
-										<div class="mb-2 text-xs font-medium text-gray-600">Filter by Subclass:</div>
-										<div class="flex flex-wrap gap-2">
-											{#each availableSubclasses as subclassName}
-												{@const count = getFilterCount('subclass', subclassName)}
-												{@const isSelected = selectedSubclasses.includes(subclassName)}
-												<button
-													onclick={() => toggleSubclassFilter(subclassName)}
-													onkeydown={(e) => {
-														if (e.key === 'Enter' || e.key === ' ') {
-															e.preventDefault();
-															toggleSubclassFilter(subclassName);
-														}
-													}}
-													class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none {isSelected
-														? 'border-blue-300 bg-blue-100 text-blue-800 shadow-sm'
-														: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}"
-													title="{formatFeatureProperty(subclassName)} ({count} results)"
-													tabindex="0"
-												>
-													<span class="max-w-20 truncate font-medium"
-														>{formatFeatureProperty(subclassName)}</span
-													>
-													<span class="bg-opacity-70 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs"
-														>{count}</span
-													>
-												</button>
-											{/each}
-										</div>
-									</div>
-								{/if}
-
-								<!-- Category Filters -->
-								{#if availableCategories.length > 0}
-									<div>
-										<div class="mb-2 text-xs font-medium text-gray-600">Filter by Category:</div>
-										<div class="flex flex-wrap gap-2">
-											{#each availableCategories as categoryName}
-												{@const count = getFilterCount('category', categoryName)}
-												{@const isSelected = selectedCategories.includes(categoryName)}
-												<button
-													onclick={() => toggleCategoryFilter(categoryName)}
-													onkeydown={(e) => {
-														if (e.key === 'Enter' || e.key === ' ') {
-															e.preventDefault();
-															toggleCategoryFilter(categoryName);
-														}
-													}}
-													class="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none {isSelected
-														? 'border-blue-300 bg-blue-100 text-blue-800 shadow-sm'
-														: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}"
-													title="{formatFeatureProperty(categoryName)} ({count} results)"
-													tabindex="0"
-												>
-													<span class="max-w-20 truncate font-medium"
-														>{formatFeatureProperty(categoryName)}</span
-													>
-													<span class="bg-opacity-70 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs"
-														>{count}</span
-													>
-												</button>
-											{/each}
-										</div>
-									</div>
-								{/if}
-							</div>
-						{/if}
-					</div>
+					<Filters
+						{filters}
+						bind:expanded={filtersExpanded}
+						{hasActiveFilters}
+						onToggleFilter={toggleFilter}
+						onClearSearch={clearSearch}
+						onClearAll={clearAllFilters}
+						onSearchChange={handleSearchChange}
+					/>
 				{/if}
 
 				{#if isSearching}
@@ -575,107 +563,14 @@
 									<span>Live results</span>
 								</div>
 							</div>
-							<div class="overflow-x-auto">
-								<table class="w-full text-sm">
-									<thead class="sticky top-0 z-10 bg-gray-50">
-										<tr class="border-b border-gray-200">
-											<th class="pr-4 pb-2 text-left font-medium text-gray-700">Name</th>
-											<th class="pr-2 pb-2 text-center font-medium text-gray-700">Type</th>
-											<th class="hidden pr-2 pb-2 text-left font-medium text-gray-700 sm:table-cell"
-												>Class</th
-											>
-											<th class="hidden pr-2 pb-2 text-left font-medium text-gray-700 md:table-cell"
-												>Subclass</th
-											>
-											<th class="hidden pr-2 pb-2 text-left font-medium text-gray-700 lg:table-cell"
-												>Category</th
-											>
-											<th class="hidden pb-2 text-left font-medium text-gray-700 xl:table-cell"
-												>Source</th
-											>
-										</tr>
-									</thead>
-									<tbody class="divide-y divide-gray-100">
-										{#each filteredResults.slice(0, 20) as result (result.id)}
-											<tr
-												class="group cursor-pointer transition-colors hover:bg-blue-50 focus:bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none focus:ring-inset active:bg-blue-100"
-												onclick={(e) => handleResultRowClick(result, e)}
-												onkeydown={(e) => {
-													if (e.key === 'Enter' || e.key === ' ') {
-														e.preventDefault();
-														handleResultRowClick(result, e);
-													}
-												}}
-												tabindex="0"
-												role="button"
-												aria-label="Select and zoom to {result.name}"
-												title="Click to zoom to and select this feature on the map"
-											>
-												<td class="py-3 pr-4">
-													<div class="flex items-center gap-2">
-														<div class="flex-1">
-															<div class="leading-tight font-medium text-gray-900">
-																{result.name}
-															</div>
-															{#if result.lng !== 0 && result.lat !== 0}
-																<div class="mt-1 text-xs text-gray-500">
-																	{result.lat.toFixed(4)}, {result.lng.toFixed(4)}
-																</div>
-															{/if}
-														</div>
-														<div
-															class="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100"
-														>
-															<span class="text-xs">🔍</span>
-														</div>
-													</div>
-												</td>
-												<td class="py-3 pr-2">
-													<div class="flex justify-center">
-														<span class="text-lg" title={formatFeatureProperty(result.class)}>
-															{getClassIcon(result.class)}
-														</span>
-													</div>
-												</td>
-												<td class="hidden py-3 pr-2 text-xs text-gray-600 sm:table-cell">
-													<div
-														class="max-w-20 truncate"
-														title={result.class ? formatFeatureProperty(result.class) : '-'}
-													>
-														{result.class ? formatFeatureProperty(result.class) : '-'}
-													</div>
-												</td>
-												<td class="hidden py-3 pr-2 text-xs text-gray-600 md:table-cell">
-													<div
-														class="max-w-20 truncate"
-														title={result.subclass ? formatFeatureProperty(result.subclass) : '-'}
-													>
-														{result.subclass ? formatFeatureProperty(result.subclass) : '-'}
-													</div>
-												</td>
-												<td class="hidden py-3 pr-2 text-xs text-gray-600 lg:table-cell">
-													<div
-														class="max-w-24 truncate"
-														title={result.category ? formatFeatureProperty(result.category) : '-'}
-													>
-														{result.category ? formatFeatureProperty(result.category) : '-'}
-													</div>
-												</td>
-												<td class="hidden py-3 text-xs text-gray-600 xl:table-cell">
-													<div class="max-w-20 truncate" title={result.database}>
-														{getDatabaseDisplayName(result.database)}
-													</div>
-												</td>
-											</tr>
-										{/each}
-									</tbody>
-								</table>
-								{#if filteredResults.length > 20}
-									<div class="border-t bg-gray-50 py-2 text-center text-xs text-gray-500">
-										Showing first 20 of {filteredResults.length} results. Search will continue...
-									</div>
-								{/if}
-							</div>
+							<FeaturesTable
+								features={finalFilteredResults}
+								onRowClick={handleResultRowClick}
+								maxResults={20}
+								showHeader={true}
+								showListsColumn={true}
+								showTypesColumn={true}
+							/>
 
 							<!-- Search status below table -->
 							{#if currentSearchingDatabase}
@@ -686,14 +581,14 @@
 										class="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
 									></div>
 									<span class="text-sm text-blue-700">
-										Searching {getDatabaseDisplayName(currentSearchingDatabase)}... ({results.length}
+										Searching {currentSearchingDatabase.replace(/\.mbtiles$/i, '')}... ({results.length}
 										results so far)
 									</span>
 								</div>
 							{/if}
 						</div>
 					{/if}
-				{:else if filteredResults.length === 0 && results.length > 0 && hasActiveFilters}
+				{:else if finalFilteredResults.length === 0 && results.length > 0 && hasActiveFilters}
 					<div class="flex flex-col items-center justify-center py-8 text-gray-500">
 						<span class="mb-2 text-2xl">🔍</span>
 						<p>No results found with current filters</p>
@@ -718,126 +613,40 @@
 						<p class="mt-1 text-sm">Search through all your local map data</p>
 					</div>
 				{:else}
-					<div class="overflow-x-auto">
-						<!-- Header instruction -->
-						<div class="mb-3 flex items-center justify-between">
-							<p class="text-xs text-gray-600">
-								Click any row to zoom to and select the feature on the map
-							</p>
-							<div class="flex items-center gap-1 text-xs text-gray-500">
-								<span>🔍</span>
-								<span>Clickable rows</span>
-							</div>
+					<!-- Header instruction -->
+					<div class="mb-3 flex items-center justify-between">
+						<p class="text-xs text-gray-600">
+							Click any row to zoom to and select the feature on the map
+						</p>
+						<div class="flex items-center gap-1 text-xs text-gray-500">
+							<span>🔍</span>
+							<span>Clickable rows</span>
 						</div>
-						<table class="w-full text-sm">
-							<thead class="sticky top-0 z-10 bg-white">
-								<tr class="border-b border-gray-200">
-									<th class="pr-4 pb-2 text-left font-medium text-gray-700">Name</th>
-									<th class="pr-2 pb-2 text-center font-medium text-gray-700">Type</th>
-									<th class="hidden pr-2 pb-2 text-left font-medium text-gray-700 sm:table-cell"
-										>Class</th
-									>
-									<th class="hidden pr-2 pb-2 text-left font-medium text-gray-700 md:table-cell"
-										>Subclass</th
-									>
-									<th class="hidden pr-2 pb-2 text-left font-medium text-gray-700 lg:table-cell"
-										>Category</th
-									>
-									<th class="hidden pb-2 text-left font-medium text-gray-700 xl:table-cell"
-										>Source</th
-									>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-100">
-								{#each filteredResults as result (result.id)}
-									<tr
-										class="group cursor-pointer transition-colors hover:bg-blue-50 focus:bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none focus:ring-inset active:bg-blue-100"
-										onclick={(e) => handleResultRowClick(result, e)}
-										onkeydown={(e) => {
-											if (e.key === 'Enter' || e.key === ' ') {
-												e.preventDefault();
-												handleResultRowClick(result, e);
-											}
-										}}
-										tabindex="0"
-										role="button"
-										aria-label="Select and zoom to {result.name}"
-										title="Click to zoom to and select this feature on the map"
-									>
-										<td class="py-3 pr-4">
-											<div class="flex items-center gap-2">
-												<div class="flex-1">
-													<div class="leading-tight font-medium text-gray-900">
-														{result.name}
-													</div>
-													{#if result.lng !== 0 && result.lat !== 0}
-														<div class="mt-1 text-xs text-gray-500">
-															{result.lat.toFixed(4)}, {result.lng.toFixed(4)}
-														</div>
-													{/if}
-												</div>
-												<div
-													class="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100"
-												>
-													<span class="text-xs">🔍</span>
-												</div>
-											</div>
-										</td>
-										<td class="py-3 pr-2">
-											<div class="flex justify-center">
-												<span class="text-lg" title={formatFeatureProperty(result.class)}>
-													{getClassIcon(result.class)}
-												</span>
-											</div>
-										</td>
-										<td class="hidden py-3 pr-2 text-xs text-gray-600 sm:table-cell">
-											<div
-												class="max-w-20 truncate"
-												title={result.class ? formatFeatureProperty(result.class) : '-'}
-											>
-												{result.class ? formatFeatureProperty(result.class) : '-'}
-											</div>
-										</td>
-										<td class="hidden py-3 pr-2 text-xs text-gray-600 md:table-cell">
-											<div
-												class="max-w-20 truncate"
-												title={result.subclass ? formatFeatureProperty(result.subclass) : '-'}
-											>
-												{result.subclass ? formatFeatureProperty(result.subclass) : '-'}
-											</div>
-										</td>
-										<td class="hidden py-3 pr-2 text-xs text-gray-600 lg:table-cell">
-											<div
-												class="max-w-24 truncate"
-												title={result.category ? formatFeatureProperty(result.category) : '-'}
-											>
-												{result.category ? formatFeatureProperty(result.category) : '-'}
-											</div>
-										</td>
-										<td class="hidden py-3 text-xs text-gray-600 xl:table-cell">
-											<div class="max-w-20 truncate" title={result.database}>
-												{getDatabaseDisplayName(result.database)}
-											</div>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
 					</div>
+
+					<FeaturesTable
+						features={finalFilteredResults}
+						onRowClick={handleResultRowClick}
+						showHeader={true}
+						showListsColumn={true}
+						showTypesColumn={true}
+					/>
 
 					{#if results.length > 0}
 						<div class="mt-4 border-t border-gray-200 pt-4">
 							<div class="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
 								<div class="text-center">
-									<div class="font-medium text-blue-600">{results.length}</div>
+									<div class="font-medium text-blue-600">{deduplicateResults(results).length}</div>
 									<div class="text-xs text-gray-500">Total Results</div>
 								</div>
 								<div class="text-center">
-									<div class="font-medium text-green-600">{filteredResults.length}</div>
+									<div class="font-medium text-green-600">{finalFilteredResults.length}</div>
 									<div class="text-xs text-gray-500">Filtered</div>
 								</div>
 								<div class="text-center">
-									<div class="font-medium text-purple-600">{availableDatabases.length}</div>
+									<div class="font-medium text-purple-600">
+										{new Set(deduplicateResults(results).map((r) => r.database)).size}
+									</div>
 									<div class="text-xs text-gray-500">Sources</div>
 								</div>
 								<div class="text-center">

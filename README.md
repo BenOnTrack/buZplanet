@@ -243,3 +243,14 @@ wrangler r2 object put mbtiles/transportation_asia_japan_kanto.mbtiles \
 ### Worker
 
 https://developers.cloudflare.com/workers/static-assets/migration-guides/migrate-from-pages/
+
+To Fix
+
+- Error in Search Results
+- Z-index check
+- set tables in drawers to be mobile responsive
+
+To Build
+
+- click on class subclass or category and update the table
+- Add Stories

@@ -1,51 +1,5 @@
 import { browser } from '$app/environment';
 
-export interface FeatureNames {
-	[key: string]: string; // name, name:en, name:fr, name:de, etc.
-}
-
-export interface BookmarkList {
-	id: string; // Unique identifier for the list
-	name: string; // Display name for the list
-	description?: string; // Optional description
-	category?: string; // Optional category/tag
-	color?: string; // Optional color for UI display
-	featureIds: string[]; // Array of feature IDs in this list
-	dateCreated: number;
-	dateModified: number;
-}
-
-export interface StoredFeature {
-	id: string; // Unique identifier for the feature
-	class?: string;
-	subclass?: string;
-	category?: string;
-	names: FeatureNames; // All name properties (name, name:en, name:fr, etc.)
-	geometry: any; // GeoJSON geometry
-	source: string; // Map source
-	sourceLayer?: string; // Source layer if applicable
-	layer?: { id: string }; // Map layer info
-
-	// User action flags
-	bookmarked: boolean;
-	listIds: string[]; // Array of bookmark list IDs this feature belongs to
-	visitedDates: number[]; // Array of timestamps when visited
-	todo: boolean;
-
-	// Metadata
-	dateCreated: number;
-	dateModified: number;
-
-	// Search optimization - denormalized searchable text
-	searchText: string; // Concatenated text for full-text search
-}
-
-export interface FeatureSearchResult {
-	feature: StoredFeature;
-	score: number; // Relevance score for ranking
-	matchedFields: string[]; // Which fields matched the search
-}
-
 /**
  * Features Database management class using Svelte 5 runes
  * Handles persistent storage of map features with efficient search capabilities

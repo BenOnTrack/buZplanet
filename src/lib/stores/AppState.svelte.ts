@@ -1,44 +1,5 @@
 import { browser } from '$app/environment';
 
-export interface MapViewState {
-	center: [number, number];
-	zoom: number;
-	bearing?: number;
-	pitch?: number;
-}
-
-export interface ColorMappings {
-	// Map feature categories
-	attraction: string;
-	education: string;
-	entertainment: string;
-	facility: string;
-	food_and_drink: string;
-	healthcare: string;
-	leisure: string;
-	lodging: string;
-	natural: string;
-	place: string;
-	route: string;
-	shop: string;
-	transportation: string;
-	// User action categories
-	bookmarks: string;
-	visited: string;
-	todo: string;
-	followed: string;
-	search: string;
-}
-
-export interface AppConfig {
-	mapView: MapViewState;
-	colorMappings: ColorMappings;
-	// Future config properties can be added here
-	// theme?: string;
-	// selectedLayers?: string[];
-	// userPreferences?: Record<string, any>;
-}
-
 const DEFAULT_COLOR_MAPPINGS: ColorMappings = {
 	// Map feature categories
 	attraction: 'teal',

@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { Dialog, Tabs } from 'bits-ui';
 	import ColorsSettings from '$lib/components/settings/ColorsSettings.svelte';
+	import AppUpdateSettings from '$lib/components/settings/AppUpdateSettings.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+	import { Z_INDEX } from '$lib/styles/z-index';
 </script>
 
 <Dialog.Root>
 	<Dialog.Trigger
-		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-36 left-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
+		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-36 left-4 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
+		style="z-index: {Z_INDEX.DIALOG_TRIGGER}"
 		onclick={(e) => {
 			// Handle click
 		}}
@@ -22,10 +25,12 @@
 	</Dialog.Trigger>
 	<Dialog.Portal>
 		<Dialog.Overlay
-			class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/80"
+			class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 bg-black/80"
+			style="z-index: {Z_INDEX.DIALOG_OVERLAY}"
 		/>
 		<Dialog.Content
-			class="rounded-card-lg bg-background shadow-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] border p-5 outline-hidden sm:max-w-[490px] md:w-full"
+			class="rounded-card-lg bg-background shadow-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] border p-5 outline-hidden sm:max-w-[490px] md:w-full"
+			style="z-index: {Z_INDEX.DIALOG_CONTENT}"
 		>
 			<Dialog.Title
 				class="flex w-full items-center justify-center text-lg font-semibold tracking-tight"
@@ -52,9 +57,9 @@
 							>Colors</Tabs.Trigger
 						>
 						<Tabs.Trigger
-							value="tab3"
+							value="updates"
 							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
-							>Tab3</Tabs.Trigger
+							>Updates</Tabs.Trigger
 						>
 					</Tabs.List>
 					<Tabs.Content value="colors" class="pt-3">
@@ -70,12 +75,9 @@
 							<p class="text-muted-foreground text-sm">This is the content for the second tab.</p>
 						</div>
 					</Tabs.Content>
-					<Tabs.Content value="tab3" class="pt-3 select-none">
-						<div class="max-h-[60vh] overflow-y-auto p-4">
-							<h4 class="mb-2 text-[20px] leading-none font-semibold tracking-[-0.01em]">
-								Tab 3 Content
-							</h4>
-							<p class="text-muted-foreground text-sm">This is the content for the third tab.</p>
+					<Tabs.Content value="updates" class="pt-3">
+						<div class="max-h-[60vh] overflow-y-auto px-1">
+							<AppUpdateSettings />
 						</div>
 					</Tabs.Content>
 				</Tabs.Root>

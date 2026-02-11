@@ -6,7 +6,6 @@
 	import CategoryFilters from './CategoryFilters.svelte';
 	import SearchFilter from './SearchFilter.svelte';
 	import FilterStats from './FilterStats.svelte';
-	import type { StoredFeature, BookmarkList } from '$lib/stores/FeaturesDB.svelte';
 
 	// Props
 	let {

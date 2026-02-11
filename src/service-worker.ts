@@ -12,6 +12,7 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
 	// Create a new cache and add all files to it
 	async function addFilesToCache() {
+		console.log('Service Worker: Installing version', version);
 		const cache = await caches.open(CACHE);
 		await cache.addAll(ASSETS);
 	}
@@ -22,8 +23,13 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
 	// Remove previous cached data from disk
 	async function deleteOldCaches() {
+		console.log('Service Worker: Activating version', version);
 		for (const key of await caches.keys()) {
-			if (key !== CACHE) await caches.delete(key);
+			// Keep only the current cache, delete everything else
+			if (key !== CACHE) {
+				console.log('Service Worker: Deleting old cache:', key);
+				await caches.delete(key);
+			}
 		}
 	}
 
@@ -31,7 +37,17 @@ self.addEventListener('activate', (event) => {
 		deleteOldCaches().then(() => {
 			console.log('Service Worker: Activated and old caches cleared');
 			// Claim all clients so the new SW takes control immediately
-			return self.clients.claim();
+			return self.clients.claim().then(() => {
+				// Notify all clients about the activation with version info
+				return self.clients.matchAll().then((clients) => {
+					clients.forEach((client) => {
+						client.postMessage({
+							type: 'SW_ACTIVATED',
+							version: version
+						});
+					});
+				});
+			});
 		})
 	);
 });
@@ -108,8 +124,17 @@ self.addEventListener('message', (event) => {
 		// Notify all clients that we're about to take control
 		self.clients.matchAll().then((clients) => {
 			clients.forEach((client) => {
-				client.postMessage({ type: 'SW_SKIP_WAITING' });
+				client.postMessage({
+					type: 'SW_SKIP_WAITING',
+					version: version
+				});
 			});
+		});
+	} else if (event.data && event.data.type === 'GET_VERSION') {
+		// Send version info to client
+		event.ports[0]?.postMessage({
+			type: 'VERSION_INFO',
+			version: version
 		});
 	}
 });

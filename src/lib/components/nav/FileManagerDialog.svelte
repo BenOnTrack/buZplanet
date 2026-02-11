@@ -4,20 +4,10 @@
 	import CloudArrowDown from 'phosphor-svelte/lib/CloudArrowDown';
 	import FileArchive from 'phosphor-svelte/lib/FileArchive';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+	import { Z_INDEX } from '$lib/styles/z-index';
+
 	// Dynamic import to avoid code splitting issues
 	let workerModule: any = null;
-
-	interface R2File {
-		key: string;
-		size: number;
-		lastModified: string;
-	}
-
-	interface FileComparisonResult {
-		filename: string;
-		isInOPFS: boolean;
-		r2File: R2File;
-	}
 
 	// State for upload functionality
 	let selectedFiles: FileList | null = $state(null);
@@ -473,7 +463,8 @@
 
 <Dialog.Root bind:open={dialogOpen} onOpenChange={handleOpenChange}>
 	<Dialog.Trigger
-		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-20 left-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
+		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-20 left-4 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
+		style="z-index: {Z_INDEX.DIALOG_TRIGGER}"
 		onclick={(e) => {
 			dialogOpen = true;
 		}}
@@ -489,10 +480,12 @@
 	</Dialog.Trigger>
 	<Dialog.Portal>
 		<Dialog.Overlay
-			class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/80"
+			class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 bg-black/80"
+			style="z-index: {Z_INDEX.DIALOG_OVERLAY}"
 		/>
 		<Dialog.Content
-			class="rounded-card-lg bg-background shadow-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] border p-5 outline-hidden sm:max-w-[490px] md:w-full"
+			class="rounded-card-lg bg-background shadow-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] border p-5 outline-hidden sm:max-w-[490px] md:w-full"
+			style="z-index: {Z_INDEX.DIALOG_CONTENT}"
 		>
 			<Dialog.Title
 				class="flex w-full items-center justify-center text-lg font-semibold tracking-tight"

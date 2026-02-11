@@ -6,35 +6,6 @@ import { VectorTile, type VectorTileFeature } from '@mapbox/vector-tile';
 import Protobuf from 'pbf';
 import { mergeTiles } from '$lib/utils/map/mergeTiles.js';
 
-export interface WorkerMessage {
-	type: string;
-	data?: any;
-	id?: string;
-	fileData?: ArrayBuffer;
-}
-
-export interface WorkerResponse extends WorkerMessage {
-	error?: boolean;
-}
-
-export interface DatabaseEntry {
-	db: OpfsDatabase;
-	bounds?: [number, number, number, number];
-	minzoom?: number;
-	maxzoom?: number;
-	filename: string;
-	metadata?: any;
-}
-
-export interface DatabaseMetadata {
-	bounds?: [number, number, number, number];
-	minzoom?: number;
-	maxzoom?: number;
-	format?: string;
-	name?: string;
-	description?: string;
-}
-
 // Global state
 let sqlite3: Sqlite3Static | null = null;
 let opfsRoot: FileSystemDirectoryHandle | null = null;
@@ -887,11 +858,6 @@ async function mergeVectorTiles(
 	}
 }
 
-interface TileToMerge {
-	filename: string;
-	data: ArrayBuffer;
-}
-
 // Merge vector tile data using the existing mergeTiles function
 async function mergeVectorTileData(
 	tilesToMerge: TileToMerge[],
@@ -906,11 +872,19 @@ async function mergeVectorTileData(
 		// Use the existing mergeTiles function
 		const mergedTile = await mergeTiles(tileArrays);
 
-		// Convert back to ArrayBuffer
-		return mergedTile.buffer.slice(
-			mergedTile.byteOffset,
-			mergedTile.byteOffset + mergedTile.byteLength
-		);
+		// Convert back to ArrayBuffer - ensure proper type handling
+		const resultBuffer =
+			mergedTile.buffer instanceof ArrayBuffer
+				? mergedTile.buffer
+				: new ArrayBuffer(mergedTile.byteLength);
+
+		if (!(mergedTile.buffer instanceof ArrayBuffer)) {
+			// Copy from SharedArrayBuffer to ArrayBuffer
+			new Uint8Array(resultBuffer).set(mergedTile);
+			return resultBuffer;
+		}
+
+		return resultBuffer.slice(mergedTile.byteOffset, mergedTile.byteOffset + mergedTile.byteLength);
 	} catch (error) {
 		console.error(`mergeTiles() failed:`, error);
 		throw error;
@@ -1023,22 +997,6 @@ postMessage({
 	type: 'ready',
 	data: 'Worker is ready'
 } satisfies WorkerResponse);
-
-// Search for features across all mbtiles databases
-export interface SearchResult {
-	id: string;
-	name: string;
-	class: string;
-	subclass?: string;
-	category?: string;
-	lng: number;
-	lat: number;
-	database: string;
-	layer: string;
-	zoom: number;
-	tileX: number;
-	tileY: number;
-}
 
 // Fast feature search (optimized from archived worker)
 async function searchFeatures(
@@ -1311,79 +1269,98 @@ async function processSingleTileOptimized(
 				const vectorTileFeature = layer.feature(i);
 				const props = vectorTileFeature.properties as Record<string, any>;
 
-				// Check name properties - prioritize name:en, fallback to name
-				const nameEn = props['name:en'];
-				const name = props['name'];
+				// Extract ALL name properties (name, name:en, name:fr, name:de, etc.)
+				const names: { [key: string]: string } = {};
+				let hasAnyName = false;
 
+				// Look for all name-related properties
+				for (const [key, value] of Object.entries(props)) {
+					if (key === 'name' || key.startsWith('name:')) {
+						if (value && typeof value === 'string') {
+							names[key] = value;
+							hasAnyName = true;
+						}
+					}
+				}
+
+				// Quick exit if no searchable name properties
+				if (!hasAnyName) continue;
+
+				// Check if any of the names match our search query
 				let isMatch = false;
-				let matchedName = '';
+				let primaryNameValue = '';
 
-				// Quick exit if no searchable properties
-				if (!name && !nameEn) continue;
+				// Prioritize name:en, then name, then any other name:XX
+				const searchOrder = [
+					'name:en',
+					'name',
+					...Object.keys(names).filter((k) => k !== 'name:en' && k !== 'name')
+				];
 
-				// Check name:en first (preferred)
-				if (nameEn && fastMatchesQuery(nameEn, normalizedQuery)) {
-					isMatch = true;
-					matchedName = nameEn;
+				for (const nameKey of searchOrder) {
+					const nameValue = names[nameKey];
+					if (nameValue && fastMatchesQuery(nameValue, normalizedQuery)) {
+						isMatch = true;
+						if (!primaryNameValue) {
+							primaryNameValue = nameValue; // Use first match as primary
+						}
+						break;
+					}
 				}
-				// If no match in name:en, check regular name
-				else if (name && fastMatchesQuery(name, normalizedQuery)) {
-					isMatch = true;
-					matchedName = name;
-				}
 
-				if (isMatch) {
-					// Convert to GeoJSON to get proper coordinates
-					const geojsonFeature = vectorTileFeature.toGeoJSON(x, y, zoomLevel);
+				// If no match found, skip this feature
+				if (!isMatch || !primaryNameValue) continue;
 
-					// Extract coordinates from GeoJSON
-					let lng: number, lat: number;
+				// Convert to GeoJSON to get proper coordinates
+				const geojsonFeature = vectorTileFeature.toGeoJSON(x, y, zoomLevel);
 
-					if (geojsonFeature.geometry.type === 'Point') {
-						[lng, lat] = geojsonFeature.geometry.coordinates;
-					} else if (
-						geojsonFeature.geometry.type === 'LineString' ||
+				// Extract coordinates from GeoJSON
+				let lng: number, lat: number;
+
+				if (geojsonFeature.geometry.type === 'Point') {
+					[lng, lat] = geojsonFeature.geometry.coordinates;
+				} else if (
+					geojsonFeature.geometry.type === 'LineString' ||
+					geojsonFeature.geometry.type === 'Polygon'
+				) {
+					// Use first coordinate for lines/polygons
+					const coords =
 						geojsonFeature.geometry.type === 'Polygon'
-					) {
-						// Use first coordinate for lines/polygons
-						const coords =
-							geojsonFeature.geometry.type === 'Polygon'
-								? geojsonFeature.geometry.coordinates[0][0]
-								: geojsonFeature.geometry.coordinates[0];
-						[lng, lat] = coords;
-					} else {
-						// Fallback: use tile center
-						const tileCenter = tileToLngLat(x, y, zoomLevel);
-						lng = tileCenter.lng;
-						lat = tileCenter.lat;
-					}
+							? geojsonFeature.geometry.coordinates[0][0]
+							: geojsonFeature.geometry.coordinates[0];
+					[lng, lat] = coords;
+				} else {
+					// Fallback: use tile center
+					const tileCenter = tileToLngLat(x, y, zoomLevel);
+					lng = tileCenter.lng;
+					lat = tileCenter.lat;
+				}
 
-					const fid = String(props['id'] || `${filename}:${sourceLayer}:${x}:${y}:${i}`);
-					const dedupKey = `${filename}|${sourceLayer}|${fid}`;
+				const fid = String(props['id'] || `${filename}:${sourceLayer}:${x}:${y}:${i}`);
+				const dedupKey = `${filename}|${sourceLayer}|${fid}`;
 
-					if (!seenIds.has(dedupKey)) {
-						seenIds.add(dedupKey);
+				if (!seenIds.has(dedupKey)) {
+					seenIds.add(dedupKey);
 
-						// Extract class from layer name
-						const featureClass = sourceLayer.startsWith('poi_')
-							? sourceLayer.replace('poi_', '')
-							: 'poi';
+					// Extract class from layer name
+					const featureClass = sourceLayer.startsWith('poi_')
+						? sourceLayer.replace('poi_', '')
+						: 'poi';
 
-						results.push({
-							id: fid,
-							name: matchedName,
-							class: featureClass,
-							subclass: props['subclass'],
-							category: props['category'],
-							lng: lng,
-							lat: lat,
-							database: filename,
-							layer: sourceLayer,
-							zoom: zoomLevel,
-							tileX: x,
-							tileY: y
-						});
-					}
+					results.push({
+						id: fid,
+						names: names,
+						class: featureClass,
+						subclass: props['subclass'],
+						category: props['category'],
+						lng: lng,
+						lat: lat,
+						database: filename,
+						layer: sourceLayer,
+						zoom: zoomLevel,
+						tileX: x,
+						tileY: y
+					});
 				}
 			}
 		}

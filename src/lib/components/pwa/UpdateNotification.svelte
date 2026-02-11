@@ -1,25 +1,54 @@
-<!-- UpdateNotification.svelte -->
+<!-- Enhanced UpdateNotification.svelte -->
 <script lang="ts">
 	import { swManager } from '$lib/utils/service-worker-manager.svelte';
 	import { onMount } from 'svelte';
+	import { Z_INDEX } from '$lib/styles/z-index';
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 
 	let showUpdate = $state(false);
 	let isUpdating = $state(false);
 
+	// Auto-hide notification after 10 seconds if no action taken
+	let autoHideTimer: NodeJS.Timeout | null = null;
+
 	onMount(() => {
 		// Initialize service worker
 		swManager.init();
+	});
 
-		// Watch for updates
-		$effect(() => {
-			showUpdate = swManager.hasUpdate && !isUpdating;
-		});
+	// Watch for updates
+	$effect(() => {
+		showUpdate = swManager.hasUpdate && swManager.notificationsEnabled && !isUpdating;
+		isUpdating = swManager.isInstalling;
+
+		if (showUpdate) {
+			// Clear any existing timer
+			if (autoHideTimer) {
+				clearTimeout(autoHideTimer);
+			}
+
+			// Set auto-hide timer
+			autoHideTimer = setTimeout(() => {
+				swManager.dismissUpdate();
+			}, 10000);
+		}
+
+		return () => {
+			if (autoHideTimer) {
+				clearTimeout(autoHideTimer);
+				autoHideTimer = null;
+			}
+		};
 	});
 
 	async function applyUpdate() {
 		if (isUpdating) return; // Prevent multiple clicks
 
-		isUpdating = true;
+		if (autoHideTimer) {
+			clearTimeout(autoHideTimer);
+			autoHideTimer = null;
+		}
+
 		try {
 			await swManager.applyUpdate();
 		} catch (error) {
@@ -31,69 +60,94 @@
 	}
 
 	function dismissUpdate() {
+		if (autoHideTimer) {
+			clearTimeout(autoHideTimer);
+			autoHideTimer = null;
+		}
+		swManager.dismissUpdate();
 		showUpdate = false;
 	}
 </script>
 
 {#if showUpdate}
 	<div
-		class="fixed right-4 bottom-4 left-4 z-50 flex items-center justify-between rounded-lg bg-blue-600 p-4 text-white shadow-lg"
+		class="bg-background border-border shadow-popover rounded-card-lg fixed top-4 right-4 w-80 max-w-[calc(100vw-2rem)] border p-4"
+		style="z-index: {Z_INDEX.SW_UPDATE_NOTIFICATION}"
 		role="alert"
-		aria-live="assertive"
+		aria-live="polite"
+		aria-labelledby="update-title"
+		aria-describedby="update-description"
 	>
-		<div class="flex items-center gap-3">
-			<div class="flex-shrink-0">
+		<div class="flex items-start gap-3">
+			<div class="mt-0.5 flex-shrink-0">
 				{#if isUpdating}
-					<svg class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
-						></circle>
-						<path
-							class="opacity-75"
-							fill="currentColor"
-							d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-						></path>
-					</svg>
+					<div class="animate-spin">
+						<PropertyIcon key="description" value="loading" size={20} class="text-blue-500" />
+					</div>
 				{:else}
-					<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-						<path
-							fill-rule="evenodd"
-							d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-							clip-rule="evenodd"
-						/>
-					</svg>
+					<PropertyIcon key="description" value="download" size={20} class="text-blue-500" />
 				{/if}
 			</div>
-			<div>
-				<p class="font-medium">
+
+			<div class="min-w-0 flex-1">
+				<h3 id="update-title" class="text-foreground text-sm font-semibold">
 					{isUpdating ? 'Updating App...' : 'App Update Available'}
-				</p>
-				<p class="text-sm text-blue-100">
+				</h3>
+				<p id="update-description" class="text-muted-foreground mt-1 text-xs">
 					{isUpdating
 						? 'Please wait while we update your app'
-						: 'A new version of BuzPlanet is ready'}
+						: 'A new version is ready to install. You can install it now or postpone until your next visit.'}
 				</p>
+
+				<div class="mt-3 flex gap-2">
+					<button
+						onclick={applyUpdate}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								applyUpdate();
+							}
+						}}
+						class="rounded-md bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+						disabled={isUpdating}
+						aria-label="Install update now"
+					>
+						{isUpdating ? 'Installing...' : 'Install Now'}
+					</button>
+
+					{#if !isUpdating}
+						<button
+							onclick={dismissUpdate}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									dismissUpdate();
+								}
+							}}
+							class="rounded-md bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-200 focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 focus-visible:outline-none dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+							aria-label="Postpone update"
+						>
+							Later
+						</button>
+					{/if}
+				</div>
 			</div>
-		</div>
-		<div class="flex gap-2">
+
 			{#if !isUpdating}
 				<button
 					onclick={dismissUpdate}
-					class="rounded bg-transparent px-3 py-2 text-sm font-medium text-blue-100 transition-colors hover:bg-blue-700"
-					type="button"
-					aria-label="Dismiss update notification"
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							dismissUpdate();
+						}
+					}}
+					class="flex-shrink-0 rounded-sm text-gray-400 transition-colors hover:text-gray-600 focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 focus-visible:outline-none dark:text-gray-500 dark:hover:text-gray-400"
+					aria-label="Close notification"
 				>
-					Later
+					<PropertyIcon key="description" value="x" size={16} />
 				</button>
 			{/if}
-			<button
-				onclick={applyUpdate}
-				class="rounded bg-white px-4 py-2 font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-				type="button"
-				disabled={isUpdating}
-				aria-label={isUpdating ? 'Updating app...' : 'Apply app update'}
-			>
-				{isUpdating ? 'Updating...' : 'Update'}
-			</button>
 		</div>
 	</div>
 {/if}

@@ -8,28 +8,6 @@ import { createProtocolHandler } from '$lib/utils/map/protocol-handler';
 import { appState } from '$lib/stores/AppState.svelte';
 import maplibregl from 'maplibre-gl';
 
-export type InitializationStatus =
-	| 'pending'
-	| 'initializing'
-	| 'worker-ready'
-	| 'appstate-ready'
-	| 'protocol-ready'
-	| 'database-scanning'
-	| 'complete'
-	| 'error';
-
-export interface InitializationState {
-	status: InitializationStatus;
-	error?: string;
-	logs: string[];
-}
-
-export interface InitializationResult {
-	success: boolean;
-	error?: string;
-	workerInfo?: any;
-}
-
 class AppInitializer {
 	private initializationPromise: Promise<InitializationResult> | null = null;
 	private state: InitializationState = {

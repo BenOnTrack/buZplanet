@@ -1,6 +1,4 @@
 <script lang="ts">
-	import type { BookmarkList } from '$lib/stores/FeaturesDB.svelte';
-
 	let {
 		availableLists,
 		selectedListIds = $bindable([]),

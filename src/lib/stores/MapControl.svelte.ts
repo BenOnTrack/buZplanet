@@ -1,5 +1,4 @@
 import type { Map as MapStore, MapGeoJSONFeature, LngLatBoundsLike } from 'svelte-maplibre';
-import type { StoredFeature } from './FeaturesDB.svelte';
 
 /**
  * Map Control store for managing map interactions and selected features
@@ -376,29 +375,22 @@ class MapControl {
 	 * Create a MapGeoJSONFeature from a SearchResult
 	 * This creates a minimal but complete feature that can be bookmarked
 	 */
-	createMapFeatureFromSearchResult(searchResult: {
-		id: string;
-		name: string;
-		class: string;
-		subclass?: string;
-		category?: string;
-		lng: number;
-		lat: number;
-		database: string;
-		layer: string;
-		zoom?: number;
-		tileX?: number;
-		tileY?: number;
-	}): any {
+	createMapFeatureFromSearchResult(searchResult: SearchResult): any {
+		// Get the primary name from the names object
+		const primaryName =
+			searchResult.names['name:en'] ||
+			searchResult.names.name ||
+			Object.values(searchResult.names)[0] ||
+			'Unnamed';
+
 		// Create a completely clean, serializable GeoJSON feature
 		// Avoid any references that might not be cloneable by IndexedDB
 		const cleanFeature = {
 			id: String(searchResult.id), // Ensure string type
 			type: 'Feature' as const,
 			properties: {
-				// Primary name properties for display and search
-				name: String(searchResult.name || ''),
-				'name:en': String(searchResult.name || ''), // Default to same name for English
+				// Add all name variants from the names object
+				...searchResult.names,
 
 				// Classification properties (ensure strings or undefined)
 				class: searchResult.class ? String(searchResult.class) : undefined,
@@ -426,20 +418,7 @@ class MapControl {
 	/**
 	 * Select a search result (converts to MapGeoJSONFeature and selects)
 	 */
-	selectSearchResult(searchResult: {
-		id: string;
-		name: string;
-		class: string;
-		subclass?: string;
-		category?: string;
-		lng: number;
-		lat: number;
-		database: string;
-		layer: string;
-		zoom?: number;
-		tileX?: number;
-		tileY?: number;
-	}) {
+	selectSearchResult(searchResult: SearchResult) {
 		const mapFeature = this.createMapFeatureFromSearchResult(searchResult);
 		this.selectFeature(mapFeature);
 	}
@@ -448,20 +427,7 @@ class MapControl {
 	 * Zoom to and select a search result
 	 * This method both zooms to the location and triggers the selectedFeature
 	 */
-	zoomToAndSelectSearchResult(searchResult: {
-		id: string;
-		name: string;
-		class: string;
-		subclass?: string;
-		category?: string;
-		lng: number;
-		lat: number;
-		database: string;
-		layer: string;
-		zoom?: number;
-		tileX?: number;
-		tileY?: number;
-	}) {
+	zoomToAndSelectSearchResult(searchResult: SearchResult) {
 		// First zoom to the location
 		this.zoomToLocation(searchResult.lng, searchResult.lat, 16);
 

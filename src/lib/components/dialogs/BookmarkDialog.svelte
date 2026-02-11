@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { Dialog, Label, Separator } from 'bits-ui';
 	import Plus from 'phosphor-svelte/lib/Plus';
-	import BookmarkList from './BookmarkList.svelte';
-	import {
-		featuresDB,
-		type BookmarkList as BookmarkListType
-	} from '$lib/stores/FeaturesDB.svelte.js';
-	import PropertyIcon from '../ui/PropertyIcon.svelte';
+	import BookmarkListDialog from '$lib/components/dialogs/BookmarkList.svelte';
+	import { featuresDB } from '$lib/stores/FeaturesDB.svelte.js';
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+	import { Z_INDEX } from '$lib/styles/z-index';
 
 	let {
 		open = $bindable(false),
@@ -19,7 +17,7 @@
 	} = $props();
 
 	// Dialog state
-	let availableLists = $state<BookmarkListType[]>([]);
+	let availableLists = $state<BookmarkList[]>([]);
 	let selectedListIds = $state<Set<string>>(new Set());
 	let isLoading = $state(false);
 	let isSaving = $state(false);
@@ -82,7 +80,7 @@
 	}
 
 	// Handle new list creation
-	function handleListCreated(newList: BookmarkListType) {
+	function handleListCreated(newList: BookmarkList) {
 		// Add to available lists and sort by name
 		availableLists = [...availableLists, newList].sort((a, b) => a.name.localeCompare(b.name));
 		// Auto-select the new list
@@ -141,7 +139,7 @@
 	}
 
 	// Format list display
-	function formatListDisplay(list: BookmarkListType): string {
+	function formatListDisplay(list: BookmarkList): string {
 		if (list.category) {
 			return `${list.name} (${list.category})`;
 		}
@@ -160,10 +158,12 @@
 <Dialog.Root bind:open>
 	<Dialog.Portal>
 		<Dialog.Overlay
-			class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-[9999] bg-black/80"
+			class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 bg-black/80"
+			style="z-index: {Z_INDEX.DIALOG_OVERLAY}"
 		/>
 		<Dialog.Content
-			class="rounded-card-lg bg-background shadow-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-[10000] flex max-h-[80vh] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] flex-col border p-5 outline-hidden sm:max-w-[520px] md:w-full"
+			class="rounded-card-lg bg-background shadow-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] flex max-h-[80vh] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] flex-col border p-5 outline-hidden sm:max-w-[520px] md:w-full"
+			style="z-index: {Z_INDEX.DIALOG_CONTENT}"
 		>
 			<Dialog.Title
 				class="flex w-full items-center justify-center text-lg font-semibold tracking-tight"
@@ -304,4 +304,4 @@
 </Dialog.Root>
 
 <!-- Create List Dialog -->
-<BookmarkList bind:open={createListDialogOpen} onListCreated={handleListCreated} />
+<BookmarkListDialog bind:open={createListDialogOpen} onListCreated={handleListCreated} />

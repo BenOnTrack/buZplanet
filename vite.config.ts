@@ -68,43 +68,45 @@ export default defineConfig(({ mode }) => {
 			target: 'es2022',
 			commonjsOptions: {
 				transformMixedEsModules: true
-			},
-			// Optimize build performance and memory usage
-			chunkSizeWarningLimit: isProduction ? 500 : 1000,
-			// Minify in production only
-			minify: isProduction ? 'esbuild' : false,
-			rollupOptions: {
-				// Enable tree shaking
-				treeshake: {
-					moduleSideEffects: false
-				},
-				// Optimize chunking to reduce memory usage
-				output: {
-					// Manual chunks to keep worker code separate
-					manualChunks: isProduction
-						? (id) => {
-								// Keep worker code in separate chunks
-								if (id.includes('/worker/') || id.includes('?worker')) {
-									return 'worker';
-								}
-								// Keep large dependencies separate
-								if (id.includes('node_modules/maplibre-gl')) {
-									return 'maplibre';
-								}
-								if (id.includes('node_modules/@sqlite.org')) {
-									return 'sqlite';
-								}
-								if (id.includes('node_modules/svelte-maplibre')) {
-									return 'svelte-maplibre';
-								}
-								// Group other vendor dependencies
-								if (id.includes('node_modules')) {
-									return 'vendor';
-								}
-							}
-						: undefined
-				}
 			}
+			// // Optimize build performance and memory usage
+			// chunkSizeWarningLimit: isProduction ? 500 : 1000,
+			// // Minify in production only
+			// minify: isProduction ? 'esbuild' : false,
+			// // Better source maps for debugging
+			// sourcemap: isProduction ? false : 'inline',
+			// rollupOptions: {
+			// 	// Enable tree shaking
+			// 	treeshake: {
+			// 		moduleSideEffects: false
+			// 	},
+			// 	// Optimize chunking to reduce memory usage
+			// 	// output: {
+			// 	// 	// Manual chunks to keep worker code separate
+			// 	// 	manualChunks: isProduction
+			// 	// 		? (id) => {
+			// 	// 				// Keep worker code in separate chunks
+			// 	// 				if (id.includes('/worker/') || id.includes('?worker')) {
+			// 	// 					return 'worker';
+			// 	// 				}
+			// 	// 				// Keep large dependencies separate
+			// 	// 				if (id.includes('node_modules/maplibre-gl')) {
+			// 	// 					return 'maplibre';
+			// 	// 				}
+			// 	// 				if (id.includes('node_modules/@sqlite.org')) {
+			// 	// 					return 'sqlite';
+			// 	// 				}
+			// 	// 				if (id.includes('node_modules/svelte-maplibre')) {
+			// 	// 					return 'svelte-maplibre';
+			// 	// 				}
+			// 	// 				// Group other vendor dependencies
+			// 	// 				if (id.includes('node_modules')) {
+			// 	// 					return 'vendor';
+			// 	// 				}
+			// 	// 			}
+			// 	// 		: undefined
+			// 	// }
+			// }
 		},
 		// PWA configuration with version tracking
 		define: {

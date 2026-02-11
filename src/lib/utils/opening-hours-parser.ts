@@ -1,28 +1,3 @@
-export interface OpeningHoursSchedule {
-	originalText: string;
-	is24_7: boolean;
-	isClosed: boolean;
-	isUnknown: boolean;
-	days: {
-		monday: TimeSlot[];
-		tuesday: TimeSlot[];
-		wednesday: TimeSlot[];
-		thursday: TimeSlot[];
-		friday: TimeSlot[];
-		saturday: TimeSlot[];
-		sunday: TimeSlot[];
-	};
-	notes: string[];
-	comments: string[];
-	warnings: string[];
-	error?: string;
-}
-
-export interface TimeSlot {
-	start: number; // minutes from midnight (0-1439)
-	end: number; // minutes from midnight (0-1440, where 1440 = next day midnight)
-}
-
 export function parseOpeningHours(openingHours: string): OpeningHoursSchedule {
 	const result: OpeningHoursSchedule = {
 		originalText: openingHours.trim(),

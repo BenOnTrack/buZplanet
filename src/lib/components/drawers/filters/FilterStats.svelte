@@ -1,6 +1,4 @@
 <script lang="ts">
-	import type { StoredFeature } from '$lib/stores/FeaturesDB.svelte';
-
 	let {
 		features,
 		hasActiveFilters,

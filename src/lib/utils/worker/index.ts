@@ -1,5 +1,4 @@
 import Worker from './worker.ts?worker';
-import type { WorkerMessage, WorkerResponse } from './worker';
 
 export class WorkerManager {
 	private worker: Worker | null = null;

@@ -10,13 +10,8 @@
 	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { appInitializer } from '$lib/utils/app-initialization';
-	import { zIndexClass } from '$lib/styles/z-index.js';
+	import { Z_INDEX } from '$lib/styles/z-index.js';
 	import { onMount, onDestroy } from 'svelte';
-
-	// Import dev tools in development
-	if (import.meta.env.DEV) {
-		import('$lib/utils/worker/dev-tools');
-	}
 
 	// Initialization state
 	type InitState = {
@@ -198,7 +193,7 @@
 		<SettingsDialog />
 
 		<!-- Search Bar -->
-		<div class="search-bar-container {zIndexClass('SEARCH_BAR')}">
+		<div class="search-bar-container" style="z-index: {Z_INDEX.SEARCH_BAR}">
 			<SearchBar
 				bind:value={searchQuery}
 				onSearch={handleSearch}
@@ -229,7 +224,7 @@
 
 	<!-- Worker Debug Panel - only show in development when app is ready -->
 	{#if import.meta.env.DEV && isAppReady}
-		<div class="worker-debug-panel {zIndexClass('DEBUG_PANEL')}">
+		<div class="worker-debug-panel" style="z-index: {Z_INDEX.DEBUG_PANEL}">
 			<button
 				class="debug-toggle"
 				onclick={() => (showDebugPanel = !showDebugPanel)}

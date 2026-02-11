@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { Drawer } from 'vaul-svelte';
 	import { clsx } from 'clsx';
+	import { Tabs } from 'bits-ui';
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
-	import { featuresDB, type StoredFeature } from '$lib/stores/FeaturesDB.svelte.js';
+	import { featuresDB } from '$lib/stores/FeaturesDB.svelte.js';
 	import BookmarkDialog from '$lib/components/dialogs/BookmarkDialog.svelte';
 	import OpeningHoursDisplay from '$lib/components/ui/OpeningHoursDisplay.svelte';
-	import { zIndexClass } from '$lib/styles/z-index.js';
+	import { Z_INDEX } from '$lib/styles/z-index';
 	import type { MapGeoJSONFeature } from 'svelte-maplibre';
-	import PropertyIcon from '../ui/PropertyIcon.svelte';
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 
 	let {
 		open = $bindable(false),
@@ -21,6 +22,13 @@
 
 	// Handle drawer open/close changes
 	function handleOpenChange(newOpen: boolean) {
+		console.log('🔍 SelectedFeatureDrawer: Open state changed:', {
+			newOpen,
+			feature,
+			hasFeature,
+			activeTab,
+			featureProperties: feature?.properties
+		});
 		// Update the bindable open prop directly
 		open = newOpen;
 		// Call parent callback if provided
@@ -29,7 +37,7 @@
 		}
 	}
 	let activeSnapPoint = $state<string | number>('200px');
-
+	let activeTab = $state('info');
 	// Derived values for display
 	let hasFeature = $derived(feature !== null && feature !== undefined);
 
@@ -50,8 +58,20 @@
 	// Also reset state when feature becomes null
 	$effect(() => {
 		if (feature) {
+			console.log('🔍 SelectedFeatureDrawer: Feature changed:', {
+				feature,
+				properties: feature.properties,
+				hasProperties: !!feature.properties,
+				propertyKeys: feature.properties ? Object.keys(feature.properties) : [],
+				hasWebsite: !!feature.properties?.website,
+				hasPhone: !!feature.properties?.phone,
+				hasOpeningHours: !!feature.properties?.opening_hours,
+				hasInternetAccess: !!feature.properties?.internet_access,
+				hasType: !!feature.properties?.type
+			});
 			updateFeatureStatus();
 		} else {
+			console.log('🔍 SelectedFeatureDrawer: Feature cleared');
 			// Reset state when no feature is selected
 			featureStatus.bookmarked = false;
 			featureStatus.listIds = [];
@@ -405,14 +425,13 @@
 	modal={false}
 >
 	<Drawer.Overlay
-		class="fixed inset-0 {zIndexClass('SELECTED_FEATURE_DRAWER_OVERLAY')} bg-black/40"
-		style="pointer-events: none; z-index: 90 !important;"
+		class="fixed inset-0 bg-black/40"
+		style="pointer-events: none;z-index: {Z_INDEX.DRAWER_OVERLAY}"
 	/>
 	<Drawer.Portal>
 		<Drawer.Content
-			class="border-b-none fixed right-0 bottom-0 left-0 {zIndexClass(
-				'SELECTED_FEATURE_DRAWER_CONTENT'
-			)} mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class="border-b-none fixed right-0 bottom-0 left-0 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
 		>
 			<div
 				class={clsx('flex w-full flex-col p-4 pt-5', {
@@ -422,7 +441,7 @@
 			>
 				<div class="mb-4 flex items-center justify-between">
 					<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
-						<span>📍</span>
+						<PropertyIcon key={'category'} value={feature?.properties.category} size={20} />
 						{#if hasFeature}
 							{getDisplayName(feature)}
 						{:else}
@@ -570,113 +589,125 @@
 							</div>
 
 							<!-- Feature details -->
-							{#if feature}
-								<div class="space-y-2 text-sm">
-									{#if feature.properties?.opening_hours}
-										<OpeningHoursDisplay
-											openingHours={feature.properties.opening_hours}
-											showCurrentStatus={true}
-										/>
-									{/if}
-									{#if feature.properties?.website}
-										{@const formattedUrl = formatWebsiteUrl(feature.properties.website)}
-										<p class="text-gray-600">
-											<strong>Website:</strong>
-											<a
-												href={formattedUrl}
-												target="_blank"
-												rel="noopener noreferrer"
-												class="ml-1 text-blue-600 underline hover:text-blue-800"
-											>
-												{feature.properties.website}
-											</a>
-											<span class="ml-1 text-xs">🔗</span>
-										</p>
-									{/if}
-									{#if feature.properties?.phone}
-										<p class="text-gray-600">
-											<strong>Phone:</strong>
-											<a
-												href="tel:{feature.properties.phone}"
-												class="ml-1 text-blue-600 hover:text-blue-800"
-											>
-												{formatPhoneNumber(feature.properties.phone)}
-											</a>
-											<span class="ml-1 text-xs">📞</span>
-										</p>
-									{/if}
-									{#if feature.properties?.internet_access}
-										{@const wifiInfo = formatWifiStatus(feature.properties.internet_access)}
-										<p class="text-gray-600">
-											<strong>WiFi:</strong>
-											<span class={wifiInfo.hasWifi ? 'text-green-600' : 'text-gray-500'}>
-												{wifiInfo.description}
-											</span>
-											<span class="ml-1 text-xs">{wifiInfo.hasWifi ? '📶' : '📵'}</span>
-										</p>
-									{/if}
-									{#if feature.properties?.type}
-										<p class="text-gray-600"><strong>Type:</strong> {feature.properties.type}</p>
-									{/if}
-									{#if featureStatus.visitedDates.length > 0}
-										<div class="text-gray-600">
-											<div class="flex items-center justify-between">
-												<p>
-													<strong>Visits:</strong>
-													{formatVisitDates(featureStatus.visitedDates)}
-												</p>
-												{#if featureStatus.visitedDates.length > 1}
-													<button
-														class="rounded text-xs text-blue-600 underline hover:text-blue-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-														onclick={() => (visitHistoryExpanded = !visitHistoryExpanded)}
-														onkeydown={(e) => {
-															if (e.key === 'Enter' || e.key === ' ') {
-																e.preventDefault();
-																visitHistoryExpanded = !visitHistoryExpanded;
-															}
-														}}
-														aria-expanded={visitHistoryExpanded}
-													>
-														{visitHistoryExpanded ? 'Hide details' : 'Manage visits'}
-													</button>
-												{/if}
-											</div>
+							<Tabs.Root bind:value={activeTab} class="w-full">
+								<Tabs.List class="grid w-full grid-cols-2 gap-1 rounded-md bg-gray-100 p-1">
+									<Tabs.Trigger
+										value="info"
+										class="rounded-sm py-2 text-sm font-medium transition-colors data-[state=active]:bg-white data-[state=active]:shadow-sm"
+									>
+										Info
+									</Tabs.Trigger>
+									<Tabs.Trigger
+										value="visits"
+										class="rounded-sm py-2 text-sm font-medium transition-colors data-[state=active]:bg-white data-[state=active]:shadow-sm"
+									>
+										Visits
+									</Tabs.Trigger>
+								</Tabs.List>
 
-											{#if visitHistoryExpanded && featureStatus.visitedDates.length > 0}
-												<div class="mt-3 space-y-2">
-													<h4 class="text-sm font-medium text-gray-700">Visit History:</h4>
-													<div class="max-h-32 space-y-2 overflow-y-auto">
-														{#each getSortedVisits(featureStatus.visitedDates) as visitTimestamp, index}
-															<div
-																class="flex items-center justify-between rounded bg-gray-50 px-2 py-1 text-xs"
-															>
-																<span class="text-gray-700">
-																	{formatVisitDateTime(visitTimestamp)}
-																</span>
-																<button
-																	class="rounded px-1 text-red-500 hover:text-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
-																	onclick={() => handleRemoveVisit(feature, visitTimestamp)}
-																	onkeydown={(e) => {
-																		if (e.key === 'Enter' || e.key === ' ') {
-																			e.preventDefault();
-																			handleRemoveVisit(feature, visitTimestamp);
-																		}
-																	}}
-																	disabled={featureStatus.loading}
-																	title="Remove this visit"
-																	aria-label={`Remove visit from ${formatVisitDateTime(visitTimestamp)}`}
-																>
-																	🗑️
-																</button>
-															</div>
-														{/each}
-													</div>
-												</div>
+								<Tabs.Content value="info" class="mt-4">
+									{#if feature}
+										<div class="space-y-2 text-sm">
+											{#if feature.properties?.opening_hours}
+												<OpeningHoursDisplay
+													openingHours={feature.properties.opening_hours}
+													showCurrentStatus={true}
+												/>
+											{/if}
+											{#if feature.properties?.website}
+												{@const formattedUrl = formatWebsiteUrl(feature.properties.website)}
+												<p class="text-gray-600">
+													<strong>Website:</strong>
+													<a
+														href={formattedUrl}
+														target="_blank"
+														rel="noopener noreferrer"
+														class="ml-1 text-blue-600 underline hover:text-blue-800"
+													>
+														{feature.properties.website}
+													</a>
+													<span class="ml-1 text-xs">🔗</span>
+												</p>
+											{/if}
+											{#if feature.properties?.phone}
+												<p class="text-gray-600">
+													<strong>Phone:</strong>
+													<a
+														href="tel:{feature.properties.phone}"
+														class="ml-1 text-blue-600 hover:text-blue-800"
+													>
+														{formatPhoneNumber(feature.properties.phone)}
+													</a>
+													<span class="ml-1 text-xs">📞</span>
+												</p>
+											{/if}
+											{#if feature.properties?.internet_access}
+												{@const wifiInfo = formatWifiStatus(feature.properties.internet_access)}
+												<p class="text-gray-600">
+													<strong>WiFi:</strong>
+													<span class={wifiInfo.hasWifi ? 'text-green-600' : 'text-gray-500'}>
+														{wifiInfo.description}
+													</span>
+													<span class="ml-1 text-xs">{wifiInfo.hasWifi ? '📶' : '📵'}</span>
+												</p>
+											{/if}
+											{#if feature.properties?.type}
+												<p class="text-gray-600">
+													<strong>Type:</strong>
+													{feature.properties.type}
+												</p>
 											{/if}
 										</div>
 									{/if}
-								</div>
-							{/if}
+								</Tabs.Content>
+
+								<Tabs.Content value="visits" class="mt-4">
+									<div class="space-y-3">
+										<!-- Visit history -->
+										{#if featureStatus.visitedDates.length > 0}
+											<div class="space-y-2">
+												<h4 class="text-sm font-medium text-gray-700">
+													Visit History ({featureStatus.visitedDates.length}):
+												</h4>
+												<div class="max-h-48 space-y-2 overflow-y-auto">
+													{#each getSortedVisits(featureStatus.visitedDates) as visitTimestamp}
+														<div
+															class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm"
+														>
+															<span class="text-gray-700">
+																{formatVisitDateTime(visitTimestamp)}
+															</span>
+															<button
+																class="rounded px-2 py-1 text-red-500 hover:bg-red-50 hover:text-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
+																onclick={() => handleRemoveVisit(feature, visitTimestamp)}
+																onkeydown={(e) => {
+																	if (e.key === 'Enter' || e.key === ' ') {
+																		e.preventDefault();
+																		handleRemoveVisit(feature, visitTimestamp);
+																	}
+																}}
+																disabled={featureStatus.loading}
+																title="Remove this visit"
+																aria-label={`Remove visit from ${formatVisitDateTime(visitTimestamp)}`}
+															>
+																🗑️
+															</button>
+														</div>
+													{/each}
+												</div>
+											</div>
+										{:else if featureStatus.bookmarked}
+											<div class="py-4 text-center text-sm text-gray-500">
+												No visits recorded yet. Add your first visit above!
+											</div>
+										{:else}
+											<div class="py-4 text-center text-sm text-gray-500">
+												Bookmark this feature to start tracking visits.
+											</div>
+										{/if}
+									</div>
+								</Tabs.Content>
+							</Tabs.Root>
 						</div>
 					{:else}
 						<div class="py-8 text-center">

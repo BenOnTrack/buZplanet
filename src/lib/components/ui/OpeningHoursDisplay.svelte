@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { OpeningHoursSchedule } from '$lib/utils/opening-hours-parser.js';
 	import { parseOpeningHours } from '$lib/utils/opening-hours-parser.js';
 
 	type DayName = keyof OpeningHoursSchedule['days'];

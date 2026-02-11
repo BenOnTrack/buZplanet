@@ -1,5 +1,4 @@
 // Worker client for interacting with the SQLite worker
-import type { WorkerMessage, WorkerResponse } from './worker.ts';
 
 export class SqliteWorkerClient {
 	private worker: Worker;
