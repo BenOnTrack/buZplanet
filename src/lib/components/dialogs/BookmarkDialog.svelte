@@ -81,12 +81,18 @@
 
 	// Handle new list creation
 	function handleListCreated(newList: BookmarkList) {
+		console.log('New list created in BookmarkDialog:', newList);
 		// Add to available lists and sort by name
 		availableLists = [...availableLists, newList].sort((a, b) => a.name.localeCompare(b.name));
 		// Auto-select the new list
 		selectedListIds = new Set([...selectedListIds, newList.id]);
 		// Close create list dialog
 		createListDialogOpen = false;
+		console.log(
+			'Updated availableLists:',
+			availableLists.map((l) => l.name)
+		);
+		console.log('Updated selectedListIds:', Array.from(selectedListIds));
 	}
 
 	// Save bookmark changes

@@ -72,7 +72,21 @@
 			isSubmitting = true;
 
 			// Import featuresDB here to avoid circular imports
-			const { featuresDB } = await import('$lib/stores/FeaturesDB.svelte.js');
+			const { featuresDB } = await import('$lib/stores/FeaturesDB.svelte.ts');
+
+			// Ensure database is initialized
+			await featuresDB.ensureInitialized();
+
+			console.log('Creating bookmark list with data:', {
+				name: formData.name.trim(),
+				description: formData.description.trim() || undefined,
+				category: formData.category.trim() || undefined,
+				color: formData.color
+			});
+
+			// Debug: Check if database is properly initialized
+			const debugInfo = featuresDB.getDebugInfo();
+			console.log('FeaturesDB debug info:', debugInfo);
 
 			const newList = await featuresDB.createBookmarkList({
 				name: formData.name.trim(),
@@ -81,6 +95,20 @@
 				color: formData.color
 			});
 
+			console.log('Successfully created bookmark list:', newList);
+
+			// Debug: Verify the list was stored by trying to retrieve it
+			try {
+				const retrievedList = await featuresDB.getBookmarkListById(newList.id);
+				console.log('Retrieved list after creation:', retrievedList);
+
+				const allLists = await featuresDB.getAllBookmarkLists();
+				console.log('All lists after creation:', allLists);
+				console.log('Updated debug info:', featuresDB.getDebugInfo());
+			} catch (debugError) {
+				console.error('Debug retrieval failed:', debugError);
+			}
+
 			// Notify parent component
 			onListCreated?.(newList);
 
@@ -88,6 +116,12 @@
 			open = false;
 		} catch (error) {
 			console.error('Failed to create bookmark list:', error);
+			// Show user-friendly error message
+			if (error instanceof Error) {
+				formErrors.name = `Failed to create list: ${error.message}`;
+			} else {
+				formErrors.name = 'Failed to create list. Please try again.';
+			}
 		} finally {
 			isSubmitting = false;
 		}
@@ -142,7 +176,9 @@
 						disabled={isSubmitting}
 					/>
 					{#if formErrors.name}
-						<span class="text-sm text-red-500">{formErrors.name}</span>
+						<div class="mt-2 rounded-md bg-red-50 p-3">
+							<div class="text-sm text-red-600">{formErrors.name}</div>
+						</div>
 					{/if}
 				</div>
 

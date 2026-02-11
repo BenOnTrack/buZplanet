@@ -818,8 +818,9 @@ class FeaturesDB {
 		// Validate timestamp
 		if (!timestamp || isNaN(timestamp)) return [];
 
-		const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
-		const store = transaction.objectStore(this.STORE_NAME);
+		// Use the correct store name
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readonly');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 		const index = store.index(this.INDEX_VISITED);
 
 		return new Promise((resolve, reject) => {
@@ -1222,6 +1223,8 @@ class FeaturesDB {
 		const now = Date.now();
 		const listId = `list-${now}-${Math.random().toString(36).substr(2, 9)}`;
 
+		console.log(`Creating bookmark list for user ${userId}:`, listData);
+
 		const bookmarkList: BookmarkList = {
 			userId, // Add userId to bookmark list
 			id: listId,
@@ -1235,20 +1238,32 @@ class FeaturesDB {
 			lastSyncTimestamp: now // Track for sync
 		};
 
+		console.log('Created bookmark list object:', bookmarkList);
+
 		const transaction = this.db.transaction([this.LISTS_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.LISTS_STORE_NAME);
 
 		await new Promise<void>((resolve, reject) => {
 			const request = store.put(bookmarkList);
-			request.onsuccess = () => resolve();
-			request.onerror = () => reject(request.error);
+			request.onsuccess = () => {
+				console.log('Successfully stored bookmark list in IndexedDB');
+				resolve();
+			};
+			request.onerror = () => {
+				console.error('Failed to store bookmark list in IndexedDB:', request.error);
+				reject(request.error);
+			};
 		});
 
 		await this.updateStats();
+		console.log('Updated stats after creating list');
 
 		// Sync to Firestore if online
 		if (this.isOnline && this.currentUser) {
+			console.log('Syncing new bookmark list to Firestore...');
 			this.syncBookmarkListToFirestore(bookmarkList);
+		} else {
+			console.log('Skipping Firestore sync - offline or not authenticated');
 		}
 
 		return bookmarkList;
@@ -1453,8 +1468,9 @@ class FeaturesDB {
 		// Validate listId
 		if (!listId) return [];
 
-		const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
-		const store = transaction.objectStore(this.STORE_NAME);
+		// Use the correct store name (FEATURES_STORE_NAME not STORE_NAME)
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readonly');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 		const index = store.index(this.INDEX_LIST_IDS);
 
 		return new Promise((resolve, reject) => {
@@ -1534,7 +1550,8 @@ class FeaturesDB {
 				orderBy('dateModified', 'desc')
 			);
 
-			this.firestoreUnsubscribe = onSnapshot(
+			// Subscribe to features changes
+			const featuresUnsubscribe = onSnapshot(
 				featuresQuery,
 				(snapshot) => this.handleFirestoreSnapshot(snapshot, 'features'),
 				(error) => {
@@ -1543,8 +1560,23 @@ class FeaturesDB {
 				}
 			);
 
-			// TODO: Also listen to lists - for now just sync features
-			// We can add a second listener for lists later
+			// Subscribe to lists changes
+			const listsUnsubscribe = onSnapshot(
+				listsQuery,
+				(snapshot) => this.handleFirestoreSnapshot(snapshot, 'lists'),
+				(error) => {
+					console.error('Firestore lists sync error:', error);
+					this.isSyncing = false;
+				}
+			);
+
+			// Store both unsubscribe functions
+			this.firestoreUnsubscribe = () => {
+				featuresUnsubscribe();
+				listsUnsubscribe();
+			};
+
+			console.log('Started Firestore sync for both features and lists');
 
 			// Initial sync
 			this.performInitialSync();
@@ -1873,13 +1905,17 @@ class FeaturesDB {
 	 * Sync bookmark list to Firestore with retry logic
 	 */
 	private async syncBookmarkListToFirestore(list: BookmarkList, retryCount = 0): Promise<void> {
-		if (!this.currentUser || !this.isOnline) return;
+		if (!this.currentUser || !this.isOnline) {
+			console.log('Skipping bookmark list sync - not authenticated or offline');
+			return;
+		}
 
 		const MAX_RETRIES = 3;
 		const RETRY_DELAY = 1000; // 1 second
 
 		try {
 			const userId = this.currentUser.uid;
+			console.log(`Syncing bookmark list ${list.id} to Firestore for user ${userId}`);
 
 			// Clean list data for Firestore (remove undefined values)
 			const cleanList = this.cleanForFirestore({
@@ -1887,6 +1923,8 @@ class FeaturesDB {
 				serverTimestamp: serverTimestamp(),
 				lastSyncTimestamp: Date.now()
 			});
+
+			console.log('Clean list data for Firestore:', cleanList);
 
 			// Use list ID as Firestore document ID
 			const docRef = doc(db, 'users', userId, 'lists', list.id);
@@ -1982,15 +2020,28 @@ class FeaturesDB {
 		const userId = this.currentUser.uid;
 		const lastSync = await this.getLastSyncTimestamp();
 
-		// Query for features modified since last sync
-		const featuresQuery = query(
-			collection(db, 'users', userId, 'features'),
-			where('dateModified', '>', lastSync),
-			orderBy('dateModified', 'asc')
-		);
+		try {
+			// Query for features modified since last sync
+			const featuresQuery = query(
+				collection(db, 'users', userId, 'features'),
+				where('dateModified', '>', lastSync),
+				orderBy('dateModified', 'asc')
+			);
 
-		// This will be handled by the snapshot listener
-		// We just trigger it here for initial download
+			// Query for lists modified since last sync
+			const listsQuery = query(
+				collection(db, 'users', userId, 'lists'),
+				where('dateModified', '>', lastSync),
+				orderBy('dateModified', 'asc')
+			);
+
+			console.log('Downloading remote changes since:', new Date(lastSync));
+
+			// The snapshot listeners will handle the actual downloads
+			// This method just sets up the queries for initial sync
+		} catch (error) {
+			console.error('Failed to set up download queries:', error);
+		}
 	}
 
 	/**
@@ -2175,6 +2226,23 @@ class FeaturesDB {
 		} catch (error) {
 			console.error('Failed to delete bookmark list from Firestore:', error);
 		}
+	}
+
+	/**
+	 * Debug method to check current user and database state
+	 */
+	getDebugInfo(): {
+		userId: string;
+		initialized: boolean;
+		stats: any;
+		hasDatabase: boolean;
+	} {
+		return {
+			userId: this.getCurrentUserId(),
+			initialized: this.isInitialized,
+			stats: this._stats,
+			hasDatabase: !!this.db
+		};
 	}
 
 	/**
