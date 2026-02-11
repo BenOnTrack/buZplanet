@@ -246,11 +246,10 @@ https://developers.cloudflare.com/workers/static-assets/migration-guides/migrate
 
 To Fix
 
-- Error in Search Results
-- Z-index check
 - set tables in drawers to be mobile responsive
 
 To Build
 
+- click on row triggers a sub-drawer with details and map
 - click on class subclass or category and update the table
 - Add Stories

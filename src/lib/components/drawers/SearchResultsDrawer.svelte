@@ -570,6 +570,11 @@
 								showHeader={true}
 								showListsColumn={true}
 								showTypesColumn={true}
+								bind:selectedTypes
+								bind:selectedListIds
+								bind:selectedClasses
+								bind:selectedSubclasses
+								bind:selectedCategories
 							/>
 
 							<!-- Search status below table -->
@@ -613,23 +618,17 @@
 						<p class="mt-1 text-sm">Search through all your local map data</p>
 					</div>
 				{:else}
-					<!-- Header instruction -->
-					<div class="mb-3 flex items-center justify-between">
-						<p class="text-xs text-gray-600">
-							Click any row to zoom to and select the feature on the map
-						</p>
-						<div class="flex items-center gap-1 text-xs text-gray-500">
-							<span>🔍</span>
-							<span>Clickable rows</span>
-						</div>
-					</div>
-
 					<FeaturesTable
 						features={finalFilteredResults}
 						onRowClick={handleResultRowClick}
 						showHeader={true}
 						showListsColumn={true}
 						showTypesColumn={true}
+						bind:selectedTypes
+						bind:selectedListIds
+						bind:selectedClasses
+						bind:selectedSubclasses
+						bind:selectedCategories
 					/>
 
 					{#if results.length > 0}

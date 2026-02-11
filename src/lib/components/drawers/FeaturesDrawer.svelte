@@ -561,6 +561,11 @@
 						showHeader={true}
 						showListsColumn={true}
 						showTypesColumn={true}
+						bind:selectedTypes
+						bind:selectedListIds
+						bind:selectedClasses
+						bind:selectedSubclasses
+						bind:selectedCategories
 					/>
 
 					{#if featuresDB.stats.total > 0}
