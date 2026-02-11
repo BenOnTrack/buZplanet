@@ -1,7 +1,7 @@
 <script lang="ts">
 	import MapView from '$lib/components/map/MapView.svelte';
 	import BottomNavigation from '$lib/components/nav/BottomNavigation.svelte';
-	import AuthDialog from '$lib/components/nav/AuthDialog.svelte';
+	import AuthDialog from '$lib/components/dialogs/AuthDialog.svelte';
 	import FileManagerDialog from '$lib/components/nav/FileManagerDialog.svelte';
 	import SettingsDialog from '$lib/components/nav/SettingsDialog.svelte';
 	import LoadingScreen from '$lib/components/LoadingScreen.svelte';

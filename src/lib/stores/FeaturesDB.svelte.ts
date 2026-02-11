@@ -1,4 +1,24 @@
 import { browser } from '$app/environment';
+import { user } from '$lib/stores/auth';
+import { db } from '$lib/firebase';
+import type { User } from 'firebase/auth';
+import {
+	collection,
+	doc,
+	getDoc,
+	setDoc,
+	deleteDoc,
+	query,
+	where,
+	onSnapshot,
+	serverTimestamp,
+	Timestamp,
+	orderBy,
+	limit as firestoreLimit,
+	type DocumentData,
+	type QuerySnapshot,
+	type Unsubscribe
+} from 'firebase/firestore';
 
 /**
  * Features Database management class using Svelte 5 runes
@@ -6,11 +26,14 @@ import { browser } from '$app/environment';
  * Optimized for quick querying across all searchable fields
  */
 class FeaturesDB {
-	// Storage configuration
+	// Storage configuration - now with Firestore sync
 	private readonly DB_NAME = 'FeaturesDB';
-	private readonly DB_VERSION = 2; // Incremented for bookmark lists
-	private readonly STORE_NAME = 'features';
-	private readonly LISTS_STORE_NAME = 'bookmarkLists';
+	private readonly DB_VERSION = 4; // Incremented for sync capabilities
+	private readonly FEATURES_STORE_NAME = 'userFeatures';
+	private readonly LISTS_STORE_NAME = 'userBookmarkLists';
+	private readonly SYNC_STORE_NAME = 'syncMetadata';
+	private readonly STORE_NAME = 'userFeatures'; // Alias for backward compatibility
+	private readonly INDEX_USER_ID = 'userId';
 	private readonly INDEX_SEARCH = 'searchText';
 	private readonly INDEX_BOOKMARKED = 'bookmarked';
 	private readonly INDEX_VISITED = 'visitedDates';
@@ -19,10 +42,20 @@ class FeaturesDB {
 	private readonly INDEX_CATEGORY = 'category';
 	private readonly INDEX_SOURCE = 'source';
 	private readonly INDEX_LIST_IDS = 'listIds';
+	private readonly INDEX_LAST_SYNC = 'lastSync';
 
 	private db: IDBDatabase | null = null;
 	private isInitialized = $state(false);
 	private initPromise: Promise<void> | null = null;
+	private currentUser: User | null = null;
+	private userUnsubscribe: (() => void) | null = null;
+
+	// Firestore sync state
+	private firestoreUnsubscribe: Unsubscribe | null = null;
+	private isSyncing = $state(false);
+	private isOnline = $state(navigator?.onLine ?? true);
+	private syncConflicts = $state<SyncConflict[]>([]);
+	private lastSyncTimestamp = $state<number>(0);
 
 	// Reactive state for features count and stats
 	private _stats = $state({
@@ -38,7 +71,44 @@ class FeaturesDB {
 
 	constructor() {
 		if (browser) {
-			this.initializeDatabase();
+			// Listen to online/offline events
+			window.addEventListener('online', () => {
+				this.isOnline = true;
+				if (this.currentUser) {
+					this.startFirestoreSync();
+				}
+			});
+
+			window.addEventListener('offline', () => {
+				this.isOnline = false;
+				this.stopFirestoreSync();
+			});
+
+			// Subscribe to auth state changes
+			this.userUnsubscribe = user.subscribe(async (currentUser) => {
+				const previousUser = this.currentUser;
+				this.currentUser = currentUser;
+
+				// If user changed, reinitialize storage for new user
+				if (previousUser?.uid !== currentUser?.uid) {
+					this.stopFirestoreSync(); // Stop previous user's sync
+					this.isInitialized = false;
+					this.initPromise = null;
+
+					// Reset stats when user changes
+					this._stats = { total: 0, bookmarked: 0, visited: 0, todo: 0, lists: 0 };
+					this._bookmarksVersion++;
+					this.syncConflicts = [];
+					this.lastSyncTimestamp = 0;
+
+					await this.initializeDatabase();
+
+					// Start sync for new authenticated user
+					if (currentUser && this.isOnline) {
+						this.startFirestoreSync();
+					}
+				}
+			});
 		} else {
 			this.isInitialized = true;
 		}
@@ -56,6 +126,30 @@ class FeaturesDB {
 	// Reactive trigger for bookmark changes
 	get bookmarksVersion(): number {
 		return this._bookmarksVersion;
+	}
+
+	// Sync status getters
+	get syncing(): boolean {
+		return this.isSyncing;
+	}
+
+	get online(): boolean {
+		return this.isOnline;
+	}
+
+	get conflicts(): SyncConflict[] {
+		return this.syncConflicts;
+	}
+
+	get lastSync(): number {
+		return this.lastSyncTimestamp;
+	}
+
+	/**
+	 * Get current user ID or 'anonymous' if not logged in
+	 */
+	private getCurrentUserId(): string {
+		return this.currentUser?.uid || 'anonymous';
 	}
 
 	/**
@@ -95,7 +189,7 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Open IndexedDB with proper indexes for efficient querying
+	 * Open IndexedDB with proper indexes for efficient querying - user-based
 	 */
 	private openDatabase(): Promise<IDBDatabase> {
 		if (!browser || typeof indexedDB === 'undefined') {
@@ -112,24 +206,55 @@ class FeaturesDB {
 				const db = (event.target as IDBOpenDBRequest).result;
 				const oldVersion = event.oldVersion;
 
-				// Create features object store
-				let featuresStore: IDBObjectStore;
-				if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-					featuresStore = db.createObjectStore(this.STORE_NAME, { keyPath: 'id' });
-				} else {
-					featuresStore = request.transaction!.objectStore(this.STORE_NAME);
+				// Clean slate for sync-enabled storage - remove old stores
+				if (oldVersion < 4) {
+					if (db.objectStoreNames.contains('features')) {
+						db.deleteObjectStore('features');
+					}
+					if (db.objectStoreNames.contains('bookmarkLists')) {
+						db.deleteObjectStore('bookmarkLists');
+					}
+					if (db.objectStoreNames.contains('userFeatures')) {
+						db.deleteObjectStore('userFeatures');
+					}
+					if (db.objectStoreNames.contains('userBookmarkLists')) {
+						db.deleteObjectStore('userBookmarkLists');
+					}
 				}
 
-				// Create bookmark lists object store
+				// Create user features object store
+				let featuresStore: IDBObjectStore;
+				if (!db.objectStoreNames.contains(this.FEATURES_STORE_NAME)) {
+					featuresStore = db.createObjectStore(this.FEATURES_STORE_NAME, {
+						keyPath: ['userId', 'id'] // Compound key: userId + featureId
+					});
+				} else {
+					featuresStore = request.transaction!.objectStore(this.FEATURES_STORE_NAME);
+				}
+
+				// Create user bookmark lists object store
 				let listsStore: IDBObjectStore;
 				if (!db.objectStoreNames.contains(this.LISTS_STORE_NAME)) {
-					listsStore = db.createObjectStore(this.LISTS_STORE_NAME, { keyPath: 'id' });
+					listsStore = db.createObjectStore(this.LISTS_STORE_NAME, {
+						keyPath: ['userId', 'id'] // Compound key: userId + listId
+					});
 				} else {
 					listsStore = request.transaction!.objectStore(this.LISTS_STORE_NAME);
 				}
 
+				// Create sync metadata store
+				let syncStore: IDBObjectStore;
+				if (!db.objectStoreNames.contains(this.SYNC_STORE_NAME)) {
+					syncStore = db.createObjectStore(this.SYNC_STORE_NAME, {
+						keyPath: 'userId'
+					});
+				} else {
+					syncStore = request.transaction!.objectStore(this.SYNC_STORE_NAME);
+				}
+
 				// Create indexes for features store
 				const featureIndexesToCreate = [
+					{ name: this.INDEX_USER_ID, keyPath: 'userId', options: { unique: false } },
 					{ name: this.INDEX_SEARCH, keyPath: 'searchText', options: { unique: false } },
 					{ name: this.INDEX_BOOKMARKED, keyPath: 'bookmarked', options: { unique: false } },
 					{
@@ -145,7 +270,8 @@ class FeaturesDB {
 						name: this.INDEX_LIST_IDS,
 						keyPath: 'listIds',
 						options: { unique: false, multiEntry: true }
-					}
+					},
+					{ name: this.INDEX_LAST_SYNC, keyPath: 'lastSyncTimestamp', options: { unique: false } }
 				];
 
 				featureIndexesToCreate.forEach(({ name, keyPath, options }) => {
@@ -154,22 +280,17 @@ class FeaturesDB {
 					}
 				});
 
-				// Migrate existing features to include listIds if upgrading from version 1
-				if (oldVersion < 2) {
-					// Add listIds array to existing features
-					const cursor = featuresStore.openCursor();
-					cursor.onsuccess = (event) => {
-						const cursor = (event.target as IDBRequest).result;
-						if (cursor) {
-							const feature = cursor.value;
-							if (!feature.listIds) {
-								feature.listIds = [];
-								cursor.update(feature);
-							}
-							cursor.continue();
-						}
-					};
-				}
+				// Create indexes for lists store
+				const listsIndexesToCreate = [
+					{ name: this.INDEX_USER_ID, keyPath: 'userId', options: { unique: false } },
+					{ name: this.INDEX_LAST_SYNC, keyPath: 'lastSyncTimestamp', options: { unique: false } }
+				];
+
+				listsIndexesToCreate.forEach(({ name, keyPath, options }) => {
+					if (!listsStore.indexNames.contains(name)) {
+						listsStore.createIndex(name, keyPath, options);
+					}
+				});
 			};
 		});
 	}
@@ -243,7 +364,7 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Store or update a feature
+	 * Store or update a feature for current user with Firestore sync
 	 */
 	async storeFeature(
 		mapFeature: any,
@@ -252,10 +373,11 @@ class FeaturesDB {
 		await this.ensureInitialized();
 		if (!this.db) throw new Error('Database not initialized');
 
+		const userId = this.getCurrentUserId();
 		const featureId = this.getFeatureId(mapFeature);
 		const names = this.extractNames(mapFeature.properties);
 
-		// Check if feature already exists
+		// Check if feature already exists for this user
 		const existingFeature = await this.getFeatureById(featureId);
 		const now = Date.now();
 
@@ -264,6 +386,7 @@ class FeaturesDB {
 			existingFeature?.bookmarked || action === 'bookmark' || action === 'visited';
 
 		const storedFeature: StoredFeature = {
+			userId, // Add userId to stored feature
 			id: featureId,
 			class: mapFeature.properties?.class,
 			subclass: mapFeature.properties?.subclass,
@@ -285,6 +408,7 @@ class FeaturesDB {
 
 			dateCreated: existingFeature?.dateCreated || now,
 			dateModified: now,
+			lastSyncTimestamp: now, // Track for sync
 
 			searchText: '' // Will be set below
 		};
@@ -293,8 +417,8 @@ class FeaturesDB {
 		storedFeature.searchText = this.generateSearchText(storedFeature);
 
 		// Store in database with better error handling
-		const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
-		const store = transaction.objectStore(this.STORE_NAME);
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 
 		await new Promise<void>((resolve, reject) => {
 			try {
@@ -317,6 +441,12 @@ class FeaturesDB {
 
 		await this.updateStats();
 		this.triggerBookmarkChange(); // Trigger reactivity
+
+		// Sync to Firestore if online
+		if (this.isOnline && this.currentUser) {
+			this.syncFeatureToFirestore(storedFeature);
+		}
+
 		return storedFeature;
 	}
 
@@ -425,17 +555,20 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Update an existing feature
+	 * Update an existing feature for current user with Firestore sync
 	 */
 	async updateFeature(feature: StoredFeature): Promise<StoredFeature> {
 		await this.ensureInitialized();
 		if (!this.db) throw new Error('Database not initialized');
 
+		// Ensure userId is set for current user
+		feature.userId = this.getCurrentUserId();
 		feature.searchText = this.generateSearchText(feature);
 		feature.dateModified = Date.now();
+		feature.lastSyncTimestamp = Date.now(); // Track for sync
 
-		const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
-		const store = transaction.objectStore(this.STORE_NAME);
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 
 		await new Promise<void>((resolve, reject) => {
 			try {
@@ -457,28 +590,35 @@ class FeaturesDB {
 
 		await this.updateStats();
 		this.triggerBookmarkChange(); // Trigger reactivity
+
+		// Sync to Firestore if online
+		if (this.isOnline && this.currentUser) {
+			this.syncFeatureToFirestore(feature);
+		}
+
 		return feature;
 	}
 
 	/**
-	 * Get feature by ID
+	 * Get feature by ID for current user
 	 */
 	async getFeatureById(id: string): Promise<StoredFeature | null> {
 		await this.ensureInitialized();
 		if (!this.db) return null;
 
-		const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
-		const store = transaction.objectStore(this.STORE_NAME);
+		const userId = this.getCurrentUserId();
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readonly');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 
 		return new Promise((resolve, reject) => {
-			const request = store.get(id);
+			const request = store.get([userId, id]); // Use compound key
 			request.onsuccess = () => resolve(request.result || null);
 			request.onerror = () => reject(request.error);
 		});
 	}
 
 	/**
-	 * Search features with text query
+	 * Search features for current user with text query
 	 */
 	async searchFeatures(
 		query: string,
@@ -494,6 +634,7 @@ class FeaturesDB {
 		await this.ensureInitialized();
 		if (!this.db) return [];
 
+		const userId = this.getCurrentUserId();
 		const {
 			limit = 50,
 			bookmarkedOnly = false,
@@ -503,30 +644,29 @@ class FeaturesDB {
 			classFilter
 		} = options;
 
-		const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
-		const store = transaction.objectStore(this.STORE_NAME);
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readonly');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 
 		let features: StoredFeature[] = [];
 
-		// Get features using appropriate index
+		// Get features for current user only
+		features = await this.getAllFeaturesForUser(store, userId);
+
+		// Apply filters
 		if (bookmarkedOnly) {
-			// Get all features and filter for bookmarked ones
-			const allFeatures = await this.getAllFeatures(store);
-			features = allFeatures.filter((f) => f.bookmarked === true);
-		} else if (visitedOnly) {
-			// Get features that have at least one visit
-			const allFeatures = await this.getAllFeatures(store);
-			features = allFeatures.filter((f) => f.visitedDates && f.visitedDates.length > 0);
-		} else if (todoOnly) {
-			// Get all features and filter for todo ones
-			const allFeatures = await this.getAllFeatures(store);
-			features = allFeatures.filter((f) => f.todo === true);
-		} else if (categoryFilter) {
-			features = await this.getFeaturesByIndex(store, this.INDEX_CATEGORY, categoryFilter);
-		} else if (classFilter) {
-			features = await this.getFeaturesByIndex(store, this.INDEX_CLASS, classFilter);
-		} else {
-			features = await this.getAllFeatures(store);
+			features = features.filter((f) => f.bookmarked === true);
+		}
+		if (visitedOnly) {
+			features = features.filter((f) => f.visitedDates && f.visitedDates.length > 0);
+		}
+		if (todoOnly) {
+			features = features.filter((f) => f.todo === true);
+		}
+		if (categoryFilter) {
+			features = features.filter((f) => f.category === categoryFilter);
+		}
+		if (classFilter) {
+			features = features.filter((f) => f.class === classFilter);
 		}
 
 		// Apply text search and scoring
@@ -623,12 +763,16 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Get all features
+	 * Get all features for a specific user
 	 */
-	private async getAllFeatures(store: IDBObjectStore): Promise<StoredFeature[]> {
+	private async getAllFeaturesForUser(
+		store: IDBObjectStore,
+		userId: string
+	): Promise<StoredFeature[]> {
 		return new Promise((resolve, reject) => {
 			const features: StoredFeature[] = [];
-			const request = store.openCursor();
+			const index = store.index(this.INDEX_USER_ID);
+			const request = index.openCursor(IDBKeyRange.only(userId));
 
 			request.onsuccess = (event) => {
 				const cursor = (event.target as IDBRequest).result;
@@ -740,22 +884,26 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Update statistics
+	 * Update statistics for current user
 	 */
 	private async updateStats(): Promise<void> {
 		if (!this.db) return;
 
 		try {
-			const transaction = this.db.transaction([this.STORE_NAME, this.LISTS_STORE_NAME], 'readonly');
-			const featuresStore = transaction.objectStore(this.STORE_NAME);
+			const userId = this.getCurrentUserId();
+			const transaction = this.db.transaction(
+				[this.FEATURES_STORE_NAME, this.LISTS_STORE_NAME],
+				'readonly'
+			);
+			const featuresStore = transaction.objectStore(this.FEATURES_STORE_NAME);
 			const listsStore = transaction.objectStore(this.LISTS_STORE_NAME);
 
 			const [total, bookmarked, visited, todo, lists] = await Promise.all([
-				this.countFeatures(featuresStore),
-				this.countBookmarkedFeatures(featuresStore), // Use custom method instead of index
-				this.countVisitedFeatures(featuresStore),
-				this.countTodoFeatures(featuresStore), // Use custom method instead of index
-				this.countBookmarkLists(listsStore)
+				this.countFeaturesForUser(featuresStore, userId),
+				this.countBookmarkedFeaturesForUser(featuresStore, userId),
+				this.countVisitedFeaturesForUser(featuresStore, userId),
+				this.countTodoFeaturesForUser(featuresStore, userId),
+				this.countBookmarkListsForUser(listsStore, userId)
 			]);
 
 			this._stats = { total, bookmarked, visited, todo, lists };
@@ -765,11 +913,12 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Count all features
+	 * Count features for a specific user
 	 */
-	private async countFeatures(store: IDBObjectStore): Promise<number> {
+	private async countFeaturesForUser(store: IDBObjectStore, userId: string): Promise<number> {
 		return new Promise((resolve, reject) => {
-			const request = store.count();
+			const index = store.index(this.INDEX_USER_ID);
+			const request = index.count(IDBKeyRange.only(userId));
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error);
 		});
@@ -804,12 +953,16 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Count visited features (features with at least one visit)
+	 * Count visited features for a specific user (features with at least one visit)
 	 */
-	private async countVisitedFeatures(store: IDBObjectStore): Promise<number> {
+	private async countVisitedFeaturesForUser(
+		store: IDBObjectStore,
+		userId: string
+	): Promise<number> {
 		return new Promise((resolve, reject) => {
 			let count = 0;
-			const request = store.openCursor();
+			const index = store.index(this.INDEX_USER_ID);
+			const request = index.openCursor(IDBKeyRange.only(userId));
 
 			request.onsuccess = (event) => {
 				const cursor = (event.target as IDBRequest).result;
@@ -829,23 +982,28 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Count bookmark lists
+	 * Count bookmark lists for a specific user
 	 */
-	private async countBookmarkLists(store: IDBObjectStore): Promise<number> {
+	private async countBookmarkListsForUser(store: IDBObjectStore, userId: string): Promise<number> {
 		return new Promise((resolve, reject) => {
-			const request = store.count();
+			const index = store.index(this.INDEX_USER_ID);
+			const request = index.count(IDBKeyRange.only(userId));
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error);
 		});
 	}
 
 	/**
-	 * Count bookmarked features (features with bookmarked = true)
+	 * Count bookmarked features for a specific user (features with bookmarked = true)
 	 */
-	private async countBookmarkedFeatures(store: IDBObjectStore): Promise<number> {
+	private async countBookmarkedFeaturesForUser(
+		store: IDBObjectStore,
+		userId: string
+	): Promise<number> {
 		return new Promise((resolve, reject) => {
 			let count = 0;
-			const request = store.openCursor();
+			const index = store.index(this.INDEX_USER_ID);
+			const request = index.openCursor(IDBKeyRange.only(userId));
 
 			request.onsuccess = (event) => {
 				const cursor = (event.target as IDBRequest).result;
@@ -865,12 +1023,13 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Count todo features (features with todo = true)
+	 * Count todo features for a specific user (features with todo = true)
 	 */
-	private async countTodoFeatures(store: IDBObjectStore): Promise<number> {
+	private async countTodoFeaturesForUser(store: IDBObjectStore, userId: string): Promise<number> {
 		return new Promise((resolve, reject) => {
 			let count = 0;
-			const request = store.openCursor();
+			const index = store.index(this.INDEX_USER_ID);
+			const request = index.openCursor(IDBKeyRange.only(userId));
 
 			request.onsuccess = (event) => {
 				const cursor = (event.target as IDBRequest).result;
@@ -890,40 +1049,51 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Delete a feature
+	 * Delete a feature for current user
 	 */
 	async deleteFeature(id: string): Promise<void> {
 		await this.ensureInitialized();
 		if (!this.db) return;
 
-		const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
-		const store = transaction.objectStore(this.STORE_NAME);
+		const userId = this.getCurrentUserId();
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 
 		await new Promise<void>((resolve, reject) => {
-			const request = store.delete(id);
+			const request = store.delete([userId, id]); // Use compound key
 			request.onsuccess = () => resolve();
 			request.onerror = () => reject(request.error);
 		});
 
 		await this.updateStats();
 		this.triggerBookmarkChange(); // Trigger reactivity
+
+		// Sync deletion to Firestore if online
+		if (this.isOnline && this.currentUser) {
+			this.deleteFeatureFromFirestore(id);
+		}
 	}
 
 	/**
-	 * Clear all features
+	 * Clear all features for current user
 	 */
 	async clearAllFeatures(): Promise<void> {
 		await this.ensureInitialized();
 		if (!this.db) return;
 
-		const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
-		const store = transaction.objectStore(this.STORE_NAME);
+		const userId = this.getCurrentUserId();
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 
-		await new Promise<void>((resolve, reject) => {
-			const request = store.clear();
-			request.onsuccess = () => resolve();
-			request.onerror = () => reject(request.error);
-		});
+		// Get all features for current user and delete them
+		const features = await this.getAllFeaturesForUser(store, userId);
+		for (const feature of features) {
+			await new Promise<void>((resolve, reject) => {
+				const request = store.delete([userId, feature.id]);
+				request.onsuccess = () => resolve();
+				request.onerror = () => reject(request.error);
+			});
+		}
 
 		this._stats.total = 0;
 		this._stats.bookmarked = 0;
@@ -933,11 +1103,13 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Clear all bookmark lists
+	 * Clear all bookmark lists for current user
 	 */
 	async clearAllBookmarkLists(): Promise<void> {
 		await this.ensureInitialized();
 		if (!this.db) return;
+
+		const userId = this.getCurrentUserId();
 
 		// First remove list IDs from all features and update their bookmark/todo status
 		const allFeatures = await this.exportFeatures();
@@ -953,15 +1125,35 @@ class FeaturesDB {
 			}
 		}
 
-		// Then clear all lists
+		// Then clear all lists for current user
 		const transaction = this.db.transaction([this.LISTS_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.LISTS_STORE_NAME);
+		const index = store.index(this.INDEX_USER_ID);
 
-		await new Promise<void>((resolve, reject) => {
-			const request = store.clear();
-			request.onsuccess = () => resolve();
+		const lists = await new Promise<BookmarkList[]>((resolve, reject) => {
+			const lists: BookmarkList[] = [];
+			const request = index.openCursor(IDBKeyRange.only(userId));
+
+			request.onsuccess = (event) => {
+				const cursor = (event.target as IDBRequest).result;
+				if (cursor) {
+					lists.push(cursor.value);
+					cursor.continue();
+				} else {
+					resolve(lists);
+				}
+			};
+
 			request.onerror = () => reject(request.error);
 		});
+
+		for (const list of lists) {
+			await new Promise<void>((resolve, reject) => {
+				const request = store.delete([userId, list.id]);
+				request.onsuccess = () => resolve();
+				request.onerror = () => reject(request.error);
+			});
+		}
 
 		this._stats.lists = 0;
 		this.triggerBookmarkChange(); // Trigger reactivity
@@ -979,7 +1171,7 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Export all features for backup
+	 * Export all features for current user for backup
 	 */
 	async exportFeatures(): Promise<StoredFeature[]> {
 		const results = await this.searchFeatures('');
@@ -987,16 +1179,20 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Import features from backup
+	 * Import features from backup for current user
 	 */
 	async importFeatures(features: StoredFeature[]): Promise<void> {
 		await this.ensureInitialized();
 		if (!this.db) return;
 
-		const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
-		const store = transaction.objectStore(this.STORE_NAME);
+		const userId = this.getCurrentUserId();
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 
 		for (const feature of features) {
+			// Ensure feature belongs to current user
+			feature.userId = userId;
+
 			await new Promise<void>((resolve, reject) => {
 				const request = store.put(feature);
 				request.onsuccess = () => resolve();
@@ -1011,7 +1207,7 @@ class FeaturesDB {
 	// ==================== BOOKMARK LISTS METHODS ====================
 
 	/**
-	 * Create a new bookmark list
+	 * Create a new bookmark list for current user
 	 */
 	async createBookmarkList(listData: {
 		name: string;
@@ -1022,10 +1218,12 @@ class FeaturesDB {
 		await this.ensureInitialized();
 		if (!this.db) throw new Error('Database not initialized');
 
+		const userId = this.getCurrentUserId();
 		const now = Date.now();
 		const listId = `list-${now}-${Math.random().toString(36).substr(2, 9)}`;
 
 		const bookmarkList: BookmarkList = {
+			userId, // Add userId to bookmark list
 			id: listId,
 			name: listData.name,
 			description: listData.description,
@@ -1033,7 +1231,8 @@ class FeaturesDB {
 			color: listData.color,
 			featureIds: [],
 			dateCreated: now,
-			dateModified: now
+			dateModified: now,
+			lastSyncTimestamp: now // Track for sync
 		};
 
 		const transaction = this.db.transaction([this.LISTS_STORE_NAME], 'readwrite');
@@ -1046,22 +1245,30 @@ class FeaturesDB {
 		});
 
 		await this.updateStats();
+
+		// Sync to Firestore if online
+		if (this.isOnline && this.currentUser) {
+			this.syncBookmarkListToFirestore(bookmarkList);
+		}
+
 		return bookmarkList;
 	}
 
 	/**
-	 * Get all bookmark lists
+	 * Get all bookmark lists for current user
 	 */
 	async getAllBookmarkLists(): Promise<BookmarkList[]> {
 		await this.ensureInitialized();
 		if (!this.db) return [];
 
+		const userId = this.getCurrentUserId();
 		const transaction = this.db.transaction([this.LISTS_STORE_NAME], 'readonly');
 		const store = transaction.objectStore(this.LISTS_STORE_NAME);
 
 		return new Promise((resolve, reject) => {
 			const lists: BookmarkList[] = [];
-			const request = store.openCursor();
+			const index = store.index(this.INDEX_USER_ID);
+			const request = index.openCursor(IDBKeyRange.only(userId));
 
 			request.onsuccess = (event) => {
 				const cursor = (event.target as IDBRequest).result;
@@ -1079,30 +1286,34 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Get bookmark list by ID
+	 * Get bookmark list by ID for current user
 	 */
 	async getBookmarkListById(listId: string): Promise<BookmarkList | null> {
 		await this.ensureInitialized();
 		if (!this.db) return null;
 
+		const userId = this.getCurrentUserId();
 		const transaction = this.db.transaction([this.LISTS_STORE_NAME], 'readonly');
 		const store = transaction.objectStore(this.LISTS_STORE_NAME);
 
 		return new Promise((resolve, reject) => {
-			const request = store.get(listId);
+			const request = store.get([userId, listId]); // Use compound key
 			request.onsuccess = () => resolve(request.result || null);
 			request.onerror = () => reject(request.error);
 		});
 	}
 
 	/**
-	 * Update bookmark list
+	 * Update bookmark list for current user
 	 */
 	async updateBookmarkList(list: BookmarkList): Promise<BookmarkList> {
 		await this.ensureInitialized();
 		if (!this.db) throw new Error('Database not initialized');
 
+		// Ensure list belongs to current user
+		list.userId = this.getCurrentUserId();
 		list.dateModified = Date.now();
+		list.lastSyncTimestamp = Date.now(); // Track for sync
 
 		const transaction = this.db.transaction([this.LISTS_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.LISTS_STORE_NAME);
@@ -1114,15 +1325,23 @@ class FeaturesDB {
 		});
 
 		await this.updateStats();
+
+		// Sync to Firestore if online
+		if (this.isOnline && this.currentUser) {
+			this.syncBookmarkListToFirestore(list);
+		}
+
 		return list;
 	}
 
 	/**
-	 * Delete bookmark list
+	 * Delete bookmark list for current user
 	 */
 	async deleteBookmarkList(listId: string): Promise<void> {
 		await this.ensureInitialized();
 		if (!this.db) return;
+
+		const userId = this.getCurrentUserId();
 
 		// First, remove this list from all features and update their bookmark/todo status
 		const features = await this.getFeaturesByListId(listId);
@@ -1143,10 +1362,15 @@ class FeaturesDB {
 		const store = transaction.objectStore(this.LISTS_STORE_NAME);
 
 		await new Promise<void>((resolve, reject) => {
-			const request = store.delete(listId);
+			const request = store.delete([userId, listId]); // Use compound key
 			request.onsuccess = () => resolve();
 			request.onerror = () => reject(request.error);
 		});
+
+		// Sync deletion to Firestore if online
+		if (this.isOnline && this.currentUser) {
+			this.deleteBookmarkListFromFirestore(listId);
+		}
 
 		await this.updateStats();
 	}
@@ -1257,7 +1481,7 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Get lists that contain a specific feature
+	 * Get lists that contain a specific feature for current user
 	 */
 	async getListsForFeature(featureId: string): Promise<BookmarkList[]> {
 		const feature = await this.getFeatureById(featureId);
@@ -1272,6 +1496,715 @@ class FeaturesDB {
 		}
 
 		return lists;
+	}
+
+	/**
+	 * Clean up resources when component is destroyed
+	 */
+	destroy(): void {
+		if (this.userUnsubscribe) {
+			this.userUnsubscribe();
+			this.userUnsubscribe = null;
+		}
+		this.stopFirestoreSync();
+	}
+
+	// ==================== FIRESTORE SYNC METHODS ====================
+
+	/**
+	 * Start Firestore real-time sync for current user
+	 */
+	private startFirestoreSync(): void {
+		if (!this.currentUser || !this.isOnline) return;
+
+		this.stopFirestoreSync(); // Clean up any existing subscription
+
+		try {
+			const userId = this.currentUser.uid;
+
+			// Listen to real-time changes in user's features collection
+			const featuresQuery = query(
+				collection(db, 'users', userId, 'features'),
+				orderBy('dateModified', 'desc')
+			);
+
+			// Listen to real-time changes in user's lists collection
+			const listsQuery = query(
+				collection(db, 'users', userId, 'lists'),
+				orderBy('dateModified', 'desc')
+			);
+
+			this.firestoreUnsubscribe = onSnapshot(
+				featuresQuery,
+				(snapshot) => this.handleFirestoreSnapshot(snapshot, 'features'),
+				(error) => {
+					console.error('Firestore features sync error:', error);
+					this.isSyncing = false;
+				}
+			);
+
+			// TODO: Also listen to lists - for now just sync features
+			// We can add a second listener for lists later
+
+			// Initial sync
+			this.performInitialSync();
+		} catch (error) {
+			console.error('Failed to start Firestore sync:', error);
+		}
+	}
+
+	/**
+	 * Stop Firestore sync
+	 */
+	private stopFirestoreSync(): void {
+		if (this.firestoreUnsubscribe) {
+			this.firestoreUnsubscribe();
+			this.firestoreUnsubscribe = null;
+		}
+		this.isSyncing = false;
+	}
+
+	/**
+	 * Handle Firestore snapshot changes
+	 */
+	private async handleFirestoreSnapshot(
+		snapshot: QuerySnapshot<DocumentData>,
+		type: 'features' | 'lists' = 'features'
+	): Promise<void> {
+		if (!this.currentUser) return;
+
+		this.isSyncing = true;
+
+		try {
+			for (const change of snapshot.docChanges()) {
+				const firestoreData = change.doc.data();
+				const docId = change.doc.id;
+
+				switch (change.type) {
+					case 'added':
+					case 'modified':
+						if (type === 'features') {
+							await this.handleRemoteFeatureChange(firestoreData, docId);
+						} else {
+							await this.handleRemoteListChange(firestoreData, docId);
+						}
+						break;
+					case 'removed':
+						if (type === 'features') {
+							await this.handleRemoteFeatureDeletion(docId);
+						} else {
+							await this.handleRemoteListDeletion(docId);
+						}
+						break;
+				}
+			}
+
+			this.lastSyncTimestamp = Date.now();
+			await this.updateSyncMetadata();
+		} catch (error) {
+			console.error('Error handling Firestore snapshot:', error);
+		} finally {
+			this.isSyncing = false;
+		}
+	}
+
+	/**
+	 * Handle remote feature changes from Firestore
+	 */
+	private async handleRemoteFeatureChange(remoteData: any, firestoreId: string): Promise<void> {
+		if (!remoteData.id) return;
+
+		const localFeature = await this.getFeatureById(remoteData.id);
+
+		if (!localFeature) {
+			// No local version, safe to add from remote
+			const feature: StoredFeature = {
+				...remoteData,
+				firestoreId,
+				lastSyncTimestamp: Date.now()
+			};
+
+			await this.storeFeatureLocally(feature);
+		} else {
+			// Check for conflicts
+			const localTimestamp = localFeature.lastSyncTimestamp || 0;
+			const remoteTimestamp = remoteData.lastSyncTimestamp || 0;
+
+			if (localTimestamp > remoteTimestamp && localFeature.dateModified > remoteData.dateModified) {
+				// Local is newer, upload to Firestore
+				this.syncFeatureToFirestore(localFeature);
+			} else if (remoteTimestamp > localTimestamp) {
+				// Remote is newer, update local
+				const updatedFeature: StoredFeature = {
+					...remoteData,
+					firestoreId,
+					lastSyncTimestamp: Date.now()
+				};
+
+				await this.storeFeatureLocally(updatedFeature);
+			} else {
+				// Conflict detected
+				this.addSyncConflict({
+					id: remoteData.id,
+					type: 'feature',
+					localData: localFeature,
+					remoteData,
+					conflictType: 'both_modified',
+					timestamp: Date.now()
+				});
+			}
+		}
+	}
+
+	/**
+	 * Handle remote feature deletion
+	 */
+	private async handleRemoteFeatureDeletion(firestoreId: string): Promise<void> {
+		// Find local feature by Firestore ID and delete it
+		const allFeatures = await this.exportFeatures();
+		const featureToDelete = allFeatures.find((f) => (f as any).firestoreId === firestoreId);
+
+		if (featureToDelete) {
+			await this.deleteFeature(featureToDelete.id);
+		}
+	}
+
+	/**
+	 * Handle remote list changes from Firestore
+	 */
+	private async handleRemoteListChange(remoteData: any, firestoreId: string): Promise<void> {
+		if (!remoteData.id) return;
+
+		const localList = await this.getBookmarkListById(remoteData.id);
+
+		if (!localList) {
+			// No local version, safe to add from remote
+			const list: BookmarkList = {
+				...remoteData,
+				firestoreId,
+				lastSyncTimestamp: Date.now()
+			};
+
+			await this.storeBookmarkListLocally(list);
+		} else {
+			// Check for conflicts
+			const localTimestamp = localList.lastSyncTimestamp || 0;
+			const remoteTimestamp = remoteData.lastSyncTimestamp || 0;
+
+			if (localTimestamp > remoteTimestamp && localList.dateModified > remoteData.dateModified) {
+				// Local is newer, upload to Firestore
+				this.syncBookmarkListToFirestore(localList);
+			} else if (remoteTimestamp > localTimestamp) {
+				// Remote is newer, update local
+				const updatedList: BookmarkList = {
+					...remoteData,
+					firestoreId,
+					lastSyncTimestamp: Date.now()
+				};
+
+				await this.storeBookmarkListLocally(updatedList);
+			} else {
+				// Conflict detected
+				this.addSyncConflict({
+					id: remoteData.id,
+					type: 'list',
+					localData: localList,
+					remoteData,
+					conflictType: 'both_modified',
+					timestamp: Date.now()
+				});
+			}
+		}
+	}
+
+	/**
+	 * Handle remote list deletion
+	 */
+	private async handleRemoteListDeletion(firestoreId: string): Promise<void> {
+		// Find local list by Firestore ID and delete it
+		const allLists = await this.getAllBookmarkLists();
+		const listToDelete = allLists.find((l) => (l as any).firestoreId === firestoreId);
+
+		if (listToDelete) {
+			await this.deleteBookmarkList(listToDelete.id);
+		}
+	}
+
+	/**
+	 * Store feature locally without triggering sync
+	 */
+	private async storeFeatureLocally(feature: StoredFeature): Promise<void> {
+		if (!this.db) return;
+
+		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
+
+		await new Promise<void>((resolve, reject) => {
+			const cleanFeature = JSON.parse(JSON.stringify(feature));
+			const request = store.put(cleanFeature);
+			request.onsuccess = () => resolve();
+			request.onerror = () => reject(request.error);
+		});
+
+		await this.updateStats();
+		this.triggerBookmarkChange();
+	}
+
+	/**
+	 * Store bookmark list locally without triggering sync
+	 */
+	private async storeBookmarkListLocally(list: BookmarkList): Promise<void> {
+		if (!this.db) return;
+
+		const transaction = this.db.transaction([this.LISTS_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.LISTS_STORE_NAME);
+
+		await new Promise<void>((resolve, reject) => {
+			const cleanList = JSON.parse(JSON.stringify(list));
+			const request = store.put(cleanList);
+			request.onsuccess = () => resolve();
+			request.onerror = () => reject(request.error);
+		});
+
+		await this.updateStats();
+		this.triggerBookmarkChange();
+	}
+
+	/**
+	 * Clean object by removing undefined values (Firestore doesn't allow undefined)
+	 */
+	private cleanForFirestore(obj: any): any {
+		if (obj === null || obj === undefined) {
+			return null;
+		}
+
+		if (Array.isArray(obj)) {
+			return obj.map((item) => this.cleanForFirestore(item));
+		}
+
+		if (typeof obj === 'object') {
+			const cleaned: any = {};
+			for (const [key, value] of Object.entries(obj)) {
+				if (value !== undefined) {
+					cleaned[key] = this.cleanForFirestore(value);
+				}
+			}
+			return cleaned;
+		}
+
+		return obj;
+	}
+
+	/**
+	 * Determine if error should trigger a retry
+	 */
+	private shouldRetry(error: any): boolean {
+		// Don't retry authentication/permission errors
+		if (error.code === 'permission-denied' || error.code === 'unauthenticated') {
+			return false;
+		}
+
+		// Don't retry invalid data errors
+		if (error.code === 'invalid-argument') {
+			return false;
+		}
+
+		// Retry network-related errors
+		if (
+			error.code === 'unavailable' ||
+			error.code === 'deadline-exceeded' ||
+			error.code === 'internal'
+		) {
+			return true;
+		}
+
+		// Default to not retrying unknown errors
+		return false;
+	}
+
+	/**
+	 * Sync feature to Firestore with retry logic
+	 */
+	private async syncFeatureToFirestore(feature: StoredFeature, retryCount = 0): Promise<void> {
+		if (!this.currentUser || !this.isOnline) return;
+
+		const MAX_RETRIES = 3;
+		const RETRY_DELAY = 1000; // 1 second
+
+		try {
+			const userId = this.currentUser.uid;
+
+			// Clean feature data for Firestore (remove undefined values)
+			const cleanFeature = this.cleanForFirestore({
+				...feature,
+				serverTimestamp: serverTimestamp(),
+				lastSyncTimestamp: Date.now()
+			});
+
+			// Use feature ID as Firestore document ID
+			const docRef = doc(db, 'users', userId, 'features', feature.id);
+			await setDoc(docRef, cleanFeature, { merge: true });
+
+			// Update local feature with sync timestamp
+			feature.lastSyncTimestamp = Date.now();
+			await this.storeFeatureLocally(feature);
+
+			console.log(`Successfully synced feature ${feature.id} to Firestore`);
+		} catch (error: any) {
+			console.error(`Failed to sync feature to Firestore (attempt ${retryCount + 1}):`, error);
+
+			// Retry logic for transient errors
+			if (retryCount < MAX_RETRIES && this.shouldRetry(error)) {
+				console.log(`Retrying sync in ${RETRY_DELAY}ms...`);
+				setTimeout(() => {
+					this.syncFeatureToFirestore(feature, retryCount + 1);
+				}, RETRY_DELAY);
+			} else {
+				// Log final failure
+				console.error(
+					`Failed to sync feature ${feature.id} after ${MAX_RETRIES} attempts:`,
+					error.message
+				);
+			}
+		}
+	}
+
+	/**
+	 * Sync bookmark list to Firestore with retry logic
+	 */
+	private async syncBookmarkListToFirestore(list: BookmarkList, retryCount = 0): Promise<void> {
+		if (!this.currentUser || !this.isOnline) return;
+
+		const MAX_RETRIES = 3;
+		const RETRY_DELAY = 1000; // 1 second
+
+		try {
+			const userId = this.currentUser.uid;
+
+			// Clean list data for Firestore (remove undefined values)
+			const cleanList = this.cleanForFirestore({
+				...list,
+				serverTimestamp: serverTimestamp(),
+				lastSyncTimestamp: Date.now()
+			});
+
+			// Use list ID as Firestore document ID
+			const docRef = doc(db, 'users', userId, 'lists', list.id);
+			await setDoc(docRef, cleanList, { merge: true });
+
+			// Update local list with sync timestamp
+			list.lastSyncTimestamp = Date.now();
+			await this.storeBookmarkListLocally(list);
+
+			console.log(`Successfully synced bookmark list ${list.id} to Firestore`);
+		} catch (error: any) {
+			console.error(
+				`Failed to sync bookmark list to Firestore (attempt ${retryCount + 1}):`,
+				error
+			);
+
+			// Retry logic for transient errors
+			if (retryCount < MAX_RETRIES && this.shouldRetry(error)) {
+				console.log(`Retrying sync in ${RETRY_DELAY}ms...`);
+				setTimeout(() => {
+					this.syncBookmarkListToFirestore(list, retryCount + 1);
+				}, RETRY_DELAY);
+			} else {
+				// Log final failure
+				console.error(
+					`Failed to sync bookmark list ${list.id} after ${MAX_RETRIES} attempts:`,
+					error.message
+				);
+			}
+		}
+	}
+
+	/**
+	 * Perform initial sync when user connects
+	 */
+	private async performInitialSync(): Promise<void> {
+		if (!this.currentUser || !this.isOnline) return;
+
+		this.isSyncing = true;
+
+		try {
+			// Upload local changes to Firestore
+			await this.uploadLocalChanges();
+
+			// Download and apply remote changes
+			await this.downloadRemoteChanges();
+
+			this.lastSyncTimestamp = Date.now();
+			await this.updateSyncMetadata();
+		} catch (error) {
+			console.error('Initial sync failed:', error);
+		} finally {
+			this.isSyncing = false;
+		}
+	}
+
+	/**
+	 * Upload local changes to Firestore
+	 */
+	private async uploadLocalChanges(): Promise<void> {
+		if (!this.currentUser) return;
+
+		const localFeatures = await this.exportFeatures();
+		const userId = this.currentUser.uid;
+
+		for (const feature of localFeatures) {
+			const lastSyncTimestamp = feature.lastSyncTimestamp || 0;
+
+			// Upload if never synced or modified since last sync
+			if (lastSyncTimestamp === 0 || feature.dateModified > lastSyncTimestamp) {
+				await this.syncFeatureToFirestore(feature);
+			}
+		}
+
+		// Upload local bookmark lists
+		const localLists = await this.getAllBookmarkLists();
+		for (const list of localLists) {
+			const lastSyncTimestamp = list.lastSyncTimestamp || 0;
+
+			// Upload if never synced or modified since last sync
+			if (lastSyncTimestamp === 0 || list.dateModified > lastSyncTimestamp) {
+				await this.syncBookmarkListToFirestore(list);
+			}
+		}
+	}
+
+	/**
+	 * Download remote changes from Firestore
+	 */
+	private async downloadRemoteChanges(): Promise<void> {
+		if (!this.currentUser) return;
+
+		const userId = this.currentUser.uid;
+		const lastSync = await this.getLastSyncTimestamp();
+
+		// Query for features modified since last sync
+		const featuresQuery = query(
+			collection(db, 'users', userId, 'features'),
+			where('dateModified', '>', lastSync),
+			orderBy('dateModified', 'asc')
+		);
+
+		// This will be handled by the snapshot listener
+		// We just trigger it here for initial download
+	}
+
+	/**
+	 * Add sync conflict to queue
+	 */
+	private addSyncConflict(conflict: SyncConflict): void {
+		this.syncConflicts = [...this.syncConflicts, conflict];
+	}
+
+	/**
+	 * Resolve sync conflict
+	 */
+	async resolveSyncConflict(
+		conflictId: string,
+		resolution: 'local' | 'remote' | 'merge'
+	): Promise<void> {
+		const conflict = this.syncConflicts.find((c) => c.id === conflictId);
+		if (!conflict) return;
+
+		try {
+			switch (resolution) {
+				case 'local':
+					// Keep local version, upload to Firestore
+					if (conflict.type === 'feature') {
+						await this.syncFeatureToFirestore(conflict.localData);
+					} else if (conflict.type === 'list') {
+						await this.syncBookmarkListToFirestore(conflict.localData);
+					}
+					break;
+				case 'remote':
+					// Accept remote version, update local
+					if (conflict.type === 'feature') {
+						await this.storeFeatureLocally(conflict.remoteData);
+					} else if (conflict.type === 'list') {
+						await this.storeBookmarkListLocally(conflict.remoteData);
+					}
+					break;
+				case 'merge':
+					// Intelligent merge
+					if (conflict.type === 'feature') {
+						const merged = this.mergeFeatures(conflict.localData, conflict.remoteData);
+						await this.storeFeatureLocally(merged);
+						await this.syncFeatureToFirestore(merged);
+					} else if (conflict.type === 'list') {
+						const merged = this.mergeBookmarkLists(conflict.localData, conflict.remoteData);
+						await this.storeBookmarkListLocally(merged);
+						await this.syncBookmarkListToFirestore(merged);
+					}
+					break;
+			}
+
+			// Remove resolved conflict
+			this.syncConflicts = this.syncConflicts.filter((c) => c.id !== conflictId);
+		} catch (error) {
+			console.error('Failed to resolve sync conflict:', error);
+		}
+	}
+
+	/**
+	 * Intelligent merge of two feature versions
+	 */
+	private mergeFeatures(local: StoredFeature, remote: StoredFeature): StoredFeature {
+		return {
+			...local,
+			// Use most recent modification time
+			dateModified: Math.max(local.dateModified, remote.dateModified),
+			// Merge visit dates (combine and deduplicate)
+			visitedDates: Array.from(new Set([...local.visitedDates, ...remote.visitedDates])).sort(),
+			// Keep bookmark status if either is bookmarked
+			bookmarked: local.bookmarked || remote.bookmarked,
+			// Keep todo status if either is todo
+			todo: local.todo || remote.todo,
+			// Merge list IDs
+			listIds: Array.from(new Set([...local.listIds, ...remote.listIds])),
+			// Update sync timestamp
+			lastSyncTimestamp: Date.now()
+		};
+	}
+
+	/**
+	 * Intelligent merge of two bookmark list versions
+	 */
+	private mergeBookmarkLists(local: BookmarkList, remote: BookmarkList): BookmarkList {
+		return {
+			...local,
+			// Use most recent modification time
+			dateModified: Math.max(local.dateModified, remote.dateModified),
+			// Merge feature IDs (combine and deduplicate)
+			featureIds: Array.from(new Set([...local.featureIds, ...remote.featureIds])),
+			// Keep most recent metadata (name, description, etc.)
+			name: local.dateModified > remote.dateModified ? local.name : remote.name,
+			description:
+				local.dateModified > remote.dateModified ? local.description : remote.description,
+			color: local.dateModified > remote.dateModified ? local.color : remote.color,
+			category: local.dateModified > remote.dateModified ? local.category : remote.category,
+			// Update sync timestamp
+			lastSyncTimestamp: Date.now()
+		};
+	}
+
+	/**
+	 * Update sync metadata
+	 */
+	private async updateSyncMetadata(): Promise<void> {
+		if (!this.db || !this.currentUser) return;
+
+		const userId = this.currentUser.uid;
+		const metadata: SyncMetadata = {
+			userId,
+			lastSyncTimestamp: this.lastSyncTimestamp,
+			deviceId: this.getDeviceId(),
+			syncVersion: 1
+		};
+
+		const transaction = this.db.transaction([this.SYNC_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.SYNC_STORE_NAME);
+
+		await new Promise<void>((resolve, reject) => {
+			const request = store.put(metadata);
+			request.onsuccess = () => resolve();
+			request.onerror = () => reject(request.error);
+		});
+	}
+
+	/**
+	 * Get last sync timestamp
+	 */
+	private async getLastSyncTimestamp(): Promise<number> {
+		if (!this.db || !this.currentUser) return 0;
+
+		const userId = this.currentUser.uid;
+		const transaction = this.db.transaction([this.SYNC_STORE_NAME], 'readonly');
+		const store = transaction.objectStore(this.SYNC_STORE_NAME);
+
+		return new Promise((resolve) => {
+			const request = store.get(userId);
+			request.onsuccess = () => {
+				const metadata = request.result as SyncMetadata;
+				resolve(metadata?.lastSyncTimestamp || 0);
+			};
+			request.onerror = () => resolve(0);
+		});
+	}
+
+	/**
+	 * Get unique device ID
+	 */
+	private getDeviceId(): string {
+		let deviceId = localStorage.getItem('deviceId');
+		if (!deviceId) {
+			deviceId = `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+			localStorage.setItem('deviceId', deviceId);
+		}
+		return deviceId;
+	}
+
+	/**
+	 * Delete feature from Firestore
+	 */
+	private async deleteFeatureFromFirestore(featureId: string): Promise<void> {
+		if (!this.currentUser) return;
+
+		try {
+			const userId = this.currentUser.uid;
+			const docRef = doc(db, 'users', userId, 'features', featureId);
+			await deleteDoc(docRef);
+		} catch (error) {
+			console.error('Failed to delete feature from Firestore:', error);
+		}
+	}
+
+	/**
+	 * Delete bookmark list from Firestore
+	 */
+	private async deleteBookmarkListFromFirestore(listId: string): Promise<void> {
+		if (!this.currentUser) return;
+
+		try {
+			const userId = this.currentUser.uid;
+			const docRef = doc(db, 'users', userId, 'lists', listId);
+			await deleteDoc(docRef);
+		} catch (error) {
+			console.error('Failed to delete bookmark list from Firestore:', error);
+		}
+	}
+
+	/**
+	 * Force full sync
+	 */
+	async forceSyncNow(): Promise<void> {
+		if (!this.currentUser || !this.isOnline) {
+			throw new Error('Cannot sync: user not authenticated or offline');
+		}
+
+		await this.performInitialSync();
+	}
+
+	/**
+	 * Get sync status
+	 */
+	getSyncStatus(): {
+		online: boolean;
+		syncing: boolean;
+		lastSync: number;
+		conflicts: number;
+		authenticated: boolean;
+	} {
+		return {
+			online: this.isOnline,
+			syncing: this.isSyncing,
+			lastSync: this.lastSyncTimestamp,
+			conflicts: this.syncConflicts.length,
+			authenticated: !!this.currentUser
+		};
 	}
 }
 

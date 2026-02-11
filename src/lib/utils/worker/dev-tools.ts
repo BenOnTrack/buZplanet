@@ -1,12 +1,5 @@
 import { getWorker } from '$lib/utils/worker';
 
-declare global {
-	interface Window {
-		testWorker: () => Promise<void>;
-		workerStatus: () => void;
-	}
-}
-
 // Browser console utilities for testing the worker
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
 	// Test function accessible from browser console

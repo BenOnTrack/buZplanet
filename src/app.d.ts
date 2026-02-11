@@ -73,6 +73,7 @@ declare global {
 	 */
 	interface BookmarkList {
 		id: string; // Unique identifier for the list
+		userId: string; // User ID from Firebase Auth
 		name: string; // Display name for the list
 		description?: string; // Optional description
 		category?: string; // Optional category/tag
@@ -80,6 +81,11 @@ declare global {
 		featureIds: string[]; // Array of feature IDs in this list
 		dateCreated: number;
 		dateModified: number;
+
+		// Sync fields
+		lastSyncTimestamp?: number; // When this list was last synced
+		firestoreId?: string; // Firestore document ID
+		deleted?: boolean; // Soft delete flag for sync
 	}
 
 	/**
@@ -87,6 +93,7 @@ declare global {
 	 */
 	interface StoredFeature {
 		id: string; // Unique identifier for the feature
+		userId: string; // User ID from Firebase Auth
 		class?: string;
 		subclass?: string;
 		category?: string;
@@ -105,6 +112,11 @@ declare global {
 		// Metadata
 		dateCreated: number;
 		dateModified: number;
+
+		// Sync fields
+		lastSyncTimestamp?: number; // When this feature was last synced
+		firestoreId?: string; // Firestore document ID
+		deleted?: boolean; // Soft delete flag for sync
 
 		// Search optimization - denormalized searchable text
 		searchText: string; // Concatenated text for full-text search
@@ -245,6 +257,57 @@ declare global {
 	interface TileToMerge {
 		filename: string;
 		data: ArrayBuffer;
+	}
+
+	interface BaseFeature {
+		id: string;
+		class?: string;
+		subclass?: string;
+		category?: string;
+		names: FeatureNames;
+	}
+
+	interface TableFeature extends BaseFeature {
+		// Common properties for both StoredFeature and SearchResult
+		types?: ('bookmarked' | 'todo' | 'visited')[];
+		lists?: { id: string; name: string; color: string }[];
+		isFromSearch?: boolean;
+		searchResult?: SearchResult; // Original search result if this is from search
+		storedFeature?: StoredFeature; // Matched stored feature if available
+	}
+
+	// ==================== BROWSER WINDOW EXTENSIONS ====================
+
+	interface Window {
+		testWorker: () => Promise<void>;
+		workerStatus: () => void;
+	}
+
+	// ==================== SYNC INTERFACES ====================
+
+	interface SyncConflict {
+		id: string;
+		type: 'feature' | 'list';
+		localData: any;
+		remoteData: any;
+		conflictType: 'both_modified' | 'local_deleted' | 'remote_deleted';
+		timestamp: number;
+	}
+
+	interface SyncMetadata {
+		userId: string;
+		lastSyncTimestamp: number;
+		deviceId: string;
+		syncVersion: number;
+	}
+
+	interface SyncStats {
+		featuresUploaded: number;
+		featuresDownloaded: number;
+		listsUploaded: number;
+		listsDownloaded: number;
+		conflictsResolved: number;
+		lastSyncDuration: number;
 	}
 
 	// ==================== SVELTEKIT APP INTERFACES ====================

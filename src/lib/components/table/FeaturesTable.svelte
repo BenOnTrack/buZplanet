@@ -3,23 +3,6 @@
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte.js';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 
-	interface BaseFeature {
-		id: string;
-		class?: string;
-		subclass?: string;
-		category?: string;
-		names: FeatureNames;
-	}
-
-	interface TableFeature extends BaseFeature {
-		// Common properties for both StoredFeature and SearchResult
-		types?: ('bookmarked' | 'todo' | 'visited')[];
-		lists?: { id: string; name: string; color: string }[];
-		isFromSearch?: boolean;
-		searchResult?: SearchResult; // Original search result if this is from search
-		storedFeature?: StoredFeature; // Matched stored feature if available
-	}
-
 	let {
 		features = [],
 		onRowClick,

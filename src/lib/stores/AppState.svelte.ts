@@ -1,4 +1,6 @@
 import { browser } from '$app/environment';
+import { user } from '$lib/stores/auth';
+import type { User } from 'firebase/auth';
 
 const DEFAULT_COLOR_MAPPINGS: ColorMappings = {
 	// Map feature categories
@@ -43,20 +45,37 @@ class AppState {
 	private _mapView = $state<MapViewState>(DEFAULT_CONFIG.mapView);
 	private _colorMappings = $state<ColorMappings>(DEFAULT_CONFIG.colorMappings);
 
-	// Storage key for IndexedDB
-	private readonly STORAGE_KEY = 'app-config';
+	// Storage configuration - user-based local storage
 	private readonly DB_NAME = 'AppStateDB';
-	private readonly DB_VERSION = 1;
-	private readonly STORE_NAME = 'config';
+	private readonly DB_VERSION = 2;
+	private readonly STORE_NAME = 'userConfigs';
 
 	private db: IDBDatabase | null = null;
 	private isInitialized = $state(false);
 	private initPromise: Promise<void> | null = null;
+	private currentUser: User | null = null;
+	private userUnsubscribe: (() => void) | null = null;
 
 	constructor() {
 		// Only initialize in browser environment
 		if (browser) {
-			this.initializeStorage();
+			// Subscribe to auth state changes for user-specific local config
+			this.userUnsubscribe = user.subscribe(async (currentUser) => {
+				const previousUser = this.currentUser;
+				this.currentUser = currentUser;
+
+				// If user changed, reinitialize storage for new user
+				if (previousUser?.uid !== currentUser?.uid) {
+					this.isInitialized = false;
+					this.initPromise = null;
+
+					// Reset to defaults when user changes
+					this._mapView = { ...DEFAULT_CONFIG.mapView };
+					this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
+
+					await this.initializeStorage();
+				}
+			});
 		} else {
 			// In SSR, mark as initialized with defaults
 			this.isInitialized = true;
@@ -120,7 +139,17 @@ class AppState {
 	}
 
 	/**
-	 * Open IndexedDB database
+	 * Get storage key for current user (local to this device)
+	 */
+	private getCurrentUserStorageKey(): string {
+		if (!this.currentUser) {
+			return 'anonymous-config';
+		}
+		return `user-${this.currentUser.uid}-config`;
+	}
+
+	/**
+	 * Open IndexedDB database with user-based local storage
 	 * Only available in browser environment
 	 */
 	private openDatabase(): Promise<IDBDatabase> {
@@ -136,8 +165,14 @@ class AppState {
 
 			request.onupgradeneeded = (event) => {
 				const db = (event.target as IDBOpenDBRequest).result;
+				const oldVersion = event.oldVersion;
 
-				// Create object store if it doesn't exist
+				// Remove old single-user store if exists
+				if (oldVersion < 2 && db.objectStoreNames.contains('config')) {
+					db.deleteObjectStore('config');
+				}
+
+				// Create user-based local config store
 				if (!db.objectStoreNames.contains(this.STORE_NAME)) {
 					db.createObjectStore(this.STORE_NAME, { keyPath: 'key' });
 				}
@@ -146,15 +181,16 @@ class AppState {
 	}
 
 	/**
-	 * Load configuration from storage
+	 * Load configuration from local storage for current user
 	 */
 	private async loadConfig(): Promise<void> {
 		if (!this.db) return;
 
 		try {
+			const storageKey = this.getCurrentUserStorageKey();
 			const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
 			const store = transaction.objectStore(this.STORE_NAME);
-			const request = store.get(this.STORAGE_KEY);
+			const request = store.get(storageKey);
 
 			const result = await new Promise<any>((resolve, reject) => {
 				request.onsuccess = () => resolve(request.result);
@@ -178,13 +214,14 @@ class AppState {
 	}
 
 	/**
-	 * Save configuration to storage
+	 * Save configuration to local storage for current user
 	 * Only saves in browser environment
 	 */
 	private async saveConfig(): Promise<void> {
 		if (!browser || !this.db || !this.isInitialized) return;
 
 		try {
+			const storageKey = this.getCurrentUserStorageKey();
 			const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
 			const store = transaction.objectStore(this.STORE_NAME);
 
@@ -201,7 +238,8 @@ class AppState {
 
 			await new Promise<void>((resolve, reject) => {
 				const request = store.put({
-					key: this.STORAGE_KEY,
+					key: storageKey,
+					userID: this.currentUser?.uid || 'anonymous',
 					value: plainConfig,
 					timestamp: Date.now()
 				});
@@ -323,6 +361,16 @@ class AppState {
 			...config.colorMappings
 		};
 		await this.saveConfig();
+	}
+
+	/**
+	 * Clean up resources when component is destroyed
+	 */
+	destroy(): void {
+		if (this.userUnsubscribe) {
+			this.userUnsubscribe();
+			this.userUnsubscribe = null;
+		}
 	}
 }
 

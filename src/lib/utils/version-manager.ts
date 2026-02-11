@@ -1,5 +1,9 @@
 import { browser } from '$app/environment';
 
+// Type declarations for build-time defines
+declare const __VERSION__: string;
+declare const __BUILD_TIME__: number;
+
 /**
  * Version management utilities
  */
