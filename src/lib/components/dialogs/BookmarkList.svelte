@@ -37,7 +37,7 @@
 		{ name: 'Gray', value: '#6B7280' }
 	];
 
-	// Reset form when dialog opens
+	// Reset form when dialog opens (side effect) - this one is legitimate as it modifies state
 	$effect(() => {
 		if (open) {
 			formData.name = '';
@@ -72,7 +72,7 @@
 			isSubmitting = true;
 
 			// Import featuresDB here to avoid circular imports
-			const { featuresDB } = await import('$lib/stores/FeaturesDB.svelte.ts');
+			const { featuresDB } = await import('$lib/stores/FeaturesDB.svelte');
 
 			// Ensure database is initialized
 			await featuresDB.ensureInitialized();

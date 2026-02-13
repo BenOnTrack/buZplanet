@@ -32,7 +32,8 @@ const DEFAULT_CONFIG: AppConfig = {
 		bearing: 0,
 		pitch: 0
 	},
-	colorMappings: DEFAULT_COLOR_MAPPINGS
+	colorMappings: DEFAULT_COLOR_MAPPINGS,
+	language: 'name' // Default to local names
 };
 
 /**
@@ -44,6 +45,7 @@ class AppState {
 	// Separate reactive states to prevent cross-triggers
 	private _mapView = $state<MapViewState>(DEFAULT_CONFIG.mapView);
 	private _colorMappings = $state<ColorMappings>(DEFAULT_CONFIG.colorMappings);
+	private _language = $state<LanguageCode>(DEFAULT_CONFIG.language);
 
 	// Storage configuration - user-based local storage
 	private readonly DB_NAME = 'AppStateDB';
@@ -59,6 +61,9 @@ class AppState {
 	constructor() {
 		// Only initialize in browser environment
 		if (browser) {
+			// Initialize with default state first to ensure app works without auth
+			this.isInitialized = true;
+
 			// Subscribe to auth state changes for user-specific local config
 			this.userUnsubscribe = user.subscribe(async (currentUser) => {
 				const previousUser = this.currentUser;
@@ -66,13 +71,12 @@ class AppState {
 
 				// If user changed, reinitialize storage for new user
 				if (previousUser?.uid !== currentUser?.uid) {
-					this.isInitialized = false;
-					this.initPromise = null;
-
 					// Reset to defaults when user changes
 					this._mapView = { ...DEFAULT_CONFIG.mapView };
 					this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
+					this._language = DEFAULT_CONFIG.language;
 
+					// Load user-specific configuration if available
 					await this.initializeStorage();
 				}
 			});
@@ -86,13 +90,19 @@ class AppState {
 	get config(): AppConfig {
 		return {
 			mapView: this._mapView,
-			colorMappings: this._colorMappings
+			colorMappings: this._colorMappings,
+			language: this._language
 		};
 	}
 
 	// Getter for map view state
 	get mapView(): MapViewState {
 		return this._mapView;
+	}
+
+	// Getter for language setting
+	get language(): LanguageCode {
+		return this._language;
 	}
 
 	// Getter for color mappings
@@ -123,18 +133,16 @@ class AppState {
 		// Double-check we're in browser
 		if (!browser || typeof indexedDB === 'undefined') {
 			console.warn('IndexedDB not available, using default configuration');
-			this.isInitialized = true;
-			return;
+			return; // Already initialized with defaults
 		}
 
 		try {
 			this.db = await this.openDatabase();
 			await this.loadConfig();
-			this.isInitialized = true;
+			console.log('AppState storage initialized for user:', this.getCurrentUserStorageKey());
 		} catch (error) {
 			console.error('Failed to initialize storage:', error);
-			// Fallback to default config if storage fails
-			this.isInitialized = true;
+			// Continue with default config if storage fails
 		}
 	}
 
@@ -207,6 +215,7 @@ class AppState {
 					...DEFAULT_COLOR_MAPPINGS,
 					...result.value.colorMappings
 				};
+				this._language = result.value.language || DEFAULT_CONFIG.language;
 			}
 		} catch (error) {
 			console.error('Failed to load config:', error);
@@ -233,7 +242,8 @@ class AppState {
 					bearing: this._mapView.bearing,
 					pitch: this._mapView.pitch
 				},
-				colorMappings: { ...this._colorMappings }
+				colorMappings: { ...this._colorMappings },
+				language: this._language
 			};
 
 			await new Promise<void>((resolve, reject) => {
@@ -293,6 +303,14 @@ class AppState {
 	}
 
 	/**
+	 * Update language setting
+	 */
+	updateLanguage(language: LanguageCode): void {
+		this._language = language;
+		this.saveConfig(); // Auto-save changes
+	}
+
+	/**
 	 * Update color mapping for a specific category (isolated from map view)
 	 */
 	updateColorMapping(categoryKey: string, colorName: string): void {
@@ -322,13 +340,17 @@ class AppState {
 	/**
 	 * Ensure storage is initialized before operations
 	 * Useful for ensuring state is ready before use
+	 * Always returns successfully, even if storage initialization fails
 	 */
 	async ensureInitialized(): Promise<void> {
 		if (!browser) return; // Always ready in SSR
-		if (this.isInitialized) return;
-		if (this.initPromise) {
-			await this.initPromise;
-		}
+		if (this.isInitialized) return; // Already initialized with defaults
+
+		// This should not happen with the new constructor logic, but just in case
+		this.isInitialized = true;
+		console.warn(
+			'AppState was not initialized in constructor, setting to initialized with defaults'
+		);
 	}
 
 	/**
@@ -337,6 +359,7 @@ class AppState {
 	async reset(): Promise<void> {
 		this._mapView = { ...DEFAULT_CONFIG.mapView };
 		this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
+		this._language = DEFAULT_CONFIG.language;
 		await this.saveConfig();
 	}
 
@@ -360,6 +383,7 @@ class AppState {
 			...DEFAULT_COLOR_MAPPINGS,
 			...config.colorMappings
 		};
+		this._language = config.language || DEFAULT_CONFIG.language;
 		await this.saveConfig();
 	}
 

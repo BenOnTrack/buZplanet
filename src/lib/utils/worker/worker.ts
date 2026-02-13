@@ -270,6 +270,7 @@ self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
 			case 'search-features':
 				// Search for features across all mbtiles databases with progressive results
 				const searchResults = await searchFeatures(data.query, data.limit || 10000, {
+					language: data.language || 'name', // Accept language preference from main thread
 					onProgress: (results: SearchResult[], isComplete: boolean, currentDatabase?: string) => {
 						// Send progressive results to main thread
 						postMessage({
@@ -1003,6 +1004,7 @@ async function searchFeatures(
 	query: string,
 	limit: number = 10000,
 	options: {
+		language?: string;
 		onProgress?: (results: SearchResult[], isComplete: boolean, currentDatabase?: string) => void;
 	} = {}
 ): Promise<SearchResult[]> {
@@ -1054,6 +1056,10 @@ async function searchFeatures(
 
 	console.log(`📚 Found ${relevantDbs.length} relevant databases to search`);
 
+	// Extract language preference
+	const preferredLanguage = options.language || 'name';
+	console.log(`🌍 Using language preference: ${preferredLanguage}`);
+
 	// Process databases in parallel with controlled concurrency
 	for (const [filename, db] of relevantDbs) {
 		if (results.length >= MAX_RESULTS) break;
@@ -1073,7 +1079,8 @@ async function searchFeatures(
 				seenIds,
 				BATCH_SIZE,
 				MAX_CONCURRENT_TILES,
-				MAX_RESULTS
+				MAX_RESULTS,
+				preferredLanguage
 			);
 
 			const newResultsCount = results.filter((r) => r.database === filename).length;
@@ -1122,7 +1129,8 @@ async function processDatabaseForSearch(
 	seenIds: Set<string>,
 	batchSize: number,
 	maxConcurrentTiles: number,
-	maxResults: number
+	maxResults: number,
+	preferredLanguage: string
 ): Promise<void> {
 	let offset = 0;
 	let hasMore = true;
@@ -1174,7 +1182,8 @@ async function processDatabaseForSearch(
 				results,
 				seenIds,
 				maxConcurrentTiles,
-				maxResults
+				maxResults,
+				preferredLanguage
 			);
 		} finally {
 			stmt.finalize();
@@ -1196,7 +1205,8 @@ async function processTileBatch(
 	results: SearchResult[],
 	seenIds: Set<string>,
 	maxConcurrentTiles: number,
-	maxResults: number
+	maxResults: number,
+	preferredLanguage: string
 ): Promise<void> {
 	const activeTasks = new Set<Promise<void>>();
 
@@ -1218,7 +1228,8 @@ async function processTileBatch(
 			normalizedQuery,
 			results,
 			seenIds,
-			maxResults
+			maxResults,
+			preferredLanguage
 		).finally(() => {
 			activeTasks.delete(tileTask);
 		});
@@ -1241,7 +1252,8 @@ async function processSingleTileOptimized(
 	normalizedQuery: string,
 	results: SearchResult[],
 	seenIds: Set<string>,
-	maxResults: number
+	maxResults: number,
+	preferredLanguage: string
 ): Promise<void> {
 	if (results.length >= maxResults) return;
 
@@ -1290,12 +1302,8 @@ async function processSingleTileOptimized(
 				let isMatch = false;
 				let primaryNameValue = '';
 
-				// Prioritize name:en, then name, then any other name:XX
-				const searchOrder = [
-					'name:en',
-					'name',
-					...Object.keys(names).filter((k) => k !== 'name:en' && k !== 'name')
-				];
+				// Create language-aware search order
+				const searchOrder = createLanguageAwareSearchOrder(preferredLanguage, Object.keys(names));
 
 				for (const nameKey of searchOrder) {
 					const nameValue = names[nameKey];
@@ -1368,6 +1376,31 @@ async function processSingleTileOptimized(
 		// Silently skip problematic tiles to maintain performance
 		// console.warn(`Error processing tile ${x}/${tmsY}:`, tileError);
 	}
+}
+
+// Create language-aware search order based on user preferences
+function createLanguageAwareSearchOrder(
+	preferredLanguage: string,
+	availableKeys: string[]
+): string[] {
+	// If preferredLanguage is 'name', use local names (no language suffix)
+	if (preferredLanguage === 'name') {
+		return [
+			'name', // Local names first
+			'name:en', // English as fallback
+			...availableKeys.filter((k) => k !== 'name' && k !== 'name:en').sort()
+		];
+	}
+
+	// For specific language preferences (e.g., 'en', 'fr', 'de')
+	const preferredKey = `name:${preferredLanguage}`;
+
+	return [
+		preferredKey, // Preferred language first
+		'name', // Local names as fallback
+		'name:en', // English as secondary fallback
+		...availableKeys.filter((k) => k !== preferredKey && k !== 'name' && k !== 'name:en').sort()
+	].filter((key) => availableKeys.includes(key)); // Only include keys that actually exist
 }
 
 // Fast and optimized search matching

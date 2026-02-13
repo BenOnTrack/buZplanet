@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Dialog, Tabs } from 'bits-ui';
 	import ColorsSettings from '$lib/components/settings/ColorsSettings.svelte';
+	import LanguageSettings from '$lib/components/settings/LanguageSettings.svelte';
 	import AppUpdateSettings from '$lib/components/settings/AppUpdateSettings.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
@@ -68,11 +69,8 @@
 						</div>
 					</Tabs.Content>
 					<Tabs.Content value="language" class="pt-3 select-none">
-						<div class="max-h-[60vh] overflow-y-auto p-4">
-							<h4 class="mb-2 text-[20px] leading-none font-semibold tracking-[-0.01em]">
-								Tab 2 Content
-							</h4>
-							<p class="text-muted-foreground text-sm">This is the content for the second tab.</p>
+						<div class="max-h-[60vh] overflow-y-auto px-1">
+							<LanguageSettings />
 						</div>
 					</Tabs.Content>
 					<Tabs.Content value="updates" class="pt-3">

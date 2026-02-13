@@ -3,7 +3,8 @@
 	import { clsx } from 'clsx';
 	import { Tabs } from 'bits-ui';
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
-	import { featuresDB } from '$lib/stores/FeaturesDB.svelte.js';
+	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
+	import { appState } from '$lib/stores/AppState.svelte';
 	import BookmarkDialog from '$lib/components/dialogs/BookmarkDialog.svelte';
 	import OpeningHoursDisplay from '$lib/components/ui/OpeningHoursDisplay.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
@@ -39,7 +40,7 @@
 	let activeSnapPoint = $state<string | number>('200px');
 	let activeTab = $state('info');
 	// Derived values for display
-	let hasFeature = $derived(feature !== null && feature !== undefined);
+	let hasFeature = $derived.by(() => feature !== null && feature !== undefined);
 
 	// State for tracking feature status in database
 	let featureStatus = $state<{
@@ -54,12 +55,14 @@
 	let bookmarkDialogOpen = $state(false);
 	let visitHistoryExpanded = $state(false);
 
-	// Watch for feature changes and update status
-	// Also reset state when feature becomes null
+	// Watch for feature changes and update status (side effect - remains $effect)
 	$effect(() => {
-		if (feature) {
+		// Only track the feature ID to avoid complex object dependencies
+		const featureId = feature?.id;
+
+		if (feature && featureId !== undefined) {
 			console.log('🔍 SelectedFeatureDrawer: Feature changed:', {
-				feature,
+				featureId,
 				properties: feature.properties,
 				hasProperties: !!feature.properties,
 				propertyKeys: feature.properties ? Object.keys(feature.properties) : [],
@@ -73,18 +76,26 @@
 		} else {
 			console.log('🔍 SelectedFeatureDrawer: Feature cleared');
 			// Reset state when no feature is selected
-			featureStatus.bookmarked = false;
-			featureStatus.listIds = [];
-			featureStatus.visitedDates = [];
-			featureStatus.todo = false;
-			featureStatus.loading = false;
-			visitHistoryExpanded = false;
+			resetFeatureStatus();
 		}
 	});
 
+	// Reset feature status to defaults
+	function resetFeatureStatus() {
+		featureStatus.bookmarked = false;
+		featureStatus.listIds = [];
+		featureStatus.visitedDates = [];
+		featureStatus.todo = false;
+		featureStatus.loading = false;
+		visitHistoryExpanded = false;
+	}
+
 	// Update feature status from database
 	async function updateFeatureStatus() {
-		if (!feature) return;
+		if (!feature) {
+			resetFeatureStatus();
+			return;
+		}
 
 		try {
 			featureStatus.loading = true;
@@ -104,18 +115,12 @@
 				featureStatus.visitedDates = storedFeature.visitedDates || [];
 				featureStatus.todo = storedFeature.todo;
 			} else {
-				featureStatus.bookmarked = false;
-				featureStatus.listIds = [];
-				featureStatus.visitedDates = [];
-				featureStatus.todo = false;
+				resetFeatureStatus();
 			}
 		} catch (error) {
 			console.error('Failed to update feature status:', error);
 			// Reset to safe defaults on error
-			featureStatus.bookmarked = false;
-			featureStatus.listIds = [];
-			featureStatus.visitedDates = [];
-			featureStatus.todo = false;
+			resetFeatureStatus();
 		} finally {
 			featureStatus.loading = false;
 		}
@@ -192,14 +197,15 @@
 		}
 	}
 
-	// Helper function to get display name with fallbacks for main title
+	// Helper function to get display name with fallbacks for main title based on language preference
 	function getDisplayName(feature: MapGeoJSONFeature | null): string {
 		if (!feature || !feature.properties) return 'Selected Feature';
 
 		const props = feature.properties;
+		const currentLanguage = appState.language;
 
-		// Try name:en first (don't format, keep as-is)
-		if (props['name:en']) return props['name:en'];
+		// Try current language setting first (don't format, keep as-is)
+		if (props[currentLanguage]) return props[currentLanguage];
 
 		// Fallback to name (don't format, keep as-is)
 		if (props.name) return props.name;
@@ -426,12 +432,12 @@
 >
 	<Drawer.Overlay
 		class="fixed inset-0 bg-black/40"
-		style="pointer-events: none;z-index: {Z_INDEX.DRAWER_OVERLAY}"
+		style="pointer-events: none;z-index: {Z_INDEX.SELECTED_FEATURE_DRAWER_OVERLAY}"
 	/>
 	<Drawer.Portal>
 		<Drawer.Content
 			class="border-b-none fixed right-0 bottom-0 left-0 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
-			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
+			style="z-index: {Z_INDEX.SELECTED_FEATURE_DRAWER_CONTENT}"
 		>
 			<div
 				class={clsx('flex w-full flex-col p-4 pt-5', {

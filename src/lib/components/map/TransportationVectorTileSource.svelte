@@ -2,10 +2,13 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { VectorTileSource, LineLayer, SymbolLayer, FillLayer } from 'svelte-maplibre';
+	import { appState } from '$lib/stores/AppState.svelte';
 
 	// Type assertion helper for Mapbox GL expressions
 	// These expressions are valid but TypeScript types are restrictive
 	const expr = (expression: any) => expression as any;
+
+	let { nameExpression }: { nameExpression: any } = $props();
 </script>
 
 <VectorTileSource
@@ -188,11 +191,7 @@
 		layout={{
 			'symbol-placement': 'line',
 			'symbol-spacing': 350,
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['Noto Sans Italic'],
 			'text-letter-spacing': 0.2,
 			'text-max-width': 5,
@@ -1415,11 +1414,7 @@
 		filter={['all', ['==', 'category', 'path']]}
 		layout={{
 			'symbol-placement': 'line',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['Noto Sans Regular'],
 			'text-rotation-alignment': 'map',
 			'text-size': {
@@ -1444,11 +1439,7 @@
 		filter={['all', ['==', '$type', 'LineString'], ['in', 'category', 'minor', 'service']]}
 		layout={{
 			'symbol-placement': 'line',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['Noto Sans Regular'],
 			'text-rotation-alignment': 'map',
 			'text-size': {
@@ -1478,11 +1469,7 @@
 		]}
 		layout={{
 			'symbol-placement': 'line',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['Noto Sans Regular'],
 			'text-rotation-alignment': 'map',
 			'text-size': {
@@ -1507,11 +1494,7 @@
 		filter={['all', ['in', 'category', 'primary', 'secondary', 'tertiary', 'trunk']]}
 		layout={{
 			'symbol-placement': 'line',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['Noto Sans Regular'],
 			'text-rotation-alignment': 'map',
 			'text-size': {

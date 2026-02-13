@@ -244,12 +244,7 @@ wrangler r2 object put mbtiles/transportation_asia_japan_kanto.mbtiles \
 
 https://developers.cloudflare.com/workers/static-assets/migration-guides/migrate-from-pages/
 
-To Fix
-
-- set tables in drawers to be mobile responsive
-
 To Build
 
 - click on row triggers a sub-drawer with details and map
-- click on class subclass or category and update the table
 - Add Stories

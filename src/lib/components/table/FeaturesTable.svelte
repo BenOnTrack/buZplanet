@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
-	import { featuresDB } from '$lib/stores/FeaturesDB.svelte.js';
+	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
+	import { appState } from '$lib/stores/AppState.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 
 	let {
@@ -40,8 +41,14 @@
 	);
 	let sortDirection = $state<'asc' | 'desc'>('asc');
 
-	// Load bookmark lists and stored features when component mounts
+	// Derived trigger for loading bookmark lists and stored features
+	const dataInitTrigger = $derived.by(() => featuresDB.initialized);
+
+	// Load bookmark lists and stored features when component mounts (side effect)
 	$effect(() => {
+		// Access trigger to create dependency
+		dataInitTrigger;
+
 		if (featuresDB.initialized) {
 			loadBookmarkLists();
 			loadStoredFeatures();
@@ -140,7 +147,8 @@
 		}
 	}
 
-	function toggleClassFilter(className: string, event: Event) {
+	function toggleClassFilter(className: string | undefined, event: Event) {
+		if (!className) return;
 		event.preventDefault();
 		event.stopPropagation();
 		if (selectedClasses.includes(className)) {
@@ -150,7 +158,8 @@
 		}
 	}
 
-	function toggleSubclassFilter(subclassName: string, event: Event) {
+	function toggleSubclassFilter(subclassName: string | undefined, event: Event) {
+		if (!subclassName) return;
 		event.preventDefault();
 		event.stopPropagation();
 		if (selectedSubclasses.includes(subclassName)) {
@@ -160,7 +169,8 @@
 		}
 	}
 
-	function toggleCategoryFilter(categoryName: string, event: Event) {
+	function toggleCategoryFilter(categoryName: string | undefined, event: Event) {
+		if (!categoryName) return;
 		event.preventDefault();
 		event.stopPropagation();
 		if (selectedCategories.includes(categoryName)) {
@@ -196,10 +206,11 @@
 		});
 	}
 
-	// Get feature's primary name (name:en first, then name, then formatted category)
+	// Get feature's primary name based on language preference, then fallback to name, then formatted category
 	function getFeatureName(feature: TableFeature): string {
+		const currentLanguage = appState.language;
 		return (
-			feature.names['name:en'] ||
+			feature.names[currentLanguage] ||
 			feature.names.name ||
 			(feature.category ? formatFeatureProperty(feature.category) : '') ||
 			Object.values(feature.names)[0] ||

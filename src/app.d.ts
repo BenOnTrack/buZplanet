@@ -154,9 +154,33 @@ declare global {
 		search: string;
 	}
 
+	/**
+	 * Language configuration for internationalization
+	 * Determines which name property to use for displaying feature names
+	 */
+	type LanguageCode =
+		| 'name'
+		| 'name:en'
+		| 'name:fr'
+		| 'name:de'
+		| 'name:es'
+		| 'name:it'
+		| 'name:pt'
+		| 'name:zh'
+		| 'name:ja'
+		| 'name:ko'
+		| 'name:ar'
+		| 'name:ru';
+
+	interface LanguageOption {
+		code: LanguageCode;
+		label: string;
+	}
+
 	interface AppConfig {
 		mapView: MapViewState;
 		colorMappings: ColorMappings;
+		language: LanguageCode;
 		// Future config properties can be added here
 		// theme?: string;
 		// selectedLayers?: string[];
@@ -283,11 +307,97 @@ declare global {
 		workerStatus: () => void;
 	}
 
+	// ==================== STORIES INTERFACES ====================
+
+	/**
+	 * Story content node types
+	 */
+	type StoryContentNode =
+		| {
+				type: 'text';
+				text: string;
+		  }
+		| {
+				type: 'feature';
+				featureId: string;
+				displayText: string;
+				feature: StoredFeature | SearchResult; // Can embed either type
+				customText?: string; // User can override display text
+		  };
+
+	/**
+	 * Story version for editing history
+	 */
+	interface StoryVersion {
+		id: string; // version id
+		storyId: string;
+		content: StoryContentNode[];
+		title: string;
+		description?: string;
+		tags: string[];
+		categories: string[];
+		dateCreated: number;
+		versionNumber: number;
+		changeDescription?: string; // What changed in this version
+	}
+
+	/**
+	 * Main story interface
+	 */
+	interface Story {
+		id: string; // Unique identifier for the story
+		userId: string; // User ID from Firebase Auth
+		title: string;
+		description?: string;
+		content: StoryContentNode[];
+		tags: string[]; // User-defined tags
+		categories: string[]; // Predefined categories like 'travel', 'food', etc.
+
+		// Metadata
+		dateCreated: number;
+		dateModified: number;
+		viewCount?: number; // How many times story was viewed
+		isPublic: boolean; // Whether story can be shared
+
+		// Versioning
+		currentVersion: number;
+		versions?: StoryVersion[]; // Full version history
+
+		// Sync fields
+		lastSyncTimestamp?: number; // When this story was last synced
+		firestoreId?: string; // Firestore document ID
+		deleted?: boolean; // Soft delete flag for sync
+
+		// Search optimization - denormalized searchable text
+		searchText: string; // Concatenated text for full-text search
+	}
+
+	/**
+	 * Story search result
+	 */
+	interface StorySearchResult {
+		story: Story;
+		score: number; // Relevance score for ranking
+		matchedFields: string[]; // Which fields matched the search
+		matchedContent?: StoryContentNode[]; // Content nodes that matched
+	}
+
+	/**
+	 * Story category configuration
+	 */
+	interface StoryCategory {
+		id: string;
+		name: string;
+		color: string;
+		icon?: string;
+		description?: string;
+	}
+
 	// ==================== SYNC INTERFACES ====================
 
 	interface SyncConflict {
 		id: string;
-		type: 'feature' | 'list';
+		type: 'feature' | 'list' | 'story';
 		localData: any;
 		remoteData: any;
 		conflictType: 'both_modified' | 'local_deleted' | 'remote_deleted';

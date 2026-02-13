@@ -2,6 +2,8 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { VectorTileSource, LineLayer, SymbolLayer, FillLayer } from 'svelte-maplibre';
+
+	let { nameExpression }: { nameExpression: any } = $props();
 </script>
 
 <VectorTileSource
@@ -421,11 +423,7 @@
 					[15, 14]
 				]
 			} as any,
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'symbol-spacing': 1250,
 			'text-max-width': 9,
 			'text-transform': 'none',
@@ -453,11 +451,7 @@
 		layout={{
 			'symbol-placement': 'line',
 			'symbol-spacing': 350,
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['Noto Sans Italic'],
 			'text-letter-spacing': 0.2,
 			'text-max-width': 5,
@@ -484,11 +478,7 @@
 		layout={{
 			'symbol-placement': 'point',
 			'symbol-spacing': 350,
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['Noto Sans Italic'],
 			'text-letter-spacing': 0.2,
 			'text-max-width': 5,
@@ -508,11 +498,7 @@
 		layout={{
 			'symbol-placement': 'point',
 			'symbol-spacing': 350,
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['Noto Sans Italic'],
 			'text-letter-spacing': 0.2,
 			'text-max-width': 5,

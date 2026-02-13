@@ -13,14 +13,14 @@
 	let tripsOpen = $state(false);
 	let featuresOpen = $state(false);
 
-	// Keep the drawer states in sync with currentOpenDrawer
+	// Keep the drawer states in sync with currentOpenDrawer (side effect)
 	$effect(() => {
 		storiesOpen = currentOpenDrawer === 'stories';
 		tripsOpen = currentOpenDrawer === 'trips';
 		featuresOpen = currentOpenDrawer === 'features';
 	});
 
-	// Watch for changes in drawer states (when closed via drawer's close button)
+	// Watch for changes in drawer states when closed via drawer's close button (side effect)
 	$effect(() => {
 		if (!storiesOpen && currentOpenDrawer === 'stories') {
 			currentOpenDrawer = null;

@@ -209,6 +209,7 @@ export class WorkerManager {
 	async searchFeatures(
 		query: string,
 		limit?: number,
+		language?: string,
 		onProgress?: (data: {
 			results: any[];
 			isComplete: boolean;
@@ -218,7 +219,7 @@ export class WorkerManager {
 	): Promise<any[]> {
 		return this.sendMessage(
 			'search-features',
-			{ query, limit },
+			{ query, limit, language },
 			60000, // 60 second timeout for comprehensive search
 			onProgress
 		);
