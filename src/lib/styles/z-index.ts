@@ -6,37 +6,41 @@
  *
  * Layering hierarchy (from bottom to top):
  * 1. Base content (z-0 to z-10)
- * 2. Drawers and overlays (z-40 to z-95)
- * 3. Selected feature drawer (z-90+) - priority drawer
- * 4. Navigation and UI chrome (z-100 to z-200)
- * 5. Modals and dialogs (z-300 to z-400)
- * 6. Tooltips and popovers (z-500 to z-600)
- * 7. Debug/dev tools (z-9000+)
+ * 2. Navigation and UI chrome (z-10 to z-30)
+ * 3. Drawers and overlays (z-40 to z-60)
+ * 4. Selected feature drawer (z-70) - priority drawer, above other drawers but below dialogs
+ * 5. Navigation overlays (z-100)
+ * 6. Modals and dialogs (z-300 to z-400)
+ * 7. Tooltips and popovers (z-500 to z-600)
+ * 8. Notifications (z-700 to z-800)
+ * 9. Debug/dev tools (z-9000+)
  */
 
 // Base content layers (0-10)
 export const Z_INDEX = {
-	// Navigation and main UI (0-100)
+	// Base content and navigation (0-30)
 	MAP: 0,
 	BOTTOM_NAV: 10,
 	SEARCH_BAR: 20,
 
-	// Modals and dialogs (100-200)
-	DIALOG_TRIGGER: 30,
-	DIALOG_OVERLAY: 50,
-	DIALOG_CONTENT: 50,
-	MODAL_OVERLAY: 200,
-	MODAL_CONTENT: 210,
-	STORY_FEATURE_DIALOG_OVERLAY: 300,
-	STORY_FEATURE_DIALOG_CONTENT: 310,
-
-	// Drawers and overlays (40-95)
+	// Drawers and overlays (40-70)
 	DRAWER_OVERLAY: 40,
 	DRAWER_CONTENT: 50,
 
-	// Selected Feature Drawer (priority drawer - always on top)
-	SELECTED_FEATURE_DRAWER_OVERLAY: 90,
-	SELECTED_FEATURE_DRAWER_CONTENT: 95,
+	// Selected Feature Drawer (priority drawer - above other drawers, below dialogs)
+	SELECTED_FEATURE_DRAWER_OVERLAY: 70,
+	SELECTED_FEATURE_DRAWER_CONTENT: 70,
+
+	// Navigation overlays (100)
+	DIALOG_TRIGGER: 100,
+	MODAL_OVERLAY: 100,
+	MODAL_CONTENT: 110,
+
+	// Modals and dialogs (300-400)
+	DIALOG_OVERLAY: 300,
+	DIALOG_CONTENT: 310,
+	STORY_FEATURE_DIALOG_OVERLAY: 320,
+	STORY_FEATURE_DIALOG_CONTENT: 330,
 
 	// Tooltips and popovers (500-600)
 	TOOLTIP: 500,
