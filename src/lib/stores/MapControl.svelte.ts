@@ -10,6 +10,7 @@ class MapControl {
 	// Selected feature state
 	private _selectedFeature = $state<MapGeoJSONFeature | null>(null);
 	private _selectedFeatureDrawerOpen = $state(false);
+	private _storyInsertionMode = $state(false); // Flag for story feature insertion mode
 
 	// Getters for reactive state
 	get selectedFeature(): MapGeoJSONFeature | null {
@@ -20,12 +21,21 @@ class MapControl {
 		return this._selectedFeatureDrawerOpen;
 	}
 
+	get storyInsertionMode(): boolean {
+		return this._storyInsertionMode;
+	}
+
 	// Setter methods
 	setSelectedFeature(feature: MapGeoJSONFeature | null) {
 		this._selectedFeature = feature;
 	}
 
 	setSelectedFeatureDrawerOpen(open: boolean) {
+		// Don't open drawer if we're in story insertion mode
+		if (open && this._storyInsertionMode) {
+			return;
+		}
+
 		// Only update if state is actually changing
 		if (this._selectedFeatureDrawerOpen !== open) {
 			this._selectedFeatureDrawerOpen = open;
@@ -33,6 +43,14 @@ class MapControl {
 			if (!open) {
 				this._selectedFeature = null;
 			}
+		}
+	}
+
+	setStoryInsertionMode(active: boolean) {
+		this._storyInsertionMode = active;
+		// If activating story insertion mode, close the selected feature drawer
+		if (active && this._selectedFeatureDrawerOpen) {
+			this._selectedFeatureDrawerOpen = false;
 		}
 	}
 
@@ -47,13 +65,16 @@ class MapControl {
 	}
 
 	/**
-	 * Select a feature and open the drawer
+	 * Select a feature and open the drawer (unless in story insertion mode)
 	 */
 	selectFeature(feature: MapGeoJSONFeature) {
 		// Only update if this is a different feature or drawer is closed
 		if (this._selectedFeature !== feature || !this._selectedFeatureDrawerOpen) {
 			this._selectedFeature = feature;
-			this._selectedFeatureDrawerOpen = true;
+			// Don't open drawer if in story insertion mode
+			if (!this._storyInsertionMode) {
+				this._selectedFeatureDrawerOpen = true;
+			}
 		}
 	}
 

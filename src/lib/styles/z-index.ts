@@ -28,9 +28,13 @@ export const Z_INDEX = {
 	MODAL_OVERLAY: 200,
 	MODAL_CONTENT: 210,
 
-	// Drawers and overlays (40-80)
+	// Drawers and overlays (40-95)
 	DRAWER_OVERLAY: 40,
 	DRAWER_CONTENT: 50,
+
+	// Selected Feature Drawer (priority drawer - always on top)
+	SELECTED_FEATURE_DRAWER_OVERLAY: 90,
+	SELECTED_FEATURE_DRAWER_CONTENT: 95,
 
 	// Tooltips and popovers (500-600)
 	TOOLTIP: 500,

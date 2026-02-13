@@ -432,12 +432,12 @@
 >
 	<Drawer.Overlay
 		class="fixed inset-0 bg-black/40"
-		style="pointer-events: none;z-index: {Z_INDEX.DRAWER_OVERLAY}"
+		style="pointer-events: none;z-index: {Z_INDEX.SELECTED_FEATURE_DRAWER_OVERLAY}"
 	/>
 	<Drawer.Portal>
 		<Drawer.Content
 			class="border-b-none fixed right-0 bottom-0 left-0 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
-			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
+			style="z-index: {Z_INDEX.SELECTED_FEATURE_DRAWER_CONTENT}"
 		>
 			<div
 				class={clsx('flex w-full flex-col p-4 pt-5', {
