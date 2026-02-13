@@ -10,6 +10,7 @@
 	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { appInitializer } from '$lib/utils/app-initialization';
+	import { appState } from '$lib/stores/AppState.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index.js';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -54,10 +55,15 @@
 			const { getWorker } = await import('$lib/utils/worker');
 			const worker = getWorker();
 
-			// Search for features with progressive results
+			// Get current language preference from AppState
+			const currentLanguage = appState.language;
+			console.log(`🌐 Using language preference: ${currentLanguage}`);
+
+			// Search for features with progressive results and language preference
 			const finalResults = await worker.searchFeatures(
 				query,
 				5000, // 5000 results max
+				currentLanguage, // Pass language preference to worker
 				// Progress callback for streaming results
 				(progressData) => {
 					const { results, isComplete, currentDatabase, total } = progressData;

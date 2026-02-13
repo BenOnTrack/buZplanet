@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { MagnifyingGlass } from 'phosphor-svelte';
-	import PropertyIcon from '../ui/PropertyIcon.svelte';
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 
 	// Props
 	let {

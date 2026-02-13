@@ -154,9 +154,33 @@ declare global {
 		search: string;
 	}
 
+	/**
+	 * Language configuration for internationalization
+	 * Determines which name property to use for displaying feature names
+	 */
+	type LanguageCode =
+		| 'name'
+		| 'name:en'
+		| 'name:fr'
+		| 'name:de'
+		| 'name:es'
+		| 'name:it'
+		| 'name:pt'
+		| 'name:zh'
+		| 'name:ja'
+		| 'name:ko'
+		| 'name:ar'
+		| 'name:ru';
+
+	interface LanguageOption {
+		code: LanguageCode;
+		label: string;
+	}
+
 	interface AppConfig {
 		mapView: MapViewState;
 		colorMappings: ColorMappings;
+		language: LanguageCode;
 		// Future config properties can be added here
 		// theme?: string;
 		// selectedLayers?: string[];

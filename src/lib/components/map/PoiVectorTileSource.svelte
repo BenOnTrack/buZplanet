@@ -5,6 +5,8 @@
 	import { appState } from '$lib/stores/AppState.svelte.js';
 	import { onMount } from 'svelte';
 
+	let { nameExpression }: { nameExpression: any } = $props();
+
 	// Track initialization
 	let isInitialized = $state(false);
 
@@ -609,11 +611,7 @@
 			'icon-image': iconImage().attraction,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -637,11 +635,7 @@
 			'icon-image': iconImage().education,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -665,11 +659,7 @@
 			'icon-image': iconImage().entertainment,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -693,11 +683,7 @@
 			'icon-image': iconImage().facility,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -721,11 +707,7 @@
 			'icon-image': iconImage().food_and_drink,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -749,11 +731,7 @@
 			'icon-image': iconImage().healthcare,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -777,11 +755,7 @@
 			'icon-image': iconImage().leisure,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -805,11 +779,7 @@
 			'icon-image': iconImage().lodging,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -833,11 +803,7 @@
 			'icon-image': iconImage().natural,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -861,11 +827,7 @@
 			'icon-image': iconImage().shop,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -889,11 +851,7 @@
 			'icon-image': iconImage().transportation,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Regular']],
 			'text-offset': [0, 1],
 			'text-max-width': 9,
@@ -946,7 +904,7 @@
 			'icon-image': iconImage().place,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']],
+			'text-field': nameExpression,
 			'text-font': [
 				'case',
 				['==', ['get', 'subclass'], 'administrative'],
@@ -1016,7 +974,7 @@
 			'icon-image': iconImage().place,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
-			'text-field': ['coalesce', ['get', 'name:en'], ['get', 'name']],
+			'text-field': nameExpression,
 			'text-font': ['literal', ['Noto Sans Bold']],
 			'text-transform': 'uppercase',
 			'text-offset': [0, 1],
@@ -1056,11 +1014,7 @@
         18, 1,
       ],
       "text-anchor": "top",
-      "text-field": [
-        "coalesce",
-        ["get", "name:en"], // Try to get name in the specified language
-        ["get", "name"], // Fallback to default name if not available
-      ],
+      'text-field': nameExpression,
       "text-font": [
   "case",
   ["==", ["get", "subclass"], "administrative"],

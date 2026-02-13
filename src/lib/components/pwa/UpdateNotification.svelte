@@ -5,22 +5,22 @@
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 
-	let showUpdate = $state(false);
-	let isUpdating = $state(false);
-
 	// Auto-hide notification after 10 seconds if no action taken
 	let autoHideTimer: NodeJS.Timeout | null = null;
+
+	// Derived state based on service worker manager
+	let showUpdate = $derived.by(() => {
+		return swManager.hasUpdate && swManager.notificationsEnabled && !isUpdating;
+	});
+	let isUpdating = $derived.by(() => swManager.isInstalling);
 
 	onMount(() => {
 		// Initialize service worker
 		swManager.init();
 	});
 
-	// Watch for updates
+	// Handle auto-hide timer (side effect - legitimate as it manages external timer)
 	$effect(() => {
-		showUpdate = swManager.hasUpdate && swManager.notificationsEnabled && !isUpdating;
-		isUpdating = swManager.isInstalling;
-
 		if (showUpdate) {
 			// Clear any existing timer
 			if (autoHideTimer) {

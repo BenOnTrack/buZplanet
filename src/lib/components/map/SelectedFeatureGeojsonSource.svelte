@@ -4,9 +4,10 @@
 	import { GeoJSON, CircleLayer, FillLayer, LineLayer } from 'svelte-maplibre';
 
 	interface Props {
+		nameExpression: any;
 		selectedFeatureGeoJSON: any;
 	}
-	let { selectedFeatureGeoJSON }: Props = $props();
+	let { nameExpression, selectedFeatureGeoJSON }: Props = $props();
 
 	// Determine geometry type for conditional rendering
 	const geometryType = $derived.by(() => {

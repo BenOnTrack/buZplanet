@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { Drawer } from 'vaul-svelte';
 	import { clsx } from 'clsx';
-	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
@@ -24,7 +23,6 @@
 	} = $props();
 
 	let activeSnapPoint = $state<string | number>('400px');
-	let filteredResults = $state<SearchResult[]>([]);
 	let allStoredFeatures = $state<StoredFeature[]>([]);
 	let bookmarkLists = $state<BookmarkList[]>([]);
 	let localSearchQuery = $state('');
@@ -35,9 +33,9 @@
 	let selectedListIds = $state<string[]>([]);
 	let filtersExpanded = $state(false);
 
-	// Update filtered results when results or filters change
-	$effect(() => {
-		filteredResults = applyFilters(deduplicateResults(results));
+	// Filtered results based on current filters (derived)
+	let filteredResults = $derived.by(() => {
+		return applyFilters(deduplicateResults(results));
 	});
 
 	// Deduplicate results by feature.id (keep first occurrence)
@@ -55,9 +53,18 @@
 		return uniqueResults;
 	}
 
-	// Load stored features for matching
+	// Derived trigger for data loading
+	const dataLoadTrigger = $derived.by(() => ({
+		initialized: featuresDB.initialized,
+		open
+	}));
+
+	// Load stored features for matching (side effect)
 	$effect(() => {
-		if (featuresDB.initialized && open) {
+		// Access trigger to create dependency
+		const { initialized, open: drawerOpen } = dataLoadTrigger;
+
+		if (initialized && drawerOpen) {
 			loadStoredFeatures();
 			loadBookmarkLists();
 		}

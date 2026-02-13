@@ -14,86 +14,85 @@
 		compact?: boolean;
 	} = $props();
 
-	let schedule = $state<OpeningHoursSchedule | null>(null);
-	let isOpen = $state<boolean | null>(null);
-	let currentStatus = $state<string>('');
-	let dropdownOpen = $state(false);
-
-	// Parse opening hours when the prop changes
-	$effect(() => {
-		if (openingHours) {
-			const parsed = parseOpeningHours(openingHours);
-			schedule = parsed;
-			updateCurrentStatus(parsed);
-		} else {
-			schedule = null;
-			isOpen = null;
-			currentStatus = 'Hours not specified';
+	// Parse opening hours and update status reactively when prop changes
+	let scheduleAndStatus = $derived.by(() => {
+		if (!openingHours) {
+			return {
+				schedule: null,
+				isOpen: null,
+				currentStatus: 'Hours not specified'
+			};
 		}
-	});
 
-	function updateCurrentStatus(parsed: OpeningHoursSchedule) {
+		const parsed = parseOpeningHours(openingHours);
+
 		if (parsed.error) {
-			isOpen = null;
-			currentStatus = 'Hours format not recognized';
-			return;
+			return {
+				schedule: parsed,
+				isOpen: null,
+				currentStatus: 'Hours format not recognized'
+			};
 		}
 
 		if (parsed.is24_7) {
-			isOpen = true;
-			currentStatus = 'Open 24/7';
-			return;
+			return {
+				schedule: parsed,
+				isOpen: true,
+				currentStatus: 'Open 24/7'
+			};
 		}
 
 		if (parsed.isClosed) {
-			isOpen = false;
-			currentStatus = 'Closed';
-			return;
+			return {
+				schedule: parsed,
+				isOpen: false,
+				currentStatus: 'Closed'
+			};
 		}
 
-		// Get current day and time
+		// Calculate current status
 		const now = new Date();
-		const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-		const currentTime = now.getHours() * 60 + now.getMinutes(); // Minutes since midnight
+		const currentDay = now.getDay();
+		const currentTime = now.getHours() * 60 + now.getMinutes();
 
-		// Find current day in schedule
-		const dayNames: DayName[] = [
-			'sunday',
-			'monday',
-			'tuesday',
-			'wednesday',
-			'thursday',
-			'friday',
-			'saturday'
-		];
-		const currentDayName = dayNames[currentDay];
+		const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+		const currentDayName = dayNames[currentDay] as DayName;
 		const todaySchedule = parsed.days[currentDayName];
 
 		if (!todaySchedule || todaySchedule.length === 0) {
-			isOpen = false;
-			currentStatus = 'Closed today';
-			return;
+			return {
+				schedule: parsed,
+				isOpen: false,
+				currentStatus: 'Closed today'
+			};
 		}
 
 		// Check if currently open
 		for (const period of todaySchedule) {
 			if (currentTime >= period.start && currentTime < period.end) {
-				isOpen = true;
 				const closingTime = formatTime(period.end);
-				currentStatus = `Open until ${closingTime}`;
-				return;
+				return {
+					schedule: parsed,
+					isOpen: true,
+					currentStatus: `Open until ${closingTime}`
+				};
 			}
 		}
 
 		// Find next opening time
-		isOpen = false;
 		const nextOpening = findNextOpening(parsed, now);
-		if (nextOpening) {
-			currentStatus = `Closed • Opens ${nextOpening}`;
-		} else {
-			currentStatus = 'Closed';
-		}
-	}
+		return {
+			schedule: parsed,
+			isOpen: false,
+			currentStatus: nextOpening ? `Closed • Opens ${nextOpening}` : 'Closed'
+		};
+	});
+
+	// Extract individual values from the derived result
+	let schedule = $derived.by(() => scheduleAndStatus.schedule);
+	let isOpen = $derived.by(() => scheduleAndStatus.isOpen);
+	let currentStatus = $derived.by(() => scheduleAndStatus.currentStatus);
+	let dropdownOpen = $state(false);
 
 	function findNextOpening(parsed: OpeningHoursSchedule, now: Date): string | null {
 		const currentDay = now.getDay();

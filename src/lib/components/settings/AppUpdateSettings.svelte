@@ -10,6 +10,7 @@
 <script lang="ts">
 	import { swManager } from '$lib/utils/service-worker-manager.svelte.js';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+	import { versionManager } from '$lib/utils/version-manager.js';
 
 	let checking = $state(false);
 
@@ -218,6 +219,12 @@
 	<div class="space-y-2">
 		<h5 class="text-foreground text-sm font-medium">Information</h5>
 		<div class="space-y-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-800/50">
+			<div class="flex items-center justify-between">
+				<span class="text-muted-foreground text-xs">Version:</span>
+				<span class="text-foreground font-mono text-xs">
+					v{versionManager.version}
+				</span>
+			</div>
 			<div class="flex items-center justify-between">
 				<span class="text-muted-foreground text-xs">Last Check:</span>
 				<span class="text-foreground font-mono text-xs">

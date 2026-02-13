@@ -1,11 +1,11 @@
 <script lang="ts">
-	import TypeFilters from './TypeFilters.svelte';
-	import ListFilters from './ListFilters.svelte';
-	import ClassFilters from './ClassFilters.svelte';
-	import SubclassFilters from './SubclassFilters.svelte';
-	import CategoryFilters from './CategoryFilters.svelte';
-	import SearchFilter from './SearchFilter.svelte';
-	import FilterStats from './FilterStats.svelte';
+	import TypeFilters from '$lib/components/drawers/filters/TypeFilters.svelte';
+	import ListFilters from '$lib/components/drawers/filters/ListFilters.svelte';
+	import ClassFilters from '$lib/components/drawers/filters/ClassFilters.svelte';
+	import SubclassFilters from '$lib/components/drawers/filters/SubclassFilters.svelte';
+	import CategoryFilters from '$lib/components/drawers/filters/CategoryFilters.svelte';
+	import SearchFilter from '$lib/components/drawers/filters/SearchFilter.svelte';
+	import FilterStats from '$lib/components/drawers/filters/FilterStats.svelte';
 
 	// Props
 	let {

@@ -5,6 +5,12 @@
 	import { appState } from '$lib/stores/AppState.svelte.js';
 	import { onMount } from 'svelte';
 
+	interface Props {
+		nameExpression: any;
+		visitedFeaturesGeoJSON: any;
+	}
+	let { nameExpression, visitedFeaturesGeoJSON }: Props = $props();
+
 	// Track initialization
 	let isInitialized = $state(false);
 
@@ -13,11 +19,6 @@
 		await appState.ensureInitialized();
 		isInitialized = true;
 	});
-
-	interface Props {
-		visitedFeaturesGeoJSON: any;
-	}
-	let { visitedFeaturesGeoJSON }: Props = $props();
 
 	const iconImage = $derived(() => {
 		if (!isInitialized) {
@@ -467,11 +468,7 @@
 				1.5
 			],
 			'text-anchor': 'top',
-			'text-field': [
-				'coalesce',
-				['get', 'name:en'], // Try to get name in the specified language
-				['get', 'name'] // Fallback to default name if not available
-			],
+			'text-field': nameExpression,
 			'text-font': [
 				'case',
 				['==', ['get', 'class'], 'place'],

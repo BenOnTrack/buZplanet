@@ -5,6 +5,7 @@
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte.js';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
+	import { getDisplayName } from '$lib/utils/language';
 
 	let {
 		open = $bindable(false),
@@ -27,12 +28,24 @@
 	function getFeatureDisplayName(feature: any): string {
 		if (!feature || !feature.properties) return 'Selected Feature';
 		const props = feature.properties;
-		return props['name:en'] || props.name || props.category || 'Selected Feature';
+
+		// Use the language utility to get the appropriate name
+		const displayName = getDisplayName(props);
+		return displayName || props.category || 'Selected Feature';
 	}
 
-	// Load bookmark lists and current feature status when dialog opens
+	// Derived trigger for bookmark list loading
+	const bookmarkLoadTrigger = $derived.by(() => ({
+		open,
+		feature
+	}));
+
+	// Load bookmark lists and current feature status when dialog opens (side effect)
 	$effect(() => {
-		if (open && feature) {
+		// Access trigger to create dependency
+		const { open: dialogOpen, feature: currentFeature } = bookmarkLoadTrigger;
+
+		if (dialogOpen && currentFeature) {
 			loadBookmarkLists();
 		}
 	});

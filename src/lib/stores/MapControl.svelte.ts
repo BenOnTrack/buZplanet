@@ -376,13 +376,6 @@ class MapControl {
 	 * This creates a minimal but complete feature that can be bookmarked
 	 */
 	createMapFeatureFromSearchResult(searchResult: SearchResult): any {
-		// Get the primary name from the names object
-		const primaryName =
-			searchResult.names['name:en'] ||
-			searchResult.names.name ||
-			Object.values(searchResult.names)[0] ||
-			'Unnamed';
-
 		// Create a completely clean, serializable GeoJSON feature
 		// Avoid any references that might not be cloneable by IndexedDB
 		const cleanFeature = {

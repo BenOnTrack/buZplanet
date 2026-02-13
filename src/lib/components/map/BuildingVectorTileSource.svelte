@@ -2,6 +2,7 @@
 <script lang="ts">
 	// @ts-nocheck
 	import { VectorTileSource, FillExtrusionLayer } from 'svelte-maplibre';
+	let { nameExpression }: { nameExpression: any } = $props();
 </script>
 
 <VectorTileSource

@@ -11,9 +11,9 @@
 	const statusMessages = {
 		pending: 'Starting up...',
 		initializing: 'Initializing worker...',
-		'worker-ready': 'Worker ready, setting up protocols...',
-		'appstate-ready': 'Setting up app state...',
-		'protocol-ready': 'Finalizing setup...',
+		'worker-ready': 'Worker ready, loading app state...',
+		'appstate-ready': 'App state loaded, setting up protocols...',
+		'protocol-ready': 'Protocols ready, finalizing setup...',
 		'database-scanning': 'Scanning databases...',
 		complete: 'Ready!',
 		error: 'Initialization failed'
@@ -23,7 +23,7 @@
 		pending: '⏳',
 		initializing: '🔄',
 		'worker-ready': '⚙️',
-		'appstate-ready': '💾',
+		'appstate-ready': '🗺️',
 		'protocol-ready': '🔗',
 		'database-scanning': '🗄️',
 		complete: '✅',
@@ -31,7 +31,7 @@
 	};
 </script>
 
-<div class="loading-container">
+<div class="loading-container" style="z-index: {Z_INDEX.LOADING}">
 	<div class="loading-content">
 		<div class="status-indicator">
 			<span
@@ -94,7 +94,6 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		z-index: 700;
 		color: white;
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 	}
@@ -175,7 +174,7 @@
 	}
 
 	.progress-fill.step-3 {
-		width: 60%;
+		width: 70%;
 	}
 
 	.progress-fill.step-4 {

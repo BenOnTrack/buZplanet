@@ -96,15 +96,24 @@ class AppInitializer {
 
 			// Step 2: Initialize AppState (IndexedDB storage) - timeout after 2 seconds
 			this.addLog('🔄 Initializing AppState storage...');
-			const appStatePromise = Promise.race([
-				appState.ensureInitialized(),
-				new Promise((_, reject) =>
-					setTimeout(() => reject(new Error('AppState initialization timeout')), 2000)
-				)
-			]);
 
-			await appStatePromise;
-			this.addLog('✅ AppState initialized!');
+			try {
+				const appStatePromise = Promise.race([
+					appState.ensureInitialized(),
+					new Promise((_, reject) =>
+						setTimeout(() => reject(new Error('AppState initialization timeout')), 2000)
+					)
+				]);
+
+				await appStatePromise;
+				this.addLog(
+					`✅ AppState initialized! Map view: [${appState.mapView.center.join(', ')}] @ z${appState.mapView.zoom}`
+				);
+			} catch (error) {
+				this.addLog(`⚠️ AppState initialization timeout - using defaults`);
+				// Continue with defaults - this is not a critical failure
+			}
+
 			this.updateState({ status: 'appstate-ready' });
 
 			// Step 3: Basic worker initialization (fast)
@@ -175,6 +184,9 @@ class AppInitializer {
 			// Step 8: Complete
 			this.updateState({ status: 'complete' });
 			this.addLog('🎉 App initialization complete!');
+			this.addLog(
+				`🗺️ Map will start at: [${appState.mapView.center.join(', ')}] @ z${appState.mapView.zoom}`
+			);
 
 			return {
 				success: true,

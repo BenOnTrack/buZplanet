@@ -5,6 +5,7 @@
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
+	import { appState } from '$lib/stores/AppState.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import FeaturesTable from '$lib/components/table/FeaturesTable.svelte';
@@ -186,18 +187,29 @@
 		});
 	});
 
-	// Reactive data loading - automatically updates when drawer opens or stats change
+	// Derived trigger for reactive data loading
+	const dataLoadTrigger = $derived(() => ({
+		open,
+		initialized: featuresDB.initialized,
+		stats: featuresDB.stats
+	}));
+
+	// Reactive data loading - automatically updates when drawer opens or stats change (side effect)
 	$effect(() => {
+		// Access trigger to create dependency
+		dataLoadTrigger();
+
 		if (open && featuresDB.initialized) {
 			loadData();
 		}
 	});
 
-	// Watch for changes in database stats to trigger refresh
+	// Watch for changes in database stats to trigger refresh (side effect)
 	$effect(() => {
-		// This effect runs when featuresDB.stats changes
-		const stats = featuresDB.stats;
-		if (open && featuresDB.initialized && (stats.total > 0 || features.length > 0)) {
+		// Access trigger to create dependency
+		const { stats, initialized } = dataLoadTrigger();
+
+		if (open && initialized && (stats.total > 0 || features.length > 0)) {
 			loadData();
 		}
 	});
@@ -225,10 +237,11 @@
 		}
 	}
 
-	// Get feature's primary name (name:en first, then name, then formatted category)
+	// Get feature's primary name based on language preference, then fallback to name, then formatted category
 	function getFeatureName(feature: StoredFeature): string {
+		const currentLanguage = appState.language;
 		return (
-			feature.names['name:en'] ||
+			feature.names[currentLanguage] ||
 			feature.names.name ||
 			(feature.category ? formatFeatureProperty(feature.category) : null) ||
 			Object.values(feature.names)[0] ||
