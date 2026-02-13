@@ -3,6 +3,7 @@
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+	import { Z_INDEX } from '$lib/styles/z-index';
 
 	let {
 		content = $bindable([]),
@@ -19,32 +20,20 @@
 	} = $props();
 
 	let editorElement = $state<HTMLDivElement | null>(null);
-	let isInserting = $state(false);
 	let selectedFeature = $state<StoredFeature | SearchResult | null>(null);
 	let customDisplayText = $state('');
 	let showFeatureDialog = $state(false);
 	let lastRenderedContent = $state<string>(''); // Track what we last rendered
 
-	// Debug: Track selectedFeature changes
+	// Enable story insertion mode when editor is opened (if not readonly)
 	$effect(() => {
-		console.log('🔄 selectedFeature changed:', selectedFeature);
-	});
+		if (!readonly) {
+			mapControl.setStoryInsertionMode(true);
+		}
 
-	// Debug: Track isInserting changes
-	$effect(() => {
-		console.log('🔄 isInserting changed:', isInserting);
-	});
-
-	// Debug: Track showFeatureDialog changes
-	$effect(() => {
-		console.log('🔄 showFeatureDialog changed:', showFeatureDialog);
-	});
-	// Clean up story insertion mode when component is destroyed
-	$effect(() => {
+		// Clean up story insertion mode when component is destroyed or becomes readonly
 		return () => {
-			if (isInserting) {
-				mapControl.setStoryInsertionMode(false);
-			}
+			mapControl.setStoryInsertionMode(false);
 		};
 	});
 
@@ -229,9 +218,6 @@
 			selectedFeature = null;
 			customDisplayText = '';
 			showFeatureDialog = false;
-			isInserting = false;
-			// Disable story insertion mode
-			mapControl.setStoryInsertionMode(false);
 
 			// After content updates, focus at the end of the editor
 			setTimeout(() => {
@@ -253,9 +239,7 @@
 		} catch (error) {
 			console.error('❌ Failed to insert feature:', error);
 			// Make sure to reset state even on error
-			isInserting = false;
 			showFeatureDialog = false;
-			mapControl.setStoryInsertionMode(false);
 		}
 	}
 
@@ -269,9 +253,9 @@
 		return 'Unknown Feature';
 	}
 
-	// Listen for map feature selection when in insert mode
+	// Listen for map feature selection when in edit mode
 	$effect(() => {
-		if (isInserting && mapControl.selectedFeature) {
+		if (!readonly && mapControl.selectedFeature) {
 			console.log('🎯 Story Editor: Feature selected for insertion:', mapControl.selectedFeature);
 
 			// Convert MapGeoJSONFeature to usable format
@@ -316,45 +300,20 @@
 				.catch((error) => {
 					console.error('❌ Error processing selected feature:', error);
 				});
-		} else if (isInserting) {
-			console.log('⏳ Story Editor: Waiting for feature selection...');
 		}
 	});
 
-	// Debug: Track selectedFeature changes
-	$effect(() => {
-		console.log('🔄 selectedFeature changed:', selectedFeature);
-	});
-
-	// Debug: Track isInserting changes
-	$effect(() => {
-		console.log('🔄 isInserting changed:', isInserting);
-	});
-
-	// Debug: Track showFeatureDialog changes
-	$effect(() => {
-		console.log('🔄 showFeatureDialog changed:', showFeatureDialog);
-	});
-
-	// Start feature insertion mode
-	function startFeatureInsertion() {
-		console.log('🚀 Story Editor: Starting feature insertion mode');
-		isInserting = true;
+	// Open feature insertion dialog
+	function openFeatureDialog() {
+		console.log('🚀 Story Editor: Opening feature insertion dialog');
 		showFeatureDialog = true;
-		// Enable story insertion mode to prevent SelectedFeatureDrawer from opening
-		mapControl.setStoryInsertionMode(true);
-		console.log('📺 Story insertion mode enabled, selectedFeature:', mapControl.selectedFeature);
 	}
 
 	// Cancel feature insertion
 	function cancelFeatureInsertion() {
 		console.log('❌ Story Editor: Cancelling feature insertion');
-		isInserting = false;
-		selectedFeature = null;
 		customDisplayText = '';
 		showFeatureDialog = false;
-		// Disable story insertion mode
-		mapControl.setStoryInsertionMode(false);
 	}
 </script>
 
@@ -364,28 +323,17 @@
 		<div class="border-b border-gray-200 bg-gray-50 px-3 py-2">
 			<div class="flex items-center gap-2">
 				<button
-					class={clsx(
-						'flex items-center gap-1 rounded px-2 py-1 text-sm font-medium transition-colors',
-						{
-							'bg-blue-100 text-blue-700': isInserting,
-							'border border-gray-200 bg-white text-gray-700 hover:bg-gray-100': !isInserting
-						}
-					)}
-					onclick={startFeatureInsertion}
-					disabled={isInserting}
+					class="flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+					onclick={openFeatureDialog}
 				>
 					<PropertyIcon key="description" value="location" size={16} />
-					{isInserting ? 'Select Feature on Map...' : 'Insert Feature'}
+					Insert Feature
+					{#if selectedFeature}
+						<span class="ml-1 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">
+							{getFeatureDisplayName(selectedFeature)}
+						</span>
+					{/if}
 				</button>
-
-				{#if isInserting}
-					<button
-						class="rounded px-2 py-1 text-sm text-gray-600 hover:text-gray-800"
-						onclick={cancelFeatureInsertion}
-					>
-						Cancel
-					</button>
-				{/if}
 			</div>
 		</div>
 	{/if}
@@ -414,66 +362,81 @@
 		<!-- Content will be populated by the effect above -->
 	</div>
 
-	<!-- Feature Insertion Dialog - Use fixed positioning to ensure visibility -->
+	<!-- Feature Insertion Dialog -->
 	{#if showFeatureDialog}
 		<div
-			class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+			class="fixed inset-0 flex items-center justify-center bg-black/50"
+			style="z-index: {Z_INDEX.STORY_FEATURE_DIALOG_OVERLAY}"
 			onclick={cancelFeatureInsertion}
+			onkeydown={(e) => {
+				if (e.key === 'Escape') cancelFeatureInsertion();
+			}}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="dialog-title"
+			tabindex="-1"
 		>
 			<div
-				class="mx-4 w-full max-w-md rounded-lg border-2 border-red-500 bg-yellow-100 p-6 shadow-xl"
+				class="mx-4 w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-xl"
+				style="z-index: {Z_INDEX.STORY_FEATURE_DIALOG_CONTENT}"
 				onclick={(e) => e.stopPropagation()}
+				onkeydown={(e) => e.stopPropagation()}
+				role="document"
 			>
-				<div class="mb-4 text-lg font-bold text-red-600">FEATURE DIALOG IS VISIBLE!</div>
-
-				<!-- Debug info -->
-				<div class="mb-4 text-sm text-gray-700">
-					DEBUG: selectedFeature = {selectedFeature ? 'SET' : 'NULL'}, showFeatureDialog = {showFeatureDialog},
-					isInserting = {isInserting}
-				</div>
+				<div id="dialog-title" class="mb-4 text-lg font-semibold text-gray-900">Insert Feature</div>
 
 				{#if selectedFeature}
-					<div class="space-y-3">
+					<div class="space-y-4">
 						<div class="flex items-center gap-2 text-sm text-gray-600">
 							<PropertyIcon key="description" value="check" size={16} color="green" />
-							Feature selected: <strong>{getFeatureDisplayName(selectedFeature)}</strong>
+							Selected feature: <strong>{getFeatureDisplayName(selectedFeature)}</strong>
 						</div>
 
 						<div>
-							<label for="custom-text" class="block text-sm font-medium text-gray-700">
-								Custom display text (optional):
+							<label for="custom-text" class="mb-1 block text-sm font-medium text-gray-700">
+								Custom display text (optional)
 							</label>
 							<input
 								id="custom-text"
 								bind:value={customDisplayText}
 								placeholder={getFeatureDisplayName(selectedFeature)}
-								class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+								class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
 							/>
+							<p class="mt-1 text-xs text-gray-500">Leave empty to use the default name</p>
 						</div>
 
-						<div class="flex items-center gap-2">
+						<div class="flex items-center justify-end gap-3">
 							<button
-								class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-								onclick={insertFeature}
-							>
-								Insert Feature
-							</button>
-							<button
-								class="rounded border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
+								class="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
 								onclick={cancelFeatureInsertion}
 							>
 								Cancel
 							</button>
+							<button
+								class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+								onclick={insertFeature}
+							>
+								Insert Feature
+							</button>
 						</div>
 					</div>
 				{:else}
-					<div class="space-y-2 text-sm text-gray-600">
-						<div class="flex items-center gap-2">
-							<PropertyIcon key="description" value="info" size={16} />
-							Click on a feature on the map or search for one to insert it here.
+					<div class="space-y-4">
+						<div class="text-sm text-gray-600">
+							<div class="mb-2 flex items-center gap-2">
+								<PropertyIcon key="description" value="info" size={16} />
+								No feature selected
+							</div>
+							<p>Click on a feature on the map to select it for insertion.</p>
 						</div>
-						<div class="text-xs text-gray-500">
-							You can also select from your bookmarked features.
+
+						<div class="flex items-center justify-end">
+							<button
+								class="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
+								onclick={cancelFeatureInsertion}
+							>
+								Close
+							</button>
 						</div>
 					</div>
 				{/if}
