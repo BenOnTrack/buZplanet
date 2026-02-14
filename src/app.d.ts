@@ -387,10 +387,16 @@ declare global {
 	 */
 	interface StoryCategory {
 		id: string;
+		userId: string; // User ID from Firebase Auth
 		name: string;
 		color: string;
 		icon?: string;
 		description?: string;
+
+		// Sync fields
+		lastSyncTimestamp?: number; // When this category was last synced
+		firestoreId?: string; // Firestore document ID
+		deleted?: boolean; // Soft delete flag for sync
 	}
 
 	// ==================== SYNC INTERFACES ====================

@@ -25,6 +25,11 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
       
+      // Allow authenticated users to read/write their own story categories
+      match /storyCategories/{categoryId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
       // Allow authenticated users to read/write their own story versions
       match /story_versions/{versionId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;

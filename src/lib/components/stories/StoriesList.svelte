@@ -47,7 +47,7 @@
 		}
 
 		// Sort by date modified (newest first) - create new array to avoid mutation
-		return [...filtered].sort((a, b) => b.dateModified - a.dateCreated);
+		return [...filtered].sort((a, b) => b.dateModified - a.dateModified);
 	});
 
 	// Load data on mount and react to changes
