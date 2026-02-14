@@ -1,4 +1,4 @@
-// Firestore Security Rules for FeaturesDB sync
+// Firestore Security Rules for FeaturesDB and StoriesDB sync
 // Copy these rules to your Firebase Console -> Firestore Database -> Rules
 
 rules_version = '2';
@@ -20,8 +20,18 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
       
+      // Allow authenticated users to read/write their own stories
+      match /stories/{storyId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Allow authenticated users to read/write their own story versions
+      match /story_versions/{versionId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
       // Allow authenticated users to read/write their own sync metadata
-      match /syncMetadata/{document=**} {
+      match /sync_metadata/{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }

@@ -1,6 +1,7 @@
 import { appState } from './AppState.svelte';
 import { user } from './auth';
 import { get } from 'svelte/store';
+import { storiesSync } from '$lib/firebase/storiesSync';
 
 /**
  * Stories database store for managing story data with IndexedDB
@@ -10,6 +11,20 @@ class StoriesDB {
 	private db = $state<IDBDatabase | null>(null);
 	private _initialized = $state(false);
 	private initializationPromise: Promise<void> | null = null;
+
+	// Reactive signal for data changes - increment this when stories change
+	private _changeSignal = $state(0);
+
+	// Public getter for change signal to trigger reactivity
+	get changeSignal(): number {
+		return this._changeSignal;
+	}
+
+	// Trigger change notification
+	private notifyChange(): void {
+		this._changeSignal++;
+		console.log('📢 Stories data changed, signal:', this._changeSignal);
+	}
 
 	// Database configuration
 	private readonly DB_NAME = 'BuzplanetStoriesDB';
@@ -119,73 +134,133 @@ class StoriesDB {
 	private cleanStoryData(story: Story): Story {
 		console.log('🧽 Cleaning story data for storage...');
 
-		// Create a clean, serializable version of the story
-		const cleanedStory: Story = JSON.parse(
-			JSON.stringify({
-				id: story.id,
-				userId: story.userId,
-				title: story.title,
-				description: story.description,
-				content: story.content.map((node) => {
-					if (node.type === 'text') {
-						return {
-							type: 'text',
-							text: node.text
-						};
-					} else if (node.type === 'feature') {
-						// Create a clean feature object
-						const cleanFeature: any = {
-							id: node.feature.id,
-							names: node.feature.names || {}
-						};
+		try {
+			// Create a completely clean object by explicitly mapping all fields
+			const cleanedStory: Story = {
+				id: String(story.id || ''),
+				userId: String(story.userId || ''),
+				title: String(story.title || ''),
+				content: Array.isArray(story.content)
+					? story.content.map((node) => {
+							if (node && typeof node === 'object' && node.type === 'text') {
+								return {
+									type: 'text' as const,
+									text: String(node.text || '')
+								};
+							} else if (node && typeof node === 'object' && node.type === 'feature') {
+								// Create a clean feature object with only serializable data
+								const cleanFeature: any = {
+									id: String(node.feature?.id || ''),
+									names: {}
+								};
 
-						// Add type-specific properties
-						if ('lng' in node.feature) {
-							// SearchResult properties
-							cleanFeature.lng = node.feature.lng;
-							cleanFeature.lat = node.feature.lat;
-							cleanFeature.database = node.feature.database;
-							cleanFeature.layer = node.feature.layer;
-							cleanFeature.zoom = node.feature.zoom;
-							cleanFeature.tileX = node.feature.tileX;
-							cleanFeature.tileY = node.feature.tileY;
-						}
+								// Safely copy names object
+								if (node.feature?.names && typeof node.feature.names === 'object') {
+									for (const [key, value] of Object.entries(node.feature.names)) {
+										if (typeof value === 'string') {
+											cleanFeature.names[key] = value;
+										}
+									}
+								}
 
-						if ('geometry' in node.feature) {
-							// StoredFeature properties
-							cleanFeature.geometry = node.feature.geometry;
-							cleanFeature.source = node.feature.source;
-							cleanFeature.sourceLayer = node.feature.sourceLayer;
-						}
+								// Add type-specific properties safely
+								if (node.feature && 'lng' in node.feature && typeof node.feature.lng === 'number') {
+									// SearchResult properties
+									cleanFeature.lng = Number(node.feature.lng);
+									cleanFeature.lat = Number(node.feature.lat || 0);
+									cleanFeature.database = String(node.feature.database || '');
+									cleanFeature.layer = String(node.feature.layer || '');
+									cleanFeature.zoom = Number(node.feature.zoom || 0);
+									cleanFeature.tileX = Number(node.feature.tileX || 0);
+									cleanFeature.tileY = Number(node.feature.tileY || 0);
+								}
 
-						// Common properties
-						if (node.feature.class) cleanFeature.class = node.feature.class;
-						if (node.feature.subclass) cleanFeature.subclass = node.feature.subclass;
-						if (node.feature.category) cleanFeature.category = node.feature.category;
+								if (node.feature && 'geometry' in node.feature) {
+									// StoredFeature properties - safely serialize geometry
+									try {
+										cleanFeature.geometry = JSON.parse(JSON.stringify(node.feature.geometry));
+									} catch (geometryError) {
+										console.warn('⚠️ Failed to serialize geometry, using null:', geometryError);
+										cleanFeature.geometry = null;
+									}
+									cleanFeature.source = String(node.feature.source || '');
+									if (node.feature.sourceLayer) {
+										cleanFeature.sourceLayer = String(node.feature.sourceLayer);
+									}
+								}
 
-						return {
-							type: 'feature',
-							featureId: node.featureId,
-							displayText: node.displayText,
-							feature: cleanFeature,
-							customText: node.customText
-						};
-					}
-					return node;
-				}),
-				tags: story.tags,
-				categories: story.categories,
-				dateCreated: story.dateCreated,
-				dateModified: story.dateModified,
-				viewCount: story.viewCount,
-				isPublic: story.isPublic,
-				currentVersion: story.currentVersion,
-				searchText: story.searchText
-			})
-		);
+								// Common properties
+								if (node.feature?.class) cleanFeature.class = String(node.feature.class);
+								if (node.feature?.subclass) cleanFeature.subclass = String(node.feature.subclass);
+								if (node.feature?.category) cleanFeature.category = String(node.feature.category);
 
-		console.log('✅ Story data cleaned for storage');
-		return cleanedStory;
+								return {
+									type: 'feature' as const,
+									featureId: String(node.featureId || ''),
+									displayText: String(node.displayText || ''),
+									feature: cleanFeature,
+									customText: node.customText ? String(node.customText) : undefined
+								};
+							}
+							// If node is malformed, create a safe text node
+							return {
+								type: 'text' as const,
+								text: '[Invalid content node]'
+							};
+						})
+					: [],
+				tags: Array.isArray(story.tags) ? story.tags.map((tag) => String(tag)).filter(Boolean) : [],
+				categories: Array.isArray(story.categories)
+					? story.categories.map((cat) => String(cat)).filter(Boolean)
+					: [],
+				dateCreated: Number(story.dateCreated) || Date.now(),
+				dateModified: Number(story.dateModified) || Date.now(),
+				viewCount: Number(story.viewCount) || 0,
+				isPublic: Boolean(story.isPublic),
+				currentVersion: Number(story.currentVersion) || 1,
+				searchText: String(story.searchText || '')
+			};
+
+			// Only add optional string fields if they have values
+			if (story.description && typeof story.description === 'string' && story.description.trim()) {
+				cleanedStory.description = story.description.trim();
+			}
+
+			// Add sync fields if present
+			if (story.deleted !== undefined) {
+				cleanedStory.deleted = Boolean(story.deleted);
+			}
+
+			if (story.firestoreId && typeof story.firestoreId === 'string') {
+				cleanedStory.firestoreId = story.firestoreId;
+			}
+
+			if (story.lastSyncTimestamp && typeof story.lastSyncTimestamp === 'number') {
+				cleanedStory.lastSyncTimestamp = story.lastSyncTimestamp;
+			}
+
+			console.log('✅ Story data cleaned for storage');
+			return cleanedStory;
+		} catch (error) {
+			console.error('❌ Failed to clean story data:', error);
+			console.error('Original story object:', story);
+
+			// Fallback: create minimal safe story
+			return {
+				id: String(story.id || `fallback-${Date.now()}`),
+				userId: String(story.userId || 'anonymous'),
+				title: String(story.title || 'Untitled Story'),
+				content: [],
+				tags: [],
+				categories: [],
+				dateCreated: Date.now(),
+				dateModified: Date.now(),
+				viewCount: 0,
+				isPublic: false,
+				currentVersion: 1,
+				searchText: String(story.title || 'Untitled Story').toLowerCase()
+			};
+		}
 	}
 
 	/**
@@ -246,6 +321,21 @@ class StoriesDB {
 			});
 
 			console.log('✅ Story created successfully:', story.id);
+			this.notifyChange();
+
+			// Sync to Firebase if user is authenticated
+			const currentUser = get(user);
+			if (currentUser && !story.userId.includes('anonymous')) {
+				try {
+					console.log('🔄 Auto-syncing new story to Firebase...');
+					await storiesSync.uploadStory(story);
+					console.log('✅ Story auto-synced to Firebase');
+				} catch (error) {
+					console.error('⚠️ Failed to auto-sync story to Firebase:', error);
+					// Don't fail the creation if sync fails
+				}
+			}
+
 			return story;
 		} catch (error) {
 			console.error('❌ Failed to create story:', error);
@@ -316,6 +406,21 @@ class StoriesDB {
 			});
 
 			console.log('✅ Story updated successfully:', updatedStory.id);
+			this.notifyChange();
+
+			// Sync to Firebase if user is authenticated
+			const currentUser = get(user);
+			if (currentUser && !updatedStory.userId.includes('anonymous')) {
+				try {
+					console.log('🔄 Auto-syncing updated story to Firebase...');
+					await storiesSync.uploadStory(updatedStory);
+					console.log('✅ Story auto-synced to Firebase');
+				} catch (error) {
+					console.error('⚠️ Failed to auto-sync story to Firebase:', error);
+					// Don't fail the update if sync fails
+				}
+			}
+
 			return updatedStory;
 		} catch (error) {
 			console.error('❌ Failed to update story:', error);
@@ -441,6 +546,137 @@ class StoriesDB {
 			// Don't throw - view count increment should be silent and not break the UI
 		}
 	}
+	/**
+	 * Delete a story (soft delete)
+	 */
+	async deleteStory(storyId: string): Promise<void> {
+		console.log('🗑️ Soft deleting story:', storyId);
+		await this.ensureInitialized();
+		if (!this.db) throw new Error('Database not initialized');
+
+		// Get the existing story first
+		const existingStory = await this.getStoryById(storyId);
+		if (!existingStory) {
+			throw new Error(`Story with id ${storyId} not found`);
+		}
+
+		// Mark as deleted
+		const deletedStory: Story = {
+			...existingStory,
+			deleted: true,
+			dateModified: Date.now()
+		};
+
+		const cleanedStory = this.cleanStoryData(deletedStory);
+		const transaction = this.db.transaction([this.STORES.STORIES], 'readwrite');
+
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const request = transaction.objectStore(this.STORES.STORIES).put(cleanedStory);
+				request.onsuccess = () => {
+					console.log('✅ Story soft deleted successfully');
+					resolve();
+				};
+				request.onerror = () => {
+					console.error('❌ Failed to soft delete story:', request.error);
+					reject(request.error);
+				};
+			});
+
+			console.log('✅ Story soft deleted successfully:', storyId);
+			this.notifyChange();
+
+			// Sync deletion to Firebase if user is authenticated
+			const currentUser = get(user);
+			if (currentUser && !deletedStory.userId.includes('anonymous')) {
+				try {
+					console.log('🔄 Syncing story deletion to Firebase...');
+					await storiesSync.deleteStoryFromFirestore(storyId);
+					console.log('✅ Story deletion synced to Firebase');
+				} catch (error) {
+					console.error('⚠️ Failed to sync story deletion to Firebase:', error);
+				}
+			}
+		} catch (error) {
+			console.error('❌ Failed to delete story:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Perform full sync with Firebase
+	 */
+	async syncWithFirebase(): Promise<{ success: boolean; message: string }> {
+		console.log('🔄 Starting manual Firebase sync...');
+
+		const currentUser = get(user);
+		if (!currentUser) {
+			return {
+				success: false,
+				message: 'User not authenticated'
+			};
+		}
+
+		try {
+			const result = await storiesSync.performFullSync();
+
+			if (result.success) {
+				// Refresh local data after sync
+				this.notifyChange();
+
+				return {
+					success: true,
+					message: `Sync completed: ${result.uploadedStories} uploaded, ${result.downloadedStories} downloaded`
+				};
+			} else {
+				return {
+					success: false,
+					message: `Sync failed: ${result.errors.join(', ')}`
+				};
+			}
+		} catch (error) {
+			console.error('❌ Manual sync failed:', error);
+			return {
+				success: false,
+				message: error instanceof Error ? error.message : 'Unknown sync error'
+			};
+		}
+	}
+
+	/**
+	 * Start real-time sync with Firebase
+	 */
+	startRealtimeSync(): void {
+		const currentUser = get(user);
+		if (currentUser) {
+			console.log('🔄 Starting real-time sync with Firebase...');
+			storiesSync.startRealtimeSync();
+		}
+	}
+
+	/**
+	 * Stop real-time sync with Firebase
+	 */
+	stopRealtimeSync(): void {
+		console.log('⏹️ Stopping real-time sync with Firebase...');
+		storiesSync.stopRealtimeSync();
+	}
+
+	/**
+	 * Get sync status
+	 */
+	async getSyncStatus(): Promise<{ lastSync: Date | null; syncInProgress: boolean }> {
+		const currentUser = get(user);
+		if (!currentUser) {
+			return {
+				lastSync: null,
+				syncInProgress: false
+			};
+		}
+
+		return await storiesSync.getSyncStatus(currentUser.uid);
+	}
+
 	/**
 	 * Get all story categories (return empty array for now)
 	 */

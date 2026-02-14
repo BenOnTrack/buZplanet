@@ -24,6 +24,7 @@ export const Z_INDEX = {
 	SEARCH_BAR: 20,
 
 	// Drawers and overlays (40-70)
+	DIALOG_TRIGGER: 30,
 	DRAWER_OVERLAY: 40,
 	DRAWER_CONTENT: 50,
 
@@ -32,7 +33,7 @@ export const Z_INDEX = {
 	SELECTED_FEATURE_DRAWER_CONTENT: 70,
 
 	// Navigation overlays (100)
-	DIALOG_TRIGGER: 100,
+
 	MODAL_OVERLAY: 100,
 	MODAL_CONTENT: 110,
 

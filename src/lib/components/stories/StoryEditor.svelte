@@ -3,7 +3,7 @@
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
-	import { Z_INDEX } from '$lib/styles/z-index';
+	import FeatureInsertDialog from '$lib/components/dialogs/FeatureInsertDialog.svelte';
 
 	let {
 		content = $bindable([]),
@@ -308,13 +308,6 @@
 		console.log('🚀 Story Editor: Opening feature insertion dialog');
 		showFeatureDialog = true;
 	}
-
-	// Cancel feature insertion
-	function cancelFeatureInsertion() {
-		console.log('❌ Story Editor: Cancelling feature insertion');
-		customDisplayText = '';
-		showFeatureDialog = false;
-	}
 </script>
 
 <div class={clsx('story-editor', className)}>
@@ -363,90 +356,12 @@
 	</div>
 
 	<!-- Feature Insertion Dialog -->
-	{#if showFeatureDialog}
-		<!-- Dialog backdrop -->
-		<div
-			class="fixed inset-0 bg-black/50"
-			style="z-index: {Z_INDEX.STORY_FEATURE_DIALOG_OVERLAY}"
-			role="presentation"
-		></div>
-		<!-- Dialog content -->
-		<dialog
-			open
-			class="fixed top-1/2 left-1/2 mx-4 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-gray-200 bg-white p-6 shadow-xl"
-			style="z-index: {Z_INDEX.STORY_FEATURE_DIALOG_CONTENT}"
-			aria-labelledby="dialog-title"
-			onkeydown={(e) => {
-				if (e.key === 'Escape') cancelFeatureInsertion();
-			}}
-		>
-			<h2 id="dialog-title" class="mb-4 text-lg font-semibold text-gray-900">Insert Feature</h2>
-
-			{#if selectedFeature}
-				<div class="space-y-4">
-					<div class="flex items-center gap-2 text-sm text-gray-600">
-						<PropertyIcon key="description" value="check" size={16} color="green" />
-						Selected feature: <strong>{getFeatureDisplayName(selectedFeature)}</strong>
-					</div>
-
-					<div>
-						<label for="custom-text" class="mb-1 block text-sm font-medium text-gray-700">
-							Custom display text (optional)
-						</label>
-						<input
-							id="custom-text"
-							bind:value={customDisplayText}
-							placeholder={getFeatureDisplayName(selectedFeature)}
-							class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-						/>
-						<p class="mt-1 text-xs text-gray-500">Leave empty to use the default name</p>
-					</div>
-
-					<div class="flex items-center justify-end gap-3">
-						<button
-							class="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
-							onclick={cancelFeatureInsertion}
-						>
-							Cancel
-						</button>
-						<button
-							class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-							onclick={insertFeature}
-						>
-							Insert Feature
-						</button>
-					</div>
-				</div>
-			{:else}
-				<div class="space-y-4">
-					<div class="text-sm text-gray-600">
-						<div class="mb-2 flex items-center gap-2">
-							<PropertyIcon key="description" value="info" size={16} />
-							No feature selected
-						</div>
-						<p>Click on a feature on the map to select it for insertion.</p>
-					</div>
-
-					<div class="flex items-center justify-end">
-						<button
-							class="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
-							onclick={cancelFeatureInsertion}
-						>
-							Close
-						</button>
-					</div>
-				</div>
-			{/if}
-		</dialog>
-		<!-- Backdrop click handler -->
-		<button
-			type="button"
-			class="fixed inset-0"
-			style="z-index: {Z_INDEX.STORY_FEATURE_DIALOG_OVERLAY}"
-			onclick={cancelFeatureInsertion}
-			aria-label="Close dialog"
-		></button>
-	{/if}
+	<FeatureInsertDialog
+		bind:open={showFeatureDialog}
+		{selectedFeature}
+		bind:customDisplayText
+		onInsertFeature={insertFeature}
+	/>
 </div>
 
 <style>

@@ -50,8 +50,10 @@
 		return [...filtered].sort((a, b) => b.dateModified - a.dateCreated);
 	});
 
-	// Load data on mount
+	// Load data on mount and react to changes
 	$effect(() => {
+		// Access the change signal to create reactivity dependency
+		storiesDB.changeSignal;
 		loadStories();
 		loadCategories();
 	});
@@ -60,7 +62,13 @@
 		try {
 			loading = true;
 			error = null;
+			console.log(
+				'📚 Loading stories... (triggered by change signal:',
+				storiesDB.changeSignal,
+				')'
+			);
 			stories = await storiesDB.getAllStories();
+			console.log('✅ Loaded', stories.length, 'stories');
 		} catch (err) {
 			console.error('Failed to load stories:', err);
 			error = 'Failed to load stories';

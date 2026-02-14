@@ -295,87 +295,92 @@
 	/>
 	<Drawer.Portal>
 		<Drawer.Content
-			class="border-b-none fixed right-0 bottom-0 left-0 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class="border-b-none fixed right-0 bottom-0 left-0 mx-[-1px] flex h-full max-h-[97%] flex-col overflow-hidden rounded-t-[10px] border border-gray-200 bg-white"
 			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
 		>
-			<div
-				class="story-editor-scrollable flex w-full flex-col overflow-y-scroll p-4 pt-5"
-				style="scrollbar-gutter: stable; height: 100%;"
-			>
-				<!-- Header -->
-				<div class="mb-4 flex items-center justify-between">
-					<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
-						<PropertyIcon key="description" value="edit" size={24} />
-						{isEditing ? 'Edit Story' : 'New Story'}
-					</Drawer.Title>
+			<div class="flex h-full min-h-0 w-full flex-col overflow-hidden">
+				<!-- Sticky Header Section -->
+				<div class="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-4">
+					<!-- Header with title and close button -->
+					<div class="mb-4 flex items-center justify-between">
+						<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
+							<PropertyIcon key="description" value="edit" size={24} />
+							{isEditing ? 'Edit Story' : 'New Story'}
+						</Drawer.Title>
 
-					<div class="flex items-center gap-2">
-						{#if hasUnsavedChanges}
-							<span class="flex items-center gap-1 text-sm text-orange-600">
-								<PropertyIcon key="description" value="unsaved" size={14} />
-								Unsaved changes
-							</span>
-						{/if}
+						<div class="flex items-center gap-2">
+							{#if hasUnsavedChanges}
+								<span class="flex items-center gap-1 text-sm text-orange-600">
+									<PropertyIcon key="description" value="unsaved" size={14} />
+									Unsaved changes
+								</span>
+							{/if}
 
-						<Drawer.Close class="text-gray-500 hover:text-gray-700" onclick={cancel}>
-							<PropertyIcon key="description" value="x" size={20} class="text-foreground" />
-							<span class="sr-only">Close</span>
-						</Drawer.Close>
-					</div>
-				</div>
-
-				<!-- Action Buttons - Always Visible at Top -->
-				<div class="mb-6 flex items-center justify-end gap-3">
-					<button
-						onclick={cancel}
-						class="flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
-						disabled={saving}
-					>
-						<PropertyIcon key="description" value="x" size={16} />
-						Cancel
-					</button>
-
-					<button
-						onclick={saveStory}
-						disabled={saving || !title.trim()}
-						class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-400"
-					>
-						{#if saving}
-							<PropertyIcon key="description" value="loading" size={16} />
-							Saving...
-						{:else}
-							<PropertyIcon key="description" value="save" size={16} />
-							{isEditing ? 'Update Story' : 'Create Story'}
-						{/if}
-					</button>
-				</div>
-
-				<!-- Error message -->
-				{#if error}
-					<div class="mb-4 rounded-md border border-red-200 bg-red-50 p-3">
-						<div class="flex items-center gap-2 text-red-700">
-							<PropertyIcon key="description" value="error" size={16} />
-							{error}
+							<Drawer.Close class="text-gray-500 hover:text-gray-700" onclick={cancel}>
+								<PropertyIcon key="description" value="x" size={20} class="text-foreground" />
+								<span class="sr-only">Close</span>
+							</Drawer.Close>
 						</div>
 					</div>
-				{/if}
 
-				<div class="min-h-[800px] space-y-6">
-					<!-- Title and Description -->
-					<div class="space-y-4">
-						<div>
-							<label for="story-title" class="mb-2 block text-sm font-medium text-gray-700">
-								Story Title *
-							</label>
-							<input
-								id="story-title"
-								bind:value={title}
-								placeholder="Enter your story title..."
-								class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-								required
-							/>
+					<!-- Title Input -->
+					<div class="mb-4">
+						<label for="story-title" class="mb-2 block text-sm font-medium text-gray-700">
+							Story Title *
+						</label>
+						<input
+							id="story-title"
+							bind:value={title}
+							placeholder="Enter your story title..."
+							class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+							required
+						/>
+					</div>
+
+					<!-- Action Buttons -->
+					<div class="flex items-center justify-end gap-3">
+						<button
+							onclick={cancel}
+							class="flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
+							disabled={saving}
+						>
+							<PropertyIcon key="description" value="x" size={16} />
+							Cancel
+						</button>
+
+						<button
+							onclick={saveStory}
+							disabled={saving || !title.trim()}
+							class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-400"
+						>
+							{#if saving}
+								<PropertyIcon key="description" value="loading" size={16} />
+								Saving...
+							{:else}
+								<PropertyIcon key="description" value="save" size={16} />
+								{isEditing ? 'Update Story' : 'Create Story'}
+							{/if}
+						</button>
+					</div>
+
+					<!-- Error message -->
+					{#if error}
+						<div class="mt-4 rounded-md border border-red-200 bg-red-50 p-3">
+							<div class="flex items-center gap-2 text-red-700">
+								<PropertyIcon key="description" value="error" size={16} />
+								{error}
+							</div>
 						</div>
+					{/if}
+				</div>
 
+				<!-- Scrollable Content Area -->
+				<div
+					class="story-editor-scrollable flex-1 overflow-x-hidden overflow-y-scroll px-4 py-4"
+					style="scrollbar-gutter: stable; min-height: 0; flex-basis: 0;"
+				>
+					<div class="space-y-6 pb-8" style="min-height: calc(100vh + 200px);">
+						<!-- Description -->
 						<div>
 							<label for="story-description" class="mb-2 block text-sm font-medium text-gray-700">
 								Description (Optional)
@@ -388,126 +393,126 @@
 								class="block w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
 							></textarea>
 						</div>
-					</div>
 
-					<!-- Categories -->
-					{#if availableCategories.length > 0}
-						<fieldset>
-							<legend class="mb-3 block text-sm font-medium text-gray-700">Categories</legend>
-							<div class="flex flex-wrap gap-2">
-								{#each availableCategories as category}
-									<button
-										class={clsx(
-											'flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none',
-											{
-												'text-white': categories.includes(category.id),
-												'border border-gray-300 text-gray-700 hover:bg-gray-50':
-													!categories.includes(category.id)
-											}
-										)}
-										style={categories.includes(category.id)
-											? `background-color: ${category.color}`
-											: ''}
-										onclick={() => toggleCategory(category.id)}
-									>
-										{#if category.icon}
-											<span>{category.icon}</span>
-										{:else}
-											<PropertyIcon key="description" value="category" size={14} />
-										{/if}
-										{category.name}
-									</button>
-								{/each}
-							</div>
-						</fieldset>
-					{/if}
-
-					<!-- Tags -->
-					<fieldset>
-						<legend class="mb-3 block text-sm font-medium text-gray-700">Tags</legend>
-
-						<!-- Tag input -->
-						<div class="mb-3 flex gap-2">
-							<input
-								bind:value={newTag}
-								onkeydown={handleTagKeydown}
-								placeholder="Add a tag..."
-								class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-							/>
-							<button
-								onclick={addTag}
-								disabled={!newTag.trim()}
-								class="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-300"
-							>
-								Add
-							</button>
-						</div>
-
-						<!-- Current tags -->
-						{#if tags.length > 0}
-							<div class="mb-3 flex flex-wrap gap-2">
-								{#each tags as tag}
-									<span
-										class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-sm text-blue-800"
-									>
-										{tag}
+						<!-- Categories -->
+						{#if availableCategories.length > 0}
+							<fieldset>
+								<legend class="mb-3 block text-sm font-medium text-gray-700">Categories</legend>
+								<div class="flex flex-wrap gap-2">
+									{#each availableCategories as category}
 										<button
-											onclick={() => removeTag(tag)}
-											class="text-blue-600 hover:text-blue-800"
-											aria-label="Remove tag {tag}"
+											class={clsx(
+												'flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none',
+												{
+													'text-white': categories.includes(category.id),
+													'border border-gray-300 text-gray-700 hover:bg-gray-50':
+														!categories.includes(category.id)
+												}
+											)}
+											style={categories.includes(category.id)
+												? `background-color: ${category.color}`
+												: ''}
+											onclick={() => toggleCategory(category.id)}
 										>
-											<PropertyIcon key="description" value="x" size={12} />
-										</button>
-									</span>
-								{/each}
-							</div>
-						{/if}
-
-						<!-- Recent tags -->
-						{#if recentTags.length > 0}
-							<div>
-								<p class="mb-2 text-xs text-gray-500">Recent tags:</p>
-								<div class="flex flex-wrap gap-1">
-									{#each recentTags.filter((tag) => !tags.includes(tag)) as tag}
-										<button
-											onclick={() => {
-												tags = [...tags, tag];
-											}}
-											class="rounded border border-gray-200 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-										>
-											{tag}
+											{#if category.icon}
+												<span>{category.icon}</span>
+											{:else}
+												<PropertyIcon key="description" value="category" size={14} />
+											{/if}
+											{category.name}
 										</button>
 									{/each}
 								</div>
-							</div>
+							</fieldset>
 						{/if}
-					</fieldset>
 
-					<!-- Story Content Editor -->
-					<fieldset>
-						<legend class="mb-3 block text-sm font-medium text-gray-700">Story Content</legend>
-						<div class="overflow-hidden rounded-md border border-gray-300">
-							<StoryEditor
-								bind:content
-								placeholder="Write your story here. Click 'Insert Feature' to add map features to your story..."
-							/>
+						<!-- Tags -->
+						<fieldset>
+							<legend class="mb-3 block text-sm font-medium text-gray-700">Tags</legend>
+
+							<!-- Tag input -->
+							<div class="mb-3 flex gap-2">
+								<input
+									bind:value={newTag}
+									onkeydown={handleTagKeydown}
+									placeholder="Add a tag..."
+									class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+								/>
+								<button
+									onclick={addTag}
+									disabled={!newTag.trim()}
+									class="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-300"
+								>
+									Add
+								</button>
+							</div>
+
+							<!-- Current tags -->
+							{#if tags.length > 0}
+								<div class="mb-3 flex flex-wrap gap-2">
+									{#each tags as tag}
+										<span
+											class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-sm text-blue-800"
+										>
+											{tag}
+											<button
+												onclick={() => removeTag(tag)}
+												class="text-blue-600 hover:text-blue-800"
+												aria-label="Remove tag {tag}"
+											>
+												<PropertyIcon key="description" value="x" size={12} />
+											</button>
+										</span>
+									{/each}
+								</div>
+							{/if}
+
+							<!-- Recent tags -->
+							{#if recentTags.length > 0}
+								<div>
+									<p class="mb-2 text-xs text-gray-500">Recent tags:</p>
+									<div class="flex flex-wrap gap-1">
+										{#each recentTags.filter((tag) => !tags.includes(tag)) as tag}
+											<button
+												onclick={() => {
+													tags = [...tags, tag];
+												}}
+												class="rounded border border-gray-200 px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+											>
+												{tag}
+											</button>
+										{/each}
+									</div>
+								</div>
+							{/if}
+						</fieldset>
+
+						<!-- Story Content Editor -->
+						<fieldset>
+							<legend class="mb-3 block text-sm font-medium text-gray-700">Story Content</legend>
+							<div class="overflow-hidden rounded-md border border-gray-300">
+								<StoryEditor
+									bind:content
+									placeholder="Write your story here. Click 'Insert Feature' to add map features to your story..."
+								/>
+							</div>
+						</fieldset>
+
+						<!-- Privacy Settings -->
+						<div>
+							<label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+								<input
+									type="checkbox"
+									bind:checked={isPublic}
+									class="rounded border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+								/>
+								Make this story public
+								<PropertyIcon key="description" value={isPublic ? 'public' : 'private'} size={14} />
+							</label>
+							<p class="mt-1 text-xs text-gray-500">
+								Public stories can be shared with other users in the future.
+							</p>
 						</div>
-					</fieldset>
-
-					<!-- Privacy Settings -->
-					<div>
-						<label class="flex items-center gap-2 text-sm font-medium text-gray-700">
-							<input
-								type="checkbox"
-								bind:checked={isPublic}
-								class="rounded border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-							/>
-							Make this story public
-							<PropertyIcon key="description" value={isPublic ? 'public' : 'private'} size={14} />
-						</label>
-						<p class="mt-1 text-xs text-gray-500">
-							Public stories can be shared with other users in the future.
-						</p>
 					</div>
 				</div>
 			</div>
@@ -516,42 +521,47 @@
 </Drawer.Root>
 
 <style>
-	/* Force scrollbar to always be visible */
+	/* Ensure proper flex layout and scrolling */
 	.story-editor-scrollable {
-		scrollbar-width: thin; /* For Firefox */
+		scrollbar-width: auto; /* For Firefox - use auto for better visibility */
 		scrollbar-color: #6b7280 #e5e7eb; /* For Firefox - visible colors */
-		overflow-y: scroll !important; /* Force scrollbar always */
+		/* Critical for proper flex scrolling */
+		flex: 1 1 0;
+		min-height: 0;
+		max-height: 100%;
+		/* Force scrollbar to always show */
+		overflow-y: scroll !important;
 	}
 
 	/* WebKit scrollbar styling - make it always visible and prominent */
 	.story-editor-scrollable::-webkit-scrollbar {
-		width: 16px; /* Make it wider so it's more visible */
+		width: 14px; /* Make it visible but not too wide */
 		-webkit-appearance: none;
 		display: block !important; /* Force it to show */
 	}
 
 	.story-editor-scrollable::-webkit-scrollbar-track {
-		background: #e5e7eb; /* Light gray track */
-		border-radius: 10px;
+		background: #f3f4f6; /* Light gray track - more visible */
+		border-radius: 8px;
+		border: 1px solid #e5e7eb;
 	}
 
 	.story-editor-scrollable::-webkit-scrollbar-thumb {
-		background: #6b7280; /* Darker gray thumb */
-		border-radius: 10px;
-		border: 2px solid #e5e7eb;
-		min-height: 30px; /* Ensure minimum thumb size */
+		background: #9ca3af; /* Medium gray thumb - more visible */
+		border-radius: 8px;
+		border: 2px solid #f3f4f6;
+		min-height: 40px; /* Ensure minimum thumb size */
 	}
 
 	.story-editor-scrollable::-webkit-scrollbar-thumb:hover {
-		background: #4b5563; /* Even darker on hover */
+		background: #6b7280; /* Darker on hover */
 	}
 
 	.story-editor-scrollable::-webkit-scrollbar-thumb:active {
-		background: #374151; /* Darkest when active */
+		background: #4b5563; /* Darkest when active */
 	}
 
-	/* Force the content to be tall enough to require scrolling */
-	.story-editor-scrollable .space-y-6 {
-		min-height: 150vh; /* Force content to be taller than viewport */
+	.story-editor-scrollable::-webkit-scrollbar-corner {
+		background: #f3f4f6;
 	}
 </style>
