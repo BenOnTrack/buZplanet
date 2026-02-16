@@ -12,7 +12,7 @@
 	import Filters from '$lib/components/ui/Filters.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
-	let activeSnapPoint = $state<string | number>('400px');
+
 	let features = $state<StoredFeature[]>([]);
 	let bookmarkLists = $state<BookmarkList[]>([]);
 	let isLoading = $state(true);
@@ -476,135 +476,187 @@
 </script>
 
 <!-- Features Drawer -->
-<Drawer.Root bind:open snapPoints={['400px', '600px', 1]} bind:activeSnapPoint modal={false}>
-	<Drawer.Overlay
-		class="fixed inset-0 bg-black/40"
-		style="pointer-events: none; z-index: {Z_INDEX.DRAWER_OVERLAY}"
-	/>
+<Drawer.Root bind:open modal={false}>
+	<Drawer.Overlay class="fixed inset-0 bg-black/40" style="z-index: {Z_INDEX.DRAWER_OVERLAY}" />
 	<Drawer.Portal>
 		<Drawer.Content
-			class="border-b-none rounded-t-10px fixed right-0 bottom-0 left-0 -mx-px flex h-full max-h-[97%] flex-col border border-gray-200 bg-white"
+			class="fixed right-0 bottom-0 left-0 flex h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-white"
 			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
 		>
-			<div
-				class={clsx('flex w-full flex-col p-4 pt-5', {
-					'overflow-y-auto': activeSnapPoint === 1 || activeSnapPoint === '1',
-					'overflow-hidden': activeSnapPoint !== 1 && activeSnapPoint !== '1'
-				})}
-			>
-				<div class="mb-4 flex items-center justify-between">
-					<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
-						<span>📍</span>
-						Saved Features
-					</Drawer.Title>
-					<Drawer.Close class="text-gray-500 hover:text-gray-700">
-						<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
-						<span class="sr-only">Close</span>
-					</Drawer.Close>
+			<div class="mx-auto flex h-full w-full max-w-full flex-col overflow-hidden">
+				<!-- Sticky Header Section -->
+				<div class="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-4">
+					<!-- Header -->
+					<div class="mb-4 flex items-center justify-between">
+						<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
+							<span>📍</span>
+							Saved Features
+						</Drawer.Title>
+						<Drawer.Close class="text-gray-500 hover:text-gray-700">
+							<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
+							<span class="sr-only">Close</span>
+						</Drawer.Close>
+					</div>
+
+					<div class="mb-4">
+						<p class="text-sm text-gray-600">
+							{isLoading
+								? 'Loading...'
+								: hasActiveFilters
+									? `${filteredFeatures.length} of ${features.length} features`
+									: `${features.length} saved features`}
+							{#if hasActiveFilters}
+								<button
+									onclick={clearAllFilters}
+									class="ml-2 text-xs text-blue-600 hover:text-blue-800"
+								>
+									Clear all filters
+								</button>
+							{/if}
+						</p>
+					</div>
+
+					{#if !isLoading && features.length > 0}
+						<!-- Filters Section -->
+						<Filters
+							{filters}
+							bind:expanded={filtersExpanded}
+							{hasActiveFilters}
+							onToggleFilter={toggleFilter}
+							onClearSearch={clearSearch}
+							onClearAll={clearAllFilters}
+							onSearchChange={handleSearchChange}
+						/>
+					{/if}
 				</div>
 
-				<div class="mb-4">
-					<p class="text-sm text-gray-600">
-						{isLoading
-							? 'Loading...'
-							: hasActiveFilters
-								? `${filteredFeatures.length} of ${features.length} features`
-								: `${features.length} saved features`}
-						{#if hasActiveFilters}
+				<!-- Content Area -->
+				<div class="min-h-0 flex-1">
+					{#if isLoading}
+						<div class="flex items-center justify-center py-8">
+							<div class="text-gray-500">Loading features...</div>
+						</div>
+					{:else if filteredFeatures.length === 0 && hasActiveFilters}
+						<div class="flex flex-col items-center justify-center py-8 text-gray-500">
+							<span class="mb-2 text-2xl">🔍</span>
+							<p>No features found with current filters</p>
+							<p class="mt-1 text-sm">Try adjusting your search or filter settings</p>
 							<button
 								onclick={clearAllFilters}
-								class="ml-2 text-xs text-blue-600 hover:text-blue-800"
+								class="mt-2 text-sm text-blue-600 hover:text-blue-800"
 							>
 								Clear all filters
 							</button>
-						{/if}
-					</p>
-				</div>
-
-				{#if !isLoading && features.length > 0}
-					<!-- Filters Section -->
-					<Filters
-						{filters}
-						bind:expanded={filtersExpanded}
-						{hasActiveFilters}
-						onToggleFilter={toggleFilter}
-						onClearSearch={clearSearch}
-						onClearAll={clearAllFilters}
-						onSearchChange={handleSearchChange}
-					/>
-				{/if}
-
-				{#if isLoading}
-					<div class="flex items-center justify-center py-8">
-						<div class="text-gray-500">Loading features...</div>
-					</div>
-				{:else if filteredFeatures.length === 0 && hasActiveFilters}
-					<div class="flex flex-col items-center justify-center py-8 text-gray-500">
-						<span class="mb-2 text-2xl">🔍</span>
-						<p>No features found with current filters</p>
-						<p class="mt-1 text-sm">Try adjusting your search or filter settings</p>
-						<button
-							onclick={clearAllFilters}
-							class="mt-2 text-sm text-blue-600 hover:text-blue-800"
-						>
-							Clear all filters
-						</button>
-					</div>
-				{:else if features.length === 0}
-					<div class="flex flex-col items-center justify-center py-8 text-gray-500">
-						<span class="mb-2 text-2xl">📍</span>
-						<p>No saved features yet</p>
-						<p class="mt-1 text-sm">Start exploring the map to bookmark features!</p>
-					</div>
-				{:else}
-					<!-- Header instruction -->
-					<div class="mb-3 flex items-center justify-between">
-						<p class="text-xs text-gray-600">
-							Click any row to zoom to and select the feature on the map
-						</p>
-						<div class="flex items-center gap-1 text-xs text-gray-500">
-							<span>🔍</span>
-							<span>Clickable rows</span>
 						</div>
-					</div>
+					{:else if features.length === 0}
+						<div class="flex flex-col items-center justify-center py-8 text-gray-500">
+							<span class="mb-2 text-2xl">📍</span>
+							<p>No saved features yet</p>
+							<p class="mt-1 text-sm">Start exploring the map to bookmark features!</p>
+						</div>
+					{:else}
+						<div class="features-drawer-scrollable h-full overflow-auto">
+							<div class="px-4">
+								<FeaturesTable
+									features={filteredFeatures}
+									onRowClick={handleFeatureRowClick}
+									showHeader={true}
+									showListsColumn={true}
+									showTypesColumn={true}
+									bind:selectedTypes
+									bind:selectedListIds
+									bind:selectedClasses
+									bind:selectedSubclasses
+									bind:selectedCategories
+								/>
+							</div>
 
-					<FeaturesTable
-						features={filteredFeatures}
-						onRowClick={handleFeatureRowClick}
-						showHeader={true}
-						showListsColumn={true}
-						showTypesColumn={true}
-						bind:selectedTypes
-						bind:selectedListIds
-						bind:selectedClasses
-						bind:selectedSubclasses
-						bind:selectedCategories
-					/>
-
-					{#if featuresDB.stats.total > 0}
-						<div class="mt-4 border-t border-gray-200 pt-4">
-							<div class="grid grid-cols-2 gap-4 text-sm">
-								<div class="text-center">
-									<div class="font-medium text-yellow-600">{featuresDB.stats.bookmarked}</div>
-									<div class="text-xs text-gray-500">Bookmarked</div>
-								</div>
-								<div class="text-center">
-									<div class="font-medium text-green-600">{featuresDB.stats.visited}</div>
-									<div class="text-xs text-gray-500">Visited</div>
-								</div>
-								<div class="text-center">
-									<div class="font-medium text-blue-600">{featuresDB.stats.todo}</div>
-									<div class="text-xs text-gray-500">Todo</div>
-								</div>
-								<div class="text-center">
-									<div class="font-medium text-purple-600">{featuresDB.stats.lists}</div>
-									<div class="text-xs text-gray-500">Lists</div>
-								</div>
+							<div class="px-4 pb-4">
+								{#if featuresDB.stats.total > 0}
+									<div class="mt-4 border-t border-gray-200 pt-4">
+										<div class="grid grid-cols-2 gap-4 text-sm">
+											<div class="text-center">
+												<div class="font-medium text-yellow-600">{featuresDB.stats.bookmarked}</div>
+												<div class="text-xs text-gray-500">Bookmarked</div>
+											</div>
+											<div class="text-center">
+												<div class="font-medium text-green-600">{featuresDB.stats.visited}</div>
+												<div class="text-xs text-gray-500">Visited</div>
+											</div>
+											<div class="text-center">
+												<div class="font-medium text-blue-600">{featuresDB.stats.todo}</div>
+												<div class="text-xs text-gray-500">Todo</div>
+											</div>
+											<div class="text-center">
+												<div class="font-medium text-purple-600">{featuresDB.stats.lists}</div>
+												<div class="text-xs text-gray-500">Lists</div>
+											</div>
+										</div>
+									</div>
+								{/if}
 							</div>
 						</div>
 					{/if}
-				{/if}
+				</div>
 			</div>
 		</Drawer.Content>
 	</Drawer.Portal>
 </Drawer.Root>
+
+<style>
+	/* Ensure proper flex layout and scrolling */
+	.features-drawer-scrollable {
+		scrollbar-width: auto; /* For Firefox - use auto for better visibility */
+		scrollbar-color: #6b7280 #e5e7eb; /* For Firefox - visible colors */
+		position: relative; /* Ensure sticky positioning context */
+	}
+
+	/* WebKit scrollbar styling - make it always visible and prominent */
+	.features-drawer-scrollable::-webkit-scrollbar {
+		width: 14px; /* Make it visible but not too wide */
+		-webkit-appearance: none;
+	}
+
+	.features-drawer-scrollable::-webkit-scrollbar-track {
+		background: #f3f4f6; /* Light gray track - more visible */
+		border-radius: 8px;
+		border: 1px solid #e5e7eb;
+	}
+
+	.features-drawer-scrollable::-webkit-scrollbar-thumb {
+		background: #9ca3af; /* Medium gray thumb - more visible */
+		border-radius: 8px;
+		border: 2px solid #f3f4f6;
+		min-height: 40px; /* Ensure minimum thumb size */
+	}
+
+	.features-drawer-scrollable::-webkit-scrollbar-thumb:hover {
+		background: #6b7280; /* Darker on hover */
+	}
+
+	.features-drawer-scrollable::-webkit-scrollbar-thumb:active {
+		background: #4b5563; /* Darkest when active */
+	}
+
+	.features-drawer-scrollable::-webkit-scrollbar-corner {
+		background: #f3f4f6;
+	}
+
+	/* Ensure table headers are sticky within scrollable areas */
+	.features-drawer-scrollable :global(table thead) {
+		z-index: 20;
+		position: sticky;
+		top: 0;
+		background-color: white !important;
+		border-bottom: 1px solid #e5e7eb !important;
+		box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+	}
+
+	.features-drawer-scrollable :global(table thead tr) {
+		background-color: white !important;
+	}
+
+	.features-drawer-scrollable :global(table thead th) {
+		background-color: white !important;
+	}
+</style>

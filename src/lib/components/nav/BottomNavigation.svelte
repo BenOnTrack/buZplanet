@@ -1,6 +1,6 @@
 <script lang="ts">
 	import FeaturesDrawer from '$lib/components/drawers/FeaturesDrawer.svelte';
-	import StoriesDrawer from '$lib/components/drawers/StoriesDrawer.svelte';
+	import StoryViewerDrawer from '$lib/components/drawers/StoryViewerDrawer.svelte';
 	import TripsDrawer from '$lib/components/drawers/TripsDrawer.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index.js';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
@@ -94,7 +94,7 @@
 	</nav>
 </div>
 
-<StoriesDrawer bind:open={storiesOpen} />
+<StoryViewerDrawer bind:open={storiesOpen} />
 <TripsDrawer bind:open={tripsOpen} />
 <FeaturesDrawer bind:open={featuresOpen} />
 

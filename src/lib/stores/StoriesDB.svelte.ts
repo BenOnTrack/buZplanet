@@ -19,6 +19,11 @@ import {
 	type QuerySnapshot,
 	type Unsubscribe
 } from 'firebase/firestore';
+import {
+	DEFAULT_STORY_CATEGORIES,
+	generateSearchText,
+	isDefaultCategory
+} from '$lib/utils/stories';
 
 /**
  * Stories Database management class using Svelte 5 runes
@@ -38,7 +43,6 @@ class StoriesDB {
 	private readonly INDEX_USER_ID = 'userId';
 	private readonly INDEX_SEARCH = 'searchText';
 	private readonly INDEX_CATEGORIES = 'categories';
-	private readonly INDEX_TAGS = 'tags';
 	private readonly INDEX_PUBLIC = 'isPublic';
 	private readonly INDEX_LAST_SYNC = 'lastSync';
 	private readonly INDEX_DATE_MODIFIED = 'dateModified';
@@ -253,7 +257,6 @@ class StoriesDB {
 						keyPath: 'categories',
 						options: { unique: false, multiEntry: true }
 					},
-					{ name: this.INDEX_TAGS, keyPath: 'tags', options: { unique: false, multiEntry: true } },
 					{ name: this.INDEX_PUBLIC, keyPath: 'isPublic', options: { unique: false } },
 					{ name: this.INDEX_DATE_MODIFIED, keyPath: 'dateModified', options: { unique: false } },
 					{ name: this.INDEX_LAST_SYNC, keyPath: 'lastSyncTimestamp', options: { unique: false } }
@@ -334,54 +337,8 @@ class StoriesDB {
 			return; // Already initialized
 		}
 
-		// Default categories
-		const defaultCategories = [
-			{
-				id: 'travel',
-				name: 'Travel',
-				color: '#3B82F6',
-				icon: '✈️',
-				description: 'Travel adventures and destinations'
-			},
-			{
-				id: 'food',
-				name: 'Food & Dining',
-				color: '#EF4444',
-				icon: '🍕',
-				description: 'Culinary experiences and restaurants'
-			},
-			{
-				id: 'nature',
-				name: 'Nature & Outdoors',
-				color: '#10B981',
-				icon: '🌲',
-				description: 'Hiking, parks, and outdoor activities'
-			},
-			{
-				id: 'culture',
-				name: 'Culture & History',
-				color: '#8B5CF6',
-				icon: '🏛️',
-				description: 'Museums, landmarks, and cultural sites'
-			},
-			{
-				id: 'events',
-				name: 'Events & Entertainment',
-				color: '#F59E0B',
-				icon: '🎭',
-				description: 'Concerts, festivals, and entertainment'
-			},
-			{
-				id: 'personal',
-				name: 'Personal',
-				color: '#6B7280',
-				icon: '📔',
-				description: 'Personal experiences and memories'
-			}
-		];
-
-		// Store each category
-		for (const categoryData of defaultCategories) {
+		// Store each default category
+		for (const categoryData of DEFAULT_STORY_CATEGORIES) {
 			const userCategory: StoryCategory = {
 				...categoryData,
 				userId,
@@ -561,43 +518,6 @@ class StoriesDB {
 	// ==================== HELPER METHODS ====================
 
 	/**
-	 * Generate searchable text from story properties
-	 */
-	private generateSearchText(story: Story): string {
-		const searchParts: string[] = [];
-
-		// Add title and description
-		searchParts.push(story.title.toLowerCase());
-		if (story.description) {
-			searchParts.push(story.description.toLowerCase());
-		}
-
-		// Add all tags
-		story.tags.forEach((tag) => {
-			searchParts.push(tag.toLowerCase());
-		});
-
-		// Add category names (would need to resolve category IDs to names)
-		story.categories.forEach((categoryId) => {
-			searchParts.push(categoryId.toLowerCase());
-		});
-
-		// Add text content from story nodes
-		story.content.forEach((node) => {
-			if (node.type === 'text') {
-				searchParts.push(node.text.toLowerCase());
-			} else if (node.type === 'feature') {
-				searchParts.push(node.displayText.toLowerCase());
-				if (node.customText) {
-					searchParts.push(node.customText.toLowerCase());
-				}
-			}
-		});
-
-		return searchParts.join(' ');
-	}
-
-	/**
 	 * Get all stories for a specific user
 	 */
 	private async getAllStoriesForUser(store: IDBObjectStore, userId: string): Promise<Story[]> {
@@ -730,7 +650,6 @@ class StoriesDB {
 		content: StoryContentNode[],
 		options?: {
 			description?: string;
-			tags?: string[];
 			categories?: string[];
 			isPublic?: boolean;
 		}
@@ -748,7 +667,6 @@ class StoriesDB {
 			title: title.trim(),
 			description: options?.description?.trim() || undefined,
 			content: [...content],
-			tags: [...(options?.tags || [])],
 			categories: [...(options?.categories || [])],
 			dateCreated: now,
 			dateModified: now,
@@ -760,7 +678,7 @@ class StoriesDB {
 		};
 
 		// Generate searchable text
-		story.searchText = this.generateSearchText(story);
+		story.searchText = generateSearchText(story);
 
 		// Store in database
 		const transaction = this.db.transaction([this.STORIES_STORE_NAME], 'readwrite');
@@ -824,6 +742,11 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
+		// Sync to Firestore if online and authenticated
+		if (this.isOnline && this.currentUser) {
+			this.syncCategoryToFirestore(category);
+		}
+
 		return category;
 	}
 
@@ -841,39 +764,6 @@ class StoriesDB {
 		return new Promise((resolve, reject) => {
 			const stories: Story[] = [];
 			const request = index.openCursor(IDBKeyRange.only(categoryId));
-
-			request.onsuccess = (event) => {
-				const cursor = (event.target as IDBRequest).result;
-				if (cursor) {
-					// Only include stories for current user
-					const story = cursor.value as Story;
-					if (story.userId === this.getCurrentUserId()) {
-						stories.push(story);
-					}
-					cursor.continue();
-				} else {
-					resolve(stories.sort((a, b) => b.dateModified - a.dateModified));
-				}
-			};
-
-			request.onerror = () => reject(request.error);
-		});
-	}
-
-	/**
-	 * Get stories by tag
-	 */
-	async getStoriesByTag(tag: string): Promise<Story[]> {
-		await this.ensureInitialized();
-		if (!this.db) return [];
-
-		const transaction = this.db.transaction([this.STORIES_STORE_NAME], 'readonly');
-		const store = transaction.objectStore(this.STORIES_STORE_NAME);
-		const index = store.index(this.INDEX_TAGS);
-
-		return new Promise((resolve, reject) => {
-			const stories: Story[] = [];
-			const request = index.openCursor(IDBKeyRange.only(tag));
 
 			request.onsuccess = (event) => {
 				const cursor = (event.target as IDBRequest).result;
@@ -1029,9 +919,7 @@ class StoriesDB {
 
 	async updateStory(
 		id: string,
-		updates: Partial<
-			Pick<Story, 'title' | 'description' | 'content' | 'tags' | 'categories' | 'isPublic'>
-		>,
+		updates: Partial<Pick<Story, 'title' | 'description' | 'content' | 'categories' | 'isPublic'>>,
 		changeDescription?: string
 	): Promise<Story> {
 		await this.ensureInitialized();
@@ -1052,7 +940,7 @@ class StoriesDB {
 		};
 
 		// Regenerate searchable text
-		updatedStory.searchText = this.generateSearchText(updatedStory);
+		updatedStory.searchText = generateSearchText(updatedStory);
 
 		// Store updated story
 		const transaction = this.db.transaction([this.STORIES_STORE_NAME], 'readwrite');
@@ -1116,7 +1004,6 @@ class StoriesDB {
 		options?: {
 			limit?: number;
 			categories?: string[];
-			tags?: string[];
 			publicOnly?: boolean;
 		}
 	): Promise<StorySearchResult[]> {
@@ -1124,7 +1011,7 @@ class StoriesDB {
 		if (!this.db) return [];
 
 		const userId = this.getCurrentUserId();
-		const { limit = 50, categories, tags, publicOnly = false } = options || {};
+		const { limit = 50, categories, publicOnly = false } = options || {};
 
 		const transaction = this.db.transaction([this.STORIES_STORE_NAME], 'readonly');
 		const store = transaction.objectStore(this.STORIES_STORE_NAME);
@@ -1138,9 +1025,6 @@ class StoriesDB {
 		}
 		if (categories && categories.length > 0) {
 			stories = stories.filter((story) => story.categories.some((cat) => categories.includes(cat)));
-		}
-		if (tags && tags.length > 0) {
-			stories = stories.filter((story) => story.tags.some((tag) => tags.includes(tag)));
 		}
 
 		// Apply text search and scoring
@@ -1178,14 +1062,6 @@ class StoriesDB {
 				matches.push('description');
 				score += 3;
 			}
-
-			// Check tags
-			story.tags.forEach((tag) => {
-				if (tag.toLowerCase().includes(queryLower)) {
-					matches.push('tag');
-					score += 2;
-				}
-			});
 
 			// Check content nodes
 			story.content.forEach((node) => {
@@ -1570,7 +1446,7 @@ class StoriesDB {
 			const lastSyncTimestamp = (category as any).lastSyncTimestamp || 0;
 
 			// Upload if never synced or is a custom category
-			if (lastSyncTimestamp === 0 && !this.isDefaultCategory(category.id)) {
+			if (lastSyncTimestamp === 0 && !isDefaultCategory(category.id)) {
 				await this.syncCategoryToFirestore(category);
 			}
 		}
@@ -1600,14 +1476,6 @@ class StoriesDB {
 		} catch (error) {
 			console.error('Failed to set up download queries:', error);
 		}
-	}
-
-	/**
-	 * Check if category is a default category
-	 */
-	private isDefaultCategory(categoryId: string): boolean {
-		const defaultIds = ['travel', 'food', 'nature', 'culture', 'events', 'personal'];
-		return defaultIds.includes(categoryId);
 	}
 
 	/**

@@ -53,9 +53,9 @@
 	}
 </script>
 
-<div class="mb-4 rounded-lg border border-gray-200 bg-gray-50">
+<div class="mb-3 rounded-lg border border-gray-200 bg-gray-50">
 	<!-- Filters Header -->
-	<div class="flex items-center justify-between p-3">
+	<div class="flex items-center justify-between px-3 py-2">
 		<button
 			onclick={toggleExpanded}
 			onkeydown={(e) => {
@@ -101,7 +101,10 @@
 
 	<!-- Filters Content -->
 	{#if expanded}
-		<div id="filters-content" class="space-y-3 px-3 pb-3">
+		<div
+			id="filters-content"
+			class="filters-scrollable max-h-48 space-y-3 overflow-y-auto px-3 pb-3"
+		>
 			{#each filters as filterGroup}
 				{#if filterGroup.type === 'search'}
 					<!-- Search Filter -->
@@ -207,3 +210,28 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.filters-scrollable {
+		scrollbar-width: thin;
+		scrollbar-color: #9ca3af #f3f4f6;
+	}
+
+	.filters-scrollable::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.filters-scrollable::-webkit-scrollbar-track {
+		background: #f3f4f6;
+		border-radius: 4px;
+	}
+
+	.filters-scrollable::-webkit-scrollbar-thumb {
+		background: #9ca3af;
+		border-radius: 4px;
+	}
+
+	.filters-scrollable::-webkit-scrollbar-thumb:hover {
+		background: #6b7280;
+	}
+</style>

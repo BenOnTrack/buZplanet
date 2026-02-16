@@ -7,10 +7,9 @@
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import StoriesList from '$lib/components/stories/StoriesList.svelte';
 	import StoryViewer from '$lib/components/stories/StoryViewer.svelte';
-	import StoryEditorDrawer from '$lib/components/stories/StoryEditorDrawer.svelte';
+	import StoryEditorDrawer from '$lib/components/drawers/StoryEditorDrawer.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
-	let activeSnapPoint = $state<string | number>('400px');
 
 	// View state
 	type ViewMode = 'list' | 'view' | 'edit';
@@ -25,6 +24,17 @@
 	let searchQuery = $state('');
 	let selectedCategories = $state<string[]>([]);
 	let availableCategories = $state<StoryCategory[]>([]);
+	let filteredStoriesCount = $state<number | null>(null);
+
+	// Derived state for button visibility
+	let showStoryButtons = $derived.by(() => {
+		const result = viewMode === 'view' && currentStory !== null;
+		console.log('🎯 Derived showStoryButtons:', result, {
+			viewMode,
+			currentStory: currentStory?.id
+		});
+		return result;
+	});
 
 	// Load categories when drawer opens
 	$effect(() => {
@@ -45,6 +55,20 @@
 		}
 	});
 
+	// Debug reactive state changes
+	$effect(() => {
+		console.log('🔄 State change detected:', {
+			viewMode,
+			currentStory: currentStory?.id,
+			showStoryButtons
+		});
+	});
+
+	// Specifically track currentStory changes
+	$effect(() => {
+		console.log('📚 currentStory changed:', currentStory?.id || 'null');
+	});
+
 	async function loadCategories() {
 		try {
 			availableCategories = await storiesDB.getAllCategories();
@@ -55,11 +79,18 @@
 
 	// Handle story selection from list
 	function handleStorySelect(story: Story) {
+		console.log('📜 Story selected:', story.id);
 		currentStory = story;
 		viewMode = 'view';
+		console.log('📜 After story select, state:', { viewMode, currentStory: currentStory?.id });
 
 		// Increment view count
 		storiesDB.incrementViewCount(story.id).catch(console.error);
+	}
+
+	// Handle stories count update from StoriesList
+	function handleStoriesCountUpdate(count: number) {
+		filteredStoriesCount = count;
 	}
 
 	// Handle new story creation
@@ -99,17 +130,24 @@
 
 	// Back to list from story view
 	function backToList() {
+		console.log('⬅️ Back to list clicked, current state:', {
+			viewMode,
+			currentStory: currentStory?.id
+		});
 		viewMode = 'list';
 		currentStory = null;
+		console.log('⬅️ After back to list, state:', { viewMode, currentStoryId: 'null' });
 	}
 
 	// Toggle category filter
 	function toggleCategoryFilter(categoryId: string) {
+		console.log('🏷️ Toggling category:', categoryId, 'Current selected:', selectedCategories);
 		if (selectedCategories.includes(categoryId)) {
 			selectedCategories = selectedCategories.filter((id) => id !== categoryId);
 		} else {
 			selectedCategories = [...selectedCategories, categoryId];
 		}
+		console.log('🏷️ After toggle, selected categories:', selectedCategories);
 	}
 
 	// Clear all filters
@@ -117,53 +155,64 @@
 		searchQuery = '';
 		selectedCategories = [];
 	}
-
-	// Get category info
-	function getCategoryInfo(categoryId: string): StoryCategory | undefined {
-		return availableCategories.find((cat) => cat.id === categoryId);
-	}
 </script>
 
 <!-- Stories Drawer -->
-<Drawer.Root bind:open snapPoints={['400px', '600px', 1]} bind:activeSnapPoint modal={false}>
-	<Drawer.Overlay
-		class="fixed inset-0 bg-black/40"
-		style="pointer-events: none;z-index: {Z_INDEX.DRAWER_OVERLAY}"
-	/>
+<Drawer.Root bind:open modal={false}>
 	<Drawer.Portal>
+		<Drawer.Overlay class="fixed inset-0 bg-black/40" style="z-index: {Z_INDEX.DRAWER_OVERLAY}" />
 		<Drawer.Content
-			class="border-b-none fixed right-0 bottom-0 left-0 mx-[-1px] flex h-full max-h-[97%] flex-col overflow-hidden rounded-t-[10px] border border-gray-200 bg-white"
+			class="fixed right-0 bottom-0 left-0 flex h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-white"
 			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
 		>
-			<div class="flex h-full min-h-0 w-full flex-col overflow-hidden">
+			<div class="mx-auto flex h-full w-full max-w-full flex-col overflow-hidden">
 				<!-- Sticky Header Section -->
-				<div class="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-4">
+				<div class="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-2">
 					<!-- Header -->
-					<div class="mb-4 flex items-center justify-between">
+					<div class="mb-2 flex items-center justify-between">
 						<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
 							<PropertyIcon key="description" value="stories" size={24} />
 							{viewMode === 'view' && currentStory ? currentStory.title : 'Stories'}
 						</Drawer.Title>
 
 						<div class="flex items-center gap-2">
-							{#if viewMode === 'view' && currentStory}
+							{#if viewMode === 'list'}
 								<button
-									class="text-gray-500 hover:text-gray-700"
+									class="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+									onclick={handleNewStory}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											handleNewStory();
+										}
+									}}
+									title="Create new story"
+									aria-label="Create new story"
+								>
+									NEW
+								</button>
+							{:else if currentStory}
+								<button
+									class="rounded bg-blue-500 px-3 py-1 text-sm font-medium text-white"
 									onclick={() => currentStory && handleEditStory(currentStory)}
 									title="Edit story"
+									aria-label="Edit story"
 								>
-									<PropertyIcon key="description" value="edit" size={20} />
+									EDIT
 								</button>
 								<button
-									class="text-gray-500 hover:text-gray-700"
+									class="rounded bg-gray-500 px-3 py-1 text-sm font-medium text-white"
 									onclick={backToList}
 									title="Back to stories list"
+									aria-label="Back to stories list"
 								>
-									<PropertyIcon key="description" value="back" size={20} />
+									BACK
 								</button>
 							{/if}
 
-							<Drawer.Close class="text-gray-500 hover:text-gray-700">
+							<Drawer.Close
+								class="rounded-md p-1 text-gray-600 transition-colors hover:text-gray-800 focus:text-gray-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+							>
 								<PropertyIcon key="description" value="x" size={20} class="text-foreground" />
 								<span class="sr-only">Close</span>
 							</Drawer.Close>
@@ -172,7 +221,7 @@
 
 					<!-- Search and Filters (only in list view) -->
 					{#if viewMode === 'list'}
-						<div class="space-y-3">
+						<div class="space-y-2">
 							<!-- Search -->
 							<div class="relative">
 								<PropertyIcon
@@ -190,60 +239,74 @@
 
 							<!-- Category filters -->
 							{#if availableCategories.length > 0}
-								<div class="flex flex-wrap gap-2">
-									{#each availableCategories as category}
-										<button
-											class={clsx(
-												'flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none',
-												{
-													'text-white': selectedCategories.includes(category.id),
-													'border border-gray-300 text-gray-700 hover:bg-gray-50':
-														!selectedCategories.includes(category.id)
-												}
-											)}
-											style={selectedCategories.includes(category.id)
-												? `background-color: ${category.color}`
-												: ''}
-											onclick={() => toggleCategoryFilter(category.id)}
-										>
-											{category.icon || '📂'}
-											{category.name}
-										</button>
-									{/each}
+								<div class="category-filters-container">
+									<div class="category-filters-scroll">
+										{#each availableCategories as category}
+											<button
+												class={clsx(
+													'flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium whitespace-nowrap transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none',
+													{
+														'text-white': selectedCategories.includes(category.id),
+														'border border-gray-300 text-gray-700 hover:bg-gray-50':
+															!selectedCategories.includes(category.id)
+													}
+												)}
+												style={selectedCategories.includes(category.id)
+													? `background-color: ${category.color}`
+													: ''}
+												onclick={() => toggleCategoryFilter(category.id)}
+											>
+												{category.icon || '📂'}
+												{category.name}
+											</button>
+										{/each}
 
-									{#if selectedCategories.length > 0 || searchQuery}
-										<button
-											class="flex items-center gap-1 rounded-full border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
-											onclick={clearFilters}
-										>
-											<PropertyIcon key="description" value="clear" size={12} />
-											Clear
-										</button>
-									{/if}
+										{#if selectedCategories.length > 0 || searchQuery}
+											<button
+												class="flex items-center gap-1 rounded-full border border-gray-300 px-2 py-1 text-xs whitespace-nowrap text-gray-600 hover:bg-gray-50 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
+												onclick={clearFilters}
+											>
+												<PropertyIcon key="description" value="clear" size={12} />
+												Clear
+											</button>
+										{/if}
+									</div>
 								</div>
 							{/if}
 						</div>
 					{/if}
 				</div>
 
-				<!-- Scrollable Content Area -->
-				<div
-					class="stories-drawer-scrollable flex-1 overflow-x-hidden overflow-y-scroll px-4 py-4"
-					style="scrollbar-gutter: stable; min-height: 0; flex-basis: 0;"
-				>
-					<div class="space-y-4 pb-8" style="min-height: calc(100vh + 200px);">
-						<!-- Content based on view mode -->
-						{#if viewMode === 'list'}
+				<!-- Content Area -->
+				<div class="flex min-h-0 flex-1 flex-col">
+					<!-- Content based on view mode -->
+					{#if viewMode === 'list'}
+						<!-- Fixed Stories Header -->
+						<div class="flex-shrink-0 border-b border-gray-100 bg-white px-4 py-2">
+							<p class="text-sm text-gray-600">
+								{filteredStoriesCount !== null ? filteredStoriesCount : '...'} stor{filteredStoriesCount !==
+								1
+									? 'ies'
+									: 'y'}
+								{selectedCategories.length > 0 || searchQuery ? ' (filtered)' : ''}
+							</p>
+						</div>
+
+						<!-- Scrollable Stories Content -->
+						<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">
 							<StoriesList
 								onStorySelect={handleStorySelect}
 								onNewStory={handleNewStory}
+								onStoriesCountUpdate={handleStoriesCountUpdate}
 								{selectedCategories}
 								{searchQuery}
+								hideHeader={true}
 							/>
-						{:else if viewMode === 'view' && currentStory}
-							<StoryViewer story={currentStory} showMetadata={true} onEditStory={handleEditStory} />
-						{/if}
-					</div>
+						</div>
+					{:else if viewMode === 'view' && currentStory}
+						<!-- Story viewer takes full height with its own internal scrolling -->
+						<StoryViewer story={currentStory} showMetadata={true} class="h-full" />
+					{/if}
 				</div>
 			</div>
 		</Drawer.Content>
@@ -263,19 +326,12 @@
 	.stories-drawer-scrollable {
 		scrollbar-width: auto; /* For Firefox - use auto for better visibility */
 		scrollbar-color: #6b7280 #e5e7eb; /* For Firefox - visible colors */
-		/* Critical for proper flex scrolling */
-		flex: 1 1 0;
-		min-height: 0;
-		max-height: 100%;
-		/* Force scrollbar to always show */
-		overflow-y: scroll !important;
 	}
 
 	/* WebKit scrollbar styling - make it always visible and prominent */
 	.stories-drawer-scrollable::-webkit-scrollbar {
 		width: 14px; /* Make it visible but not too wide */
 		-webkit-appearance: none;
-		display: block !important; /* Force it to show */
 	}
 
 	.stories-drawer-scrollable::-webkit-scrollbar-track {
@@ -301,5 +357,41 @@
 
 	.stories-drawer-scrollable::-webkit-scrollbar-corner {
 		background: #f3f4f6;
+	}
+
+	/* Category filters horizontal scrolling - specific to category sections only */
+	.category-filters-container {
+		overflow: hidden;
+		width: 100%;
+	}
+
+	.category-filters-scroll {
+		display: flex;
+		gap: 0.5rem;
+		overflow-x: auto;
+		overflow-y: hidden;
+		padding-bottom: 0.25rem;
+		scrollbar-width: thin;
+		scrollbar-color: #d1d5db transparent;
+		/* Ensure this only affects this specific container */
+		max-width: 100%;
+	}
+
+	.category-filters-scroll::-webkit-scrollbar {
+		height: 4px;
+		width: auto; /* Reset any inherited width */
+	}
+
+	.category-filters-scroll::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.category-filters-scroll::-webkit-scrollbar-thumb {
+		background: #d1d5db;
+		border-radius: 2px;
+	}
+
+	.category-filters-scroll::-webkit-scrollbar-thumb:hover {
+		background: #9ca3af;
 	}
 </style>

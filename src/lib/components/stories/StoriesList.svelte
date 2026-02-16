@@ -2,18 +2,23 @@
 	import { clsx } from 'clsx';
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+	import { formatDate, getPreviewText, countFeatures } from '$lib/utils/stories';
 
 	let {
 		onStorySelect,
 		onNewStory,
+		onStoriesCountUpdate = undefined,
 		selectedCategories = [],
 		searchQuery = '',
+		hideHeader = false,
 		class: className = ''
 	}: {
 		onStorySelect: (story: Story) => void;
 		onNewStory: () => void;
+		onStoriesCountUpdate?: (count: number) => void;
 		selectedCategories?: string[];
 		searchQuery?: string;
+		hideHeader?: boolean;
 		class?: string;
 	} = $props();
 
@@ -27,11 +32,24 @@
 	let filteredStories = $derived.by(() => {
 		let filtered = [...stories]; // Create a copy to avoid mutating the original
 
-		// Apply category filter
+		console.log('🔍 Filtering stories:', {
+			totalStories: stories.length,
+			selectedCategories: selectedCategories,
+			searchQuery: searchQuery.trim()
+		});
+
+		// Apply category filter (ALL selected categories must be present in the story)
 		if (selectedCategories.length > 0) {
-			filtered = filtered.filter((story) =>
-				story.categories.some((cat) => selectedCategories.includes(cat))
-			);
+			filtered = filtered.filter((story) => {
+				const hasAllCategories = selectedCategories.every((selectedCat) =>
+					story.categories.includes(selectedCat)
+				);
+				console.log(
+					`Story "${story.title}" categories: [${story.categories.join(', ')}], has all selected: ${hasAllCategories}`
+				);
+				return hasAllCategories;
+			});
+			console.log('After category filter:', filtered.length, 'stories remain');
 		}
 
 		// Apply search filter
@@ -41,13 +59,15 @@
 				(story) =>
 					story.title.toLowerCase().includes(query) ||
 					story.description?.toLowerCase().includes(query) ||
-					story.tags.some((tag) => tag.toLowerCase().includes(query)) ||
 					story.searchText.includes(query)
 			);
+			console.log('After search filter:', filtered.length, 'stories remain');
 		}
 
 		// Sort by date modified (newest first) - create new array to avoid mutation
-		return [...filtered].sort((a, b) => b.dateModified - a.dateModified);
+		const result = [...filtered].sort((a, b) => b.dateModified - a.dateModified);
+		console.log('Final filtered stories:', result.length);
+		return result;
 	});
 
 	// Load data on mount and react to changes
@@ -56,6 +76,18 @@
 		storiesDB.changeSignal;
 		loadStories();
 		loadCategories();
+	});
+
+	// Notify parent of filtered stories count changes
+	$effect(() => {
+		// Track dependencies: filteredStories length, loading state
+		const count = filteredStories.length;
+		const isLoading = loading;
+
+		// Only call the callback once we have loaded stories and computed filtered results
+		if (onStoriesCountUpdate && !isLoading) {
+			onStoriesCountUpdate(count);
+		}
 	});
 
 	async function loadStories() {
@@ -85,80 +117,33 @@
 		}
 	}
 
-	// Format date for display
-	function formatDate(timestamp: number, short = false): string {
-		const date = new Date(timestamp);
-		const now = new Date();
-		const diffMs = now.getTime() - date.getTime();
-		const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-		if (short) {
-			if (diffDays === 0) return 'Today';
-			if (diffDays === 1) return 'Yesterday';
-			if (diffDays < 7) return `${diffDays} days ago`;
-			if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-			if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-			return `${Math.floor(diffDays / 365)} years ago`;
-		}
-
-		return date.toLocaleDateString(undefined, {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric'
-		});
-	}
-
 	// Get category display info
 	function getCategoryInfo(categoryId: string): StoryCategory | undefined {
 		return categories.find((cat) => cat.id === categoryId);
-	}
-
-	// Extract preview text from story content
-	function getPreviewText(content: StoryContentNode[], maxLength = 120): string {
-		let text = '';
-
-		for (const node of content) {
-			if (node.type === 'text') {
-				text += node.text + ' ';
-			} else if (node.type === 'feature') {
-				text += `[${node.customText || node.displayText}] `;
-			}
-
-			if (text.length > maxLength) {
-				break;
-			}
-		}
-
-		return text.trim().length > maxLength
-			? text.trim().substring(0, maxLength) + '...'
-			: text.trim();
-	}
-
-	// Count features in story
-	function countFeatures(content: StoryContentNode[]): number {
-		return content.filter((node) => node.type === 'feature').length;
 	}
 </script>
 
 <div class={clsx('stories-list', className)}>
 	<!-- Header -->
-	<div class="mb-6 flex items-center justify-between">
-		<div>
-			<h2 class="text-xl font-semibold text-gray-900">Your Stories</h2>
-			<p class="text-sm text-gray-600">
-				{filteredStories.length} stor{filteredStories.length !== 1 ? 'ies' : 'y'}
-				{selectedCategories.length > 0 || searchQuery ? ' (filtered)' : ''}
-			</p>
-		</div>
+	{#if !hideHeader}
+		<div class="mb-6 flex items-center justify-between">
+			<div>
+				<h2 class="text-xl font-semibold text-gray-900">Your Stories</h2>
+				<p class="text-sm text-gray-600">
+					{filteredStories.length} stor{filteredStories.length !== 1 ? 'ies' : 'y'}
+					{selectedCategories.length > 0 || searchQuery ? ' (filtered)' : ''}
+				</p>
+			</div>
 
-		<button
-			class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-			onclick={onNewStory}
-		>
-			<PropertyIcon key="description" value="plus" size={16} />
-			New Story
-		</button>
-	</div>
+			<button
+				class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+				onclick={onNewStory}
+			>
+				<PropertyIcon key="description" value="plus" size={16} />
+				New Story
+			</button>
+		</div>
+	{/if}
 
 	<!-- Loading state -->
 	{#if loading}
@@ -229,7 +214,7 @@
 							</div>
 
 							<div class="ml-4 flex-shrink-0 text-xs text-gray-500">
-								{formatDate(story.dateModified, true)}
+								{formatDate(story.dateModified, { short: true })}
 							</div>
 						</div>
 					</header>
@@ -286,20 +271,6 @@
 							{/if}
 						</div>
 					</footer>
-
-					<!-- Tags (if any) -->
-					{#if story.tags.length > 0}
-						<div class="mt-2 flex flex-wrap gap-1">
-							{#each story.tags.slice(0, 3) as tag}
-								<span class="inline-block rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-									{tag}
-								</span>
-							{/each}
-							{#if story.tags.length > 3}
-								<span class="text-xs text-gray-500">+{story.tags.length - 3} more</span>
-							{/if}
-						</div>
-					{/if}
 				</button>
 			{/each}
 		</div>

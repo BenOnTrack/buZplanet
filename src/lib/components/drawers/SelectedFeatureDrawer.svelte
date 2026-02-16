@@ -426,7 +426,7 @@
 <Drawer.Root
 	{open}
 	onOpenChange={handleOpenChange}
-	snapPoints={['200px', '400px', 1]}
+	snapPoints={[0.25, 0.5, 0.75]}
 	bind:activeSnapPoint
 	modal={false}
 >

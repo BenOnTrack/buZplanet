@@ -317,11 +317,11 @@
 	});
 </script>
 
-<div class="overflow-x-auto">
+<div class="features-table-wrapper">
 	<table class="w-full text-xs">
 		{#if showHeader}
-			<thead class="sticky top-0 bg-gray-50">
-				<tr class="border-b border-gray-200">
+			<thead class="sticky top-0 z-20 border-b border-gray-200 bg-white">
+				<tr class="bg-white shadow-sm">
 					<!-- Name column: sortable -->
 					<th class="w-32 pr-1 pb-1 text-left text-xs font-medium text-gray-700">
 						<button
@@ -651,3 +651,24 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* Ensure sticky headers work properly */
+	.features-table-wrapper :global(thead) {
+		position: sticky;
+		top: 0;
+		z-index: 20;
+		background-color: white;
+		border-bottom: 1px solid #e5e7eb;
+	}
+
+	.features-table-wrapper :global(thead tr) {
+		background-color: white;
+		box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+	}
+
+	.features-table-wrapper :global(thead th) {
+		background-color: white;
+		position: relative;
+	}
+</style>

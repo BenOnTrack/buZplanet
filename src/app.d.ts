@@ -334,7 +334,6 @@ declare global {
 		content: StoryContentNode[];
 		title: string;
 		description?: string;
-		tags: string[];
 		categories: string[];
 		dateCreated: number;
 		versionNumber: number;
@@ -350,8 +349,7 @@ declare global {
 		title: string;
 		description?: string;
 		content: StoryContentNode[];
-		tags: string[]; // User-defined tags
-		categories: string[]; // Predefined categories like 'travel', 'food', etc.
+		categories: string[]; // Predefined and user-created categories like 'travel', 'food', etc.
 
 		// Metadata
 		dateCreated: number;

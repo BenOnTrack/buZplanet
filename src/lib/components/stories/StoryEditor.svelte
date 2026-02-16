@@ -4,6 +4,14 @@
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import FeatureInsertDialog from '$lib/components/dialogs/FeatureInsertDialog.svelte';
+	import {
+		updateFeatureStatuses,
+		getFeatureDisplayName,
+		createSearchResultFromMapFeature,
+		renderContentToHTML,
+		parseHTMLToContent,
+		type FeatureStatus
+	} from '$lib/utils/stories';
 
 	let {
 		content = $bindable([]),
@@ -25,6 +33,53 @@
 	let showFeatureDialog = $state(false);
 	let lastRenderedContent = $state<string>(''); // Track what we last rendered
 
+	// Reactive state for feature statuses - updates when features are modified
+	let featureStatuses = $state<Map<string, FeatureStatus>>(new Map());
+	let bookmarksVersion = $state(0);
+
+	// Track features DB reactivity
+	$effect(() => {
+		// This effect will re-run whenever bookmarks change in the database
+		bookmarksVersion = featuresDB.bookmarksVersion;
+		updateFeatureStatusesForContent();
+	});
+
+	// Update all feature statuses using centralized function
+	async function updateFeatureStatusesForContent() {
+		if (!content || content.length === 0) return;
+
+		featureStatuses = await updateFeatureStatuses(content);
+
+		// Update DOM if editor is mounted
+		if (editorElement) {
+			updateFeatureSpansColor();
+		}
+	}
+
+	// Update colors of existing feature spans in the DOM
+	function updateFeatureSpansColor() {
+		if (!editorElement) return;
+
+		const featureSpans = editorElement.querySelectorAll('.story-feature');
+		featureSpans.forEach((span) => {
+			const featureId = span.getAttribute('data-feature-id');
+			if (featureId) {
+				const status = featureStatuses.get(featureId) || 'gray';
+
+				// Remove existing status classes
+				span.classList.remove(
+					'story-feature-gray',
+					'story-feature-blue',
+					'story-feature-red',
+					'story-feature-green'
+				);
+
+				// Add new status class
+				span.classList.add(`story-feature-${status}`);
+			}
+		});
+	}
+
 	// Enable story insertion mode when editor is opened (if not readonly)
 	$effect(() => {
 		if (!readonly) {
@@ -37,35 +92,26 @@
 		};
 	});
 
-	// Render content as HTML for contenteditable
-	function renderContentToHTML(contentNodes: StoryContentNode[]): string {
-		return contentNodes
-			.map((node, index) => {
-				if (node.type === 'text') {
-					return node.text.replace(/\n/g, '<br>');
-				} else if (node.type === 'feature') {
-					const displayText = node.customText || node.displayText;
-					// Make feature spans non-editable to prevent cursor getting stuck
-					return `<span class="story-feature" data-feature-id="${node.featureId}" data-index="${index}" contenteditable="false">${displayText}</span>`;
-				}
-				return '';
-			})
-			.join('');
-	}
-
 	// Initialize editor when mounted or content changes externally
 	$effect(() => {
 		if (editorElement && readonly) {
 			// For readonly mode, always update to show current content
-			const newHTML = renderContentToHTML(content);
+			const newHTML = renderContentToHTML(content, featureStatuses);
 			editorElement.innerHTML = newHTML;
+		}
+	});
+
+	// Update feature statuses when content changes
+	$effect(() => {
+		if (content) {
+			updateFeatureStatusesForContent();
 		}
 	});
 
 	// Update the editor HTML when content changes from outside (not from user input)
 	$effect(() => {
 		if (editorElement && !readonly) {
-			const newHTML = renderContentToHTML(content);
+			const newHTML = renderContentToHTML(content, featureStatuses);
 			const contentStr = JSON.stringify(content);
 
 			// Only update DOM if content actually changed from external source
@@ -89,58 +135,7 @@
 
 		try {
 			const html = editorElement.innerHTML;
-			const newContent: StoryContentNode[] = [];
-
-			// Parse HTML back to content nodes
-			const tempDiv = document.createElement('div');
-			tempDiv.innerHTML = html;
-
-			let textAccumulator = '';
-
-			function processNode(node: Node) {
-				if (node.nodeType === Node.TEXT_NODE) {
-					textAccumulator += node.textContent || '';
-				} else if (node.nodeType === Node.ELEMENT_NODE) {
-					const element = node as HTMLElement;
-
-					if (element.classList.contains('story-feature')) {
-						// Save accumulated text before feature
-						if (textAccumulator) {
-							newContent.push({ type: 'text', text: textAccumulator });
-							textAccumulator = '';
-						}
-
-						// Find the original feature by ID
-						const featureId = element.getAttribute('data-feature-id');
-						const originalFeature = content.find(
-							(node) => node.type === 'feature' && node.featureId === featureId
-						);
-
-						if (originalFeature && originalFeature.type === 'feature') {
-							newContent.push({
-								...originalFeature,
-								customText: element.textContent || originalFeature.displayText
-							});
-						}
-					} else if (element.tagName === 'BR') {
-						textAccumulator += '\n';
-					} else {
-						// Process child nodes
-						for (const child of Array.from(element.childNodes)) {
-							processNode(child);
-						}
-					}
-				}
-			}
-
-			for (const child of Array.from(tempDiv.childNodes)) {
-				processNode(child);
-			}
-
-			// Save remaining text
-			if (textAccumulator) {
-				newContent.push({ type: 'text', text: textAccumulator });
-			}
+			const newContent = parseHTMLToContent(html, content);
 
 			// Only update if content actually changed
 			const newContentStr = JSON.stringify(newContent);
@@ -243,16 +238,6 @@
 		}
 	}
 
-	// Get display name for feature
-	function getFeatureDisplayName(feature: StoredFeature | SearchResult): string {
-		if ('names' in feature) {
-			// It's either type, try to get the best name
-			const names = 'names' in feature ? feature.names : {};
-			return names.name || names['name:en'] || Object.values(names)[0] || 'Unknown Feature';
-		}
-		return 'Unknown Feature';
-	}
-
 	// Listen for map feature selection when in edit mode
 	$effect(() => {
 		if (!readonly && mapControl.selectedFeature) {
@@ -271,27 +256,7 @@
 					} else {
 						console.log('🔄 Creating basic feature from map feature:', mapFeature);
 						// Create a basic feature from map feature
-						const basicFeature: SearchResult = {
-							id: String(mapFeature.id),
-							names: mapFeature.properties || {},
-							class: mapFeature.properties?.class || '',
-							subclass: mapFeature.properties?.subclass,
-							category: mapFeature.properties?.category,
-							lng: 0, // These will be populated from geometry if needed
-							lat: 0,
-							database: mapFeature.source || '',
-							layer: mapFeature.sourceLayer || '',
-							zoom: 14,
-							tileX: 0,
-							tileY: 0
-						};
-
-						// Extract coordinates if it's a point
-						if (mapFeature.geometry && mapFeature.geometry.type === 'Point') {
-							const [lng, lat] = mapFeature.geometry.coordinates;
-							basicFeature.lng = lng;
-							basicFeature.lat = lat;
-						}
+						const basicFeature = createSearchResultFromMapFeature(mapFeature);
 
 						console.log('✅ Created basic feature:', basicFeature);
 						selectedFeature = basicFeature;
@@ -376,12 +341,9 @@
 	}
 
 	:global(.story-feature) {
-		background-color: #ebf8ff;
-		border: 1px solid #3182ce;
 		border-radius: 4px;
 		padding: 2px 6px;
-		margin: 0 2px;
-		color: #2c5282;
+		margin: 0 4px;
 		font-weight: 500;
 		cursor: pointer;
 		display: inline-block;
@@ -389,19 +351,60 @@
 		/* Make chips non-editable to prevent cursor getting stuck */
 		user-select: none;
 		-webkit-user-select: none;
-		/* Add some spacing around chips */
-		margin: 0 4px;
 		/* Ensure chips can't be edited */
 		pointer-events: auto;
 	}
 
-	:global(.story-feature:hover) {
+	/* Gray - Default (not saved or not bookmarked) */
+	:global(.story-feature-gray) {
+		background-color: #f3f4f6;
+		border: 1px solid #d1d5db;
+		color: #6b7280;
+	}
+
+	:global(.story-feature-gray:hover) {
+		background-color: #e5e7eb;
+		border-color: #9ca3af;
+	}
+
+	/* Blue - Bookmarked */
+	:global(.story-feature-blue) {
+		background-color: #ebf8ff;
+		border: 1px solid #3182ce;
+		color: #2c5282;
+	}
+
+	:global(.story-feature-blue:hover) {
 		background-color: #bee3f8;
 		border-color: #2b6cb0;
 	}
 
+	/* Red - Todo */
+	:global(.story-feature-red) {
+		background-color: #fef2f2;
+		border: 1px solid #dc2626;
+		color: #991b1b;
+	}
+
+	:global(.story-feature-red:hover) {
+		background-color: #fee2e2;
+		border-color: #b91c1c;
+	}
+
+	/* Green - Visited */
+	:global(.story-feature-green) {
+		background-color: #f0fdf4;
+		border: 1px solid #16a34a;
+		color: #15803d;
+	}
+
+	:global(.story-feature-green:hover) {
+		background-color: #dcfce7;
+		border-color: #15803d;
+	}
+
 	:global(.story-feature:focus) {
-		outline: 2px solid #3182ce;
+		outline: 2px solid currentColor;
 		outline-offset: 1px;
 	}
 </style>
