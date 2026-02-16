@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import { user } from '$lib/stores/auth';
 import { db } from '$lib/firebase';
+import { userStore } from '$lib/stores/UserStore.svelte';
 import type { User } from 'firebase/auth';
 import {
 	collection,
@@ -15,6 +16,7 @@ import {
 	Timestamp,
 	orderBy,
 	limit as firestoreLimit,
+	getDocs,
 	type DocumentData,
 	type QuerySnapshot,
 	type Unsubscribe
@@ -33,8 +35,9 @@ import {
 class StoriesDB {
 	// Storage configuration - with Firestore sync
 	private readonly DB_NAME = 'StoriesDB';
-	private readonly DB_VERSION = 1;
+	private readonly DB_VERSION = 2; // UPDATED: New version for followed stories store
 	private readonly STORIES_STORE_NAME = 'userStories';
+	private readonly FOLLOWED_STORIES_STORE_NAME = 'followedStories'; // NEW: Cache for followed users' stories
 	private readonly STORY_VERSIONS_STORE_NAME = 'userStoryVersions';
 	private readonly CATEGORIES_STORE_NAME = 'storyCategories';
 	private readonly SYNC_STORE_NAME = 'syncMetadata';
@@ -55,6 +58,7 @@ class StoriesDB {
 
 	// Firestore sync state
 	private firestoreUnsubscribe: Unsubscribe | null = null;
+	private followedStoriesUnsubscribes: Map<string, Unsubscribe> = new Map(); // NEW: Track followed users' listeners
 	private isSyncing = $state(false);
 	private isOnline = $state(navigator?.onLine ?? true);
 	private syncConflicts = $state<SyncConflict[]>([]);
@@ -94,6 +98,7 @@ class StoriesDB {
 				// If user changed, reinitialize storage for new user
 				if (previousUser?.uid !== currentUser?.uid) {
 					this.stopFirestoreSync(); // Stop previous user's sync
+					this.stopFollowedStoriesSync(); // NEW: Stop followed stories sync
 					this.isInitialized = false;
 					this.initPromise = null;
 
@@ -108,6 +113,8 @@ class StoriesDB {
 					// Start sync for new authenticated user
 					if (currentUser && this.isOnline) {
 						this.startFirestoreSync();
+						// Start followed stories sync after a brief delay to let user data load
+						setTimeout(() => this.startFollowedStoriesSync(), 2000); // Increased delay
 					}
 				}
 			});
@@ -218,6 +225,16 @@ class StoriesDB {
 					storiesStore = request.transaction!.objectStore(this.STORIES_STORE_NAME);
 				}
 
+				// NEW: Create followed stories object store
+				let followedStoriesStore: IDBObjectStore;
+				if (!db.objectStoreNames.contains(this.FOLLOWED_STORIES_STORE_NAME)) {
+					followedStoriesStore = db.createObjectStore(this.FOLLOWED_STORIES_STORE_NAME, {
+						keyPath: ['authorUserId', 'id'] // Compound key: authorUserId + storyId
+					});
+				} else {
+					followedStoriesStore = request.transaction!.objectStore(this.FOLLOWED_STORIES_STORE_NAME);
+				}
+
 				// Create story versions object store
 				let versionsStore: IDBObjectStore;
 				if (!db.objectStoreNames.contains(this.STORY_VERSIONS_STORE_NAME)) {
@@ -265,6 +282,20 @@ class StoriesDB {
 				storyIndexesToCreate.forEach(({ name, keyPath, options }) => {
 					if (!storiesStore.indexNames.contains(name)) {
 						storiesStore.createIndex(name, keyPath, options);
+					}
+				});
+
+				// NEW: Create indexes for followed stories store
+				const followedStoryIndexesToCreate = [
+					{ name: 'authorUserId', keyPath: 'authorUserId', options: { unique: false } },
+					{ name: this.INDEX_PUBLIC, keyPath: 'isPublic', options: { unique: false } },
+					{ name: this.INDEX_DATE_MODIFIED, keyPath: 'dateModified', options: { unique: false } },
+					{ name: 'authorName', keyPath: 'authorName', options: { unique: false } }
+				];
+
+				followedStoryIndexesToCreate.forEach(({ name, keyPath, options }) => {
+					if (!followedStoriesStore.indexNames.contains(name)) {
+						followedStoriesStore.createIndex(name, keyPath, options);
 					}
 				});
 
@@ -316,6 +347,7 @@ class StoriesDB {
 			this.userUnsubscribe = null;
 		}
 		this.stopFirestoreSync();
+		this.stopFollowedStoriesSync(); // NEW: Clean up followed stories listeners
 	}
 
 	// ==================== PLACEHOLDER METHODS ====================
@@ -450,6 +482,144 @@ class StoriesDB {
 			this.firestoreUnsubscribe = null;
 		}
 		this.isSyncing = false;
+	}
+
+	// ==================== FOLLOWED STORIES SYNC (NEW) ====================
+
+	/**
+	 * Start real-time sync for followed users' public stories
+	 */
+	private startFollowedStoriesSync(): void {
+		if (!this.currentUser || !this.isOnline) {
+			console.log('Cannot start followed stories sync: user not authenticated or offline');
+			return;
+		}
+
+		try {
+			// Get current following list
+			const followingUsers = userStore.following;
+			console.log(`🔄 Starting followed stories sync for ${followingUsers.length} users`);
+
+			// Stop any existing listeners first
+			this.stopFollowedStoriesSync();
+
+			// Set up real-time listener for each followed user's public stories
+			followingUsers.forEach((followedUser) => {
+				if (!followedUser.id || followedUser.id.length < 3) {
+					console.warn(`Invalid user ID for ${followedUser.displayName}:`, followedUser.id);
+					return;
+				}
+
+				try {
+					const followedStoriesQuery = query(
+						collection(db, 'users', followedUser.id, 'stories'),
+						where('isPublic', '==', true), // Only public stories
+						orderBy('dateModified', 'desc')
+					);
+
+					// Set up real-time listener
+					const unsubscribe = onSnapshot(
+						followedStoriesQuery,
+						(snapshot) => this.handleFollowedStoriesSnapshot(snapshot, followedUser),
+						(error) => {
+							console.warn(`Followed stories sync error for ${followedUser.displayName}:`, error);
+						}
+					);
+
+					// Store the unsubscribe function
+					this.followedStoriesUnsubscribes.set(followedUser.id, unsubscribe);
+					console.log(`✅ Started listening to stories from ${followedUser.displayName}`);
+				} catch (error) {
+					console.error(`Failed to set up listener for ${followedUser.displayName}:`, error);
+				}
+			});
+
+			console.log(
+				`🚀 Followed stories sync started for ${this.followedStoriesUnsubscribes.size} users`
+			);
+		} catch (error) {
+			console.error('Failed to start followed stories sync:', error);
+		}
+	}
+
+	/**
+	 * Stop all followed stories sync listeners
+	 */
+	private stopFollowedStoriesSync(): void {
+		console.log(`🛑 Stopping ${this.followedStoriesUnsubscribes.size} followed stories listeners`);
+
+		// Unsubscribe from all followed stories listeners
+		this.followedStoriesUnsubscribes.forEach((unsubscribe, userId) => {
+			try {
+				unsubscribe();
+			} catch (error) {
+				console.error(`Error unsubscribing from stories for user ${userId}:`, error);
+			}
+		});
+
+		this.followedStoriesUnsubscribes.clear();
+	}
+
+	/**
+	 * Handle followed stories snapshot changes (real-time updates)
+	 */
+	private async handleFollowedStoriesSnapshot(
+		snapshot: QuerySnapshot<DocumentData>,
+		authorProfile: any
+	): Promise<void> {
+		try {
+			console.log(`📚 Received ${snapshot.docs.length} stories from ${authorProfile.displayName}`);
+
+			// Process each story change
+			for (const change of snapshot.docChanges()) {
+				const storyData = change.doc.data();
+				const storyId = change.doc.id;
+
+				// Create enhanced story with author info
+				const enhancedStory: Story & {
+					authorName: string;
+					authorUsername: string;
+					authorAvatarUrl?: string;
+					readOnly: boolean;
+					authorUserId: string;
+				} = {
+					...storyData,
+					authorName: authorProfile.displayName,
+					authorUsername: authorProfile.username,
+					authorAvatarUrl: authorProfile.avatarUrl,
+					readOnly: true,
+					authorUserId: authorProfile.id
+				} as any;
+
+				switch (change.type) {
+					case 'added':
+					case 'modified':
+						// Only store if still public
+						if (enhancedStory.isPublic) {
+							await this.storeFollowedStoryLocally(enhancedStory);
+							console.log(
+								`✅ ${change.type} story "${enhancedStory.title}" from ${authorProfile.displayName}`
+							);
+						} else {
+							// Story became private, remove it
+							await this.removeFollowedStoryLocally(authorProfile.id, storyId);
+							console.log(
+								`🔒 Removed private story "${enhancedStory.title}" from ${authorProfile.displayName}`
+							);
+						}
+						break;
+					case 'removed':
+						await this.removeFollowedStoryLocally(authorProfile.id, storyId);
+						console.log(`🗑️ Removed deleted story from ${authorProfile.displayName}`);
+						break;
+				}
+			}
+
+			// Trigger UI update
+			this.triggerChange();
+		} catch (error) {
+			console.error('Error handling followed stories snapshot:', error);
+		}
 	}
 
 	/**
@@ -1341,6 +1511,67 @@ class StoriesDB {
 	}
 
 	/**
+	 * Store followed story locally without triggering sync
+	 */
+	private async storeFollowedStoryLocally(story: any): Promise<void> {
+		if (!this.db) return;
+
+		const transaction = this.db.transaction([this.FOLLOWED_STORIES_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.FOLLOWED_STORIES_STORE_NAME);
+
+		await new Promise<void>((resolve, reject) => {
+			const cleanStory = JSON.parse(JSON.stringify(story));
+			const request = store.put(cleanStory);
+			request.onsuccess = () => resolve();
+			request.onerror = () => reject(request.error);
+		});
+	}
+
+	/**
+	 * Remove followed story locally
+	 */
+	private async removeFollowedStoryLocally(authorUserId: string, storyId: string): Promise<void> {
+		if (!this.db) return;
+
+		const transaction = this.db.transaction([this.FOLLOWED_STORIES_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.FOLLOWED_STORIES_STORE_NAME);
+
+		await new Promise<void>((resolve, reject) => {
+			const request = store.delete([authorUserId, storyId]);
+			request.onsuccess = () => resolve();
+			request.onerror = () => reject(request.error);
+		});
+	}
+
+	/**
+	 * Get all followed stories from local cache
+	 */
+	private async getAllFollowedStoriesFromCache(): Promise<Story[]> {
+		if (!this.db) return [];
+
+		const transaction = this.db.transaction([this.FOLLOWED_STORIES_STORE_NAME], 'readonly');
+		const store = transaction.objectStore(this.FOLLOWED_STORIES_STORE_NAME);
+
+		return new Promise((resolve, reject) => {
+			const stories: Story[] = [];
+			const request = store.openCursor();
+
+			request.onsuccess = (event) => {
+				const cursor = (event.target as IDBRequest).result;
+				if (cursor) {
+					stories.push(cursor.value);
+					cursor.continue();
+				} else {
+					// Sort by date modified (newest first)
+					resolve(stories.sort((a, b) => b.dateModified - a.dateModified));
+				}
+			};
+
+			request.onerror = () => reject(request.error);
+		});
+	}
+
+	/**
 	 * Add sync conflict to queue
 	 */
 	private addSyncConflict(conflict: SyncConflict): void {
@@ -1554,6 +1785,104 @@ class StoriesDB {
 			localStorage.setItem('deviceId', deviceId);
 		}
 		return deviceId;
+	}
+
+	// ==================== SOCIAL FEATURES ====================
+
+	/**
+	 * Get public stories from users that the current user follows (FROM CACHE - NO FIRESTORE REQUESTS)
+	 */
+	async getStoriesFromFollowedUsers(limit = 20): Promise<Story[]> {
+		if (!this.currentUser) {
+			console.warn('No user logged in, cannot fetch followed stories');
+			return [];
+		}
+
+		try {
+			// NEW: Read from local cache instead of making Firestore requests
+			console.log('💾 Reading followed stories from local cache...');
+			const cachedStories = await this.getAllFollowedStoriesFromCache();
+
+			// Apply limit and return
+			const limitedStories = cachedStories.slice(0, limit);
+			console.log(
+				`✅ Returning ${limitedStories.length} cached followed stories (from ${cachedStories.length} total)`
+			);
+			return limitedStories;
+		} catch (error) {
+			console.error('Error reading followed stories from cache:', error);
+			return [];
+		}
+	}
+
+	/**
+	 * Force sync restart for followed stories (public method)
+	 * Call this when following list changes
+	 */
+	async refreshFollowedStoriesSync(): Promise<void> {
+		if (!this.currentUser || !this.isOnline) {
+			console.log('Cannot refresh followed stories sync: user not authenticated or offline');
+			return;
+		}
+
+		console.log('🔄 Refreshing followed stories sync (public method)');
+		// Small delay to let UserStore update
+		setTimeout(() => this.startFollowedStoriesSync(), 500);
+	}
+
+	/**
+	 * Get a specific story by ID and user ID (for reading followed user stories)
+	 */
+	async getStoryFromUser(userId: string, storyId: string): Promise<Story | null> {
+		if (!this.currentUser) {
+			return null;
+		}
+
+		try {
+			// Check if we're following this user (for permission)
+			const isFollowing = userStore.following.some((user) => user.id === userId);
+			if (!isFollowing && userId !== this.currentUser.uid) {
+				console.warn('Cannot access story from user we are not following');
+				return null;
+			}
+
+			const storyRef = doc(db, 'users', userId, 'stories', storyId);
+			const storyDoc = await getDoc(storyRef);
+
+			if (!storyDoc.exists()) {
+				return null;
+			}
+
+			const storyData = storyDoc.data();
+
+			// Only return if story is public (unless it's our own story)
+			if (!storyData.isPublic && userId !== this.currentUser.uid) {
+				console.warn('Story is not public');
+				return null;
+			}
+
+			// Get author information
+			const authorProfile = userStore.following.find((user) => user.id === userId);
+
+			const story: Story = {
+				...storyData,
+				// Add author metadata
+				authorName: authorProfile?.displayName || 'Unknown',
+				authorUsername: authorProfile?.username || 'unknown',
+				authorAvatarUrl: authorProfile?.avatarUrl,
+				readOnly: userId !== this.currentUser.uid // Read-only if not our story
+			} as Story & {
+				authorName: string;
+				authorUsername: string;
+				authorAvatarUrl?: string;
+				readOnly: boolean;
+			};
+
+			return story;
+		} catch (error) {
+			console.error('Error fetching story from user:', error);
+			return null;
+		}
 	}
 }
 

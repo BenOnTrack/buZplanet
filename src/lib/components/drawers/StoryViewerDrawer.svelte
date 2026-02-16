@@ -5,7 +5,7 @@
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
-	import StoriesList from '$lib/components/stories/StoriesList.svelte';
+	import SocialStoriesList from '$lib/components/stories/SocialStoriesList.svelte';
 	import StoryViewer from '$lib/components/stories/StoryViewer.svelte';
 	import StoryEditorDrawer from '$lib/components/drawers/StoryEditorDrawer.svelte';
 
@@ -26,14 +26,10 @@
 	let availableCategories = $state<StoryCategory[]>([]);
 	let filteredStoriesCount = $state<number | null>(null);
 
-	// Derived state for button visibility
-	let showStoryButtons = $derived.by(() => {
-		const result = viewMode === 'view' && currentStory !== null;
-		console.log('🎯 Derived showStoryButtons:', result, {
-			viewMode,
-			currentStory: currentStory?.id
-		});
-		return result;
+	// Check if current story is read-only (from a followed user)
+	let isCurrentStoryReadOnly = $derived.by(() => {
+		if (!currentStory) return false;
+		return (currentStory as any).readOnly === true;
 	});
 
 	// Load categories when drawer opens
@@ -60,7 +56,7 @@
 		console.log('🔄 State change detected:', {
 			viewMode,
 			currentStory: currentStory?.id,
-			showStoryButtons
+			isCurrentStoryReadOnly
 		});
 	});
 
@@ -172,7 +168,18 @@
 					<div class="mb-2 flex items-center justify-between">
 						<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
 							<PropertyIcon key="description" value="stories" size={24} />
-							{viewMode === 'view' && currentStory ? currentStory.title : 'Stories'}
+							{#if viewMode === 'view' && currentStory}
+								{currentStory.title}
+								{#if isCurrentStoryReadOnly}
+									{@const authorName = (currentStory as any).authorName}
+									{@const authorUsername = (currentStory as any).authorUsername}
+									<span class="text-base font-normal text-blue-600">
+										by {authorName}{authorUsername ? ` (@${authorUsername})` : ''}
+									</span>
+								{/if}
+							{:else}
+								Stories
+							{/if}
 						</Drawer.Title>
 
 						<div class="flex items-center gap-2">
@@ -191,18 +198,35 @@
 								>
 									NEW
 								</button>
-							{:else if currentStory}
+							{:else if currentStory && !isCurrentStoryReadOnly}
+								<!-- Edit button only for user's own stories -->
 								<button
-									class="rounded bg-blue-500 px-3 py-1 text-sm font-medium text-white"
+									class="rounded bg-blue-500 px-3 py-1 text-sm font-medium text-white hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
 									onclick={() => currentStory && handleEditStory(currentStory)}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											currentStory && handleEditStory(currentStory);
+										}
+									}}
 									title="Edit story"
 									aria-label="Edit story"
 								>
 									EDIT
 								</button>
+							{/if}
+
+							{#if currentStory}
+								<!-- Back button for any story view -->
 								<button
-									class="rounded bg-gray-500 px-3 py-1 text-sm font-medium text-white"
+									class="rounded bg-gray-500 px-3 py-1 text-sm font-medium text-white hover:bg-gray-600 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
 									onclick={backToList}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											backToList();
+										}
+									}}
 									title="Back to stories list"
 									aria-label="Back to stories list"
 								>
@@ -232,7 +256,7 @@
 								/>
 								<input
 									bind:value={searchQuery}
-									placeholder="Search stories..."
+									placeholder="Search stories and authors..."
 									class="w-full rounded-md border border-gray-300 py-2 pr-4 pl-10 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
 								/>
 							</div>
@@ -294,7 +318,7 @@
 
 						<!-- Scrollable Stories Content -->
 						<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">
-							<StoriesList
+							<SocialStoriesList
 								onStorySelect={handleStorySelect}
 								onNewStory={handleNewStory}
 								onStoriesCountUpdate={handleStoriesCountUpdate}

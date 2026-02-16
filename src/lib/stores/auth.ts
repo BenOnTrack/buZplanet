@@ -11,17 +11,23 @@ import {
 	updateProfile
 } from 'firebase/auth';
 import { auth } from '$lib/firebase';
+import { browser } from '$app/environment';
 
 // Auth store to track the current user
 export const user = writable<User | null>(null);
 export const loading = writable<boolean>(true);
 export const authError = writable<string | null>(null);
 
-// Initialize auth state listener
-onAuthStateChanged(auth, (firebaseUser) => {
-	user.set(firebaseUser);
+// Initialize auth state listener (only in browser)
+if (browser) {
+	onAuthStateChanged(auth, (firebaseUser) => {
+		user.set(firebaseUser);
+		loading.set(false);
+	});
+} else {
+	// On server, just set loading to false
 	loading.set(false);
-});
+}
 
 // Clear auth error
 export function clearAuthError() {

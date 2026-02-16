@@ -31,3 +31,9 @@ project.inlang/cache/
 
 # Local development data
 dev-data/
+
+# Firebase Emulator Data
+emulator-data/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

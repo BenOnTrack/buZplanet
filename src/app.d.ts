@@ -397,6 +397,149 @@ declare global {
 		deleted?: boolean; // Soft delete flag for sync
 	}
 
+	// ==================== USER FOLLOWING INTERFACES ====================
+
+	/**
+	 * User profile for public display and following
+	 */
+	interface UserProfile {
+		id: string; // Firebase Auth UID
+		username: string; // Unique username for @mentions and URLs
+		displayName: string; // Display name
+		bio?: string; // User bio/description
+		avatarUrl?: string; // Profile picture URL
+		location?: string; // User's location (optional)
+		website?: string; // Personal website/social link
+
+		// Privacy settings
+		isPublic: boolean; // Whether profile is publicly visible
+		allowFollowers: boolean; // Whether user accepts followers
+		showActivity: boolean; // Whether to show activity in feeds
+
+		// Social stats
+		followerCount: number;
+		followingCount: number;
+		publicStoryCount: number;
+		publicFeatureCount: number;
+
+		// Metadata
+		dateCreated: number;
+		dateModified: number;
+		lastActiveDate: number;
+
+		// Sync fields
+		lastSyncTimestamp?: number;
+		firestoreId?: string;
+	}
+
+	/**
+	 * Follow relationship between users
+	 */
+	interface UserFollow {
+		id: string; // Unique follow relationship ID
+		followerId: string; // User who is following
+		followeeId: string; // User being followed
+		status: 'pending' | 'accepted' | 'blocked'; // Follow request status
+		dateCreated: number;
+		dateAccepted?: number; // When follow request was accepted
+
+		// Notification preferences for this follow
+		notifyOnStories: boolean; // Notify when followee posts stories
+		notifyOnFeatures: boolean; // Notify when followee bookmarks features
+		notifyOnLists: boolean; // Notify when followee creates lists
+
+		// Metadata
+		dateModified: number;
+
+		// Sync fields
+		lastSyncTimestamp?: number;
+		firestoreId?: string;
+		deleted?: boolean;
+	}
+
+	/**
+	 * Activity feed item for social features
+	 */
+	type ActivityType =
+		| 'story_created'
+		| 'story_updated'
+		| 'feature_bookmarked'
+		| 'list_created'
+		| 'list_updated'
+		| 'user_followed';
+
+	interface ActivityFeedItem {
+		id: string; // Unique activity ID
+		userId: string; // User who performed the activity
+		type: ActivityType;
+		dateCreated: number;
+
+		// Activity-specific data
+		storyId?: string; // For story activities
+		featureId?: string; // For feature activities
+		listId?: string; // For list activities
+		targetUserId?: string; // For follow activities
+
+		// Denormalized data for efficient display
+		userDisplayName: string;
+		userUsername: string;
+		userAvatarUrl?: string;
+		itemTitle?: string; // Title of story/list/feature
+		itemDescription?: string; // Brief description
+
+		// Privacy and filtering
+		isPublic: boolean; // Whether this activity should be public
+
+		// Sync fields
+		lastSyncTimestamp?: number;
+		firestoreId?: string;
+	}
+
+	/**
+	 * User search result for finding users to follow
+	 */
+	interface UserSearchResult {
+		user: UserProfile;
+		score: number; // Relevance score
+		matchedFields: string[]; // Which fields matched
+		followStatus?: 'none' | 'following' | 'pending' | 'follower' | 'mutual';
+		mutualFollowers?: UserProfile[]; // Mutual followers (limited to first few)
+		mutualFollowerCount?: number;
+	}
+
+	/**
+	 * Notification for social interactions
+	 */
+	type NotificationType =
+		| 'follow_request'
+		| 'follow_accepted'
+		| 'story_mention'
+		| 'activity_like'
+		| 'new_follower_activity';
+
+	interface UserNotification {
+		id: string;
+		userId: string; // Recipient user ID
+		type: NotificationType;
+		read: boolean;
+		dateCreated: number;
+
+		// Notification-specific data
+		fromUserId?: string; // User who triggered the notification
+		itemId?: string; // Related story/feature/list ID
+		message: string; // Notification message
+
+		// Denormalized data
+		fromUserDisplayName?: string;
+		fromUserUsername?: string;
+		fromUserAvatarUrl?: string;
+
+		// Sync fields
+		lastSyncTimestamp?: number;
+		firestoreId?: string;
+		deleted?: boolean;
+	}
+
 	// ==================== SYNC INTERFACES ====================
 
 	interface SyncConflict {

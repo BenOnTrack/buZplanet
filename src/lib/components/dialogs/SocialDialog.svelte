@@ -2,10 +2,8 @@
 	import { Dialog } from 'bits-ui';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
-	import { user, loading } from '$lib/stores/auth';
+	import { user } from '$lib/stores/auth';
 	import { userStore } from '$lib/stores/UserStore.svelte';
-	import AuthForm from '$lib/components/auth/AuthForm.svelte';
-	import UserProfile from '$lib/components/auth/UserProfile.svelte';
 	import UserSearch from '$lib/components/UserSearch.svelte';
 	import FollowRequests from '$lib/components/FollowRequests.svelte';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
@@ -13,15 +11,13 @@
 	import ProfileEditor from '$lib/components/ProfileEditor.svelte';
 
 	const currentUser = $derived($user);
-	const isLoading = $derived($loading);
 
-	let activeTab = $state('auth');
+	let activeTab = $state('feed');
 	let showNotifications = $state(false);
 
 	const tabs = [
-		{ id: 'auth', label: 'Account', icon: 'lock' },
 		{ id: 'feed', label: 'Feed', icon: 'home' },
-		{ id: 'search', label: 'People', icon: 'search' },
+		{ id: 'search', label: 'Search', icon: 'search' },
 		{ id: 'requests', label: 'Requests', icon: 'user-plus' }
 	];
 
@@ -32,24 +28,17 @@
 	function toggleNotifications() {
 		showNotifications = !showNotifications;
 	}
-
-	// Auto-switch to appropriate tab based on auth state
-	$effect(() => {
-		if (!currentUser && activeTab !== 'auth') {
-			activeTab = 'auth';
-		}
-	});
 </script>
 
 <Dialog.Root>
 	<Dialog.Trigger
-		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-4 left-4 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
+		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-4 right-4 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
 		style="z-index: {Z_INDEX.DIALOG_TRIGGER}"
-		aria-label="Open account and social features"
+		aria-label="Open social features"
 	>
 		<div class="relative">
-			<PropertyIcon key={'description'} value={'authentication'} size={20} />
-			{#if currentUser && userStore.unreadNotificationCount > 0}
+			<PropertyIcon key={'description'} value={'users'} size={20} />
+			{#if userStore.unreadNotificationCount > 0}
 				<span
 					class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white"
 				>
@@ -70,40 +59,28 @@
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-gray-200 p-5">
 				<Dialog.Title class="flex items-center text-lg font-semibold tracking-tight">
-					{#if activeTab === 'auth'}
-						<PropertyIcon key={'description'} value={'lock'} size={20} class="mr-2" />
-						{currentUser ? 'Account' : 'Authentication'}
-					{:else if activeTab === 'feed'}
-						<PropertyIcon key={'description'} value={'home'} size={20} class="mr-2" />
-						Activity Feed
-					{:else if activeTab === 'search'}
-						<PropertyIcon key={'description'} value={'search'} size={20} class="mr-2" />
-						Find People
-					{:else if activeTab === 'requests'}
-						<PropertyIcon key={'description'} value={'user-plus'} size={20} class="mr-2" />
-						Follow Requests
-					{/if}
+					<PropertyIcon key={'description'} value={'users'} size={20} class="mr-2" />
+					Social
 				</Dialog.Title>
 
 				<div class="flex items-center space-x-2">
-					{#if currentUser}
-						<!-- Notifications button -->
-						<button
-							onclick={toggleNotifications}
-							onkeydown={(e) => e.key === 'Enter' && toggleNotifications()}
-							class="relative rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
-							aria-label="Open notifications"
-						>
-							<PropertyIcon key={'description'} value={'bell'} size={18} />
-							{#if userStore.unreadNotificationCount > 0}
-								<span
-									class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white"
-								>
-									{userStore.unreadNotificationCount > 9 ? '9+' : userStore.unreadNotificationCount}
-								</span>
-							{/if}
-						</button>
-					{/if}
+					<!-- Notifications button -->
+					<button
+						onclick={toggleNotifications}
+						onkeydown={(e) => e.key === 'Enter' && toggleNotifications()}
+						class="relative rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+						tabindex="0"
+						aria-label="Open notifications"
+					>
+						<PropertyIcon key={'description'} value={'bell'} size={18} />
+						{#if userStore.unreadNotificationCount > 0}
+							<span
+								class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white"
+							>
+								{userStore.unreadNotificationCount > 9 ? '9+' : userStore.unreadNotificationCount}
+							</span>
+						{/if}
+					</button>
 
 					<Dialog.Close
 						class="focus-visible:ring-foreground focus-visible:ring-offset-background rounded-md p-2 hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
@@ -115,23 +92,24 @@
 			</div>
 
 			{#if !currentUser}
-				<!-- Not authenticated - show only auth content -->
-				<div class="p-5">
-					{#if isLoading}
-						<div class="flex items-center justify-center py-8">
-							<PropertyIcon
-								key={'description'}
-								value={'loading'}
-								size={32}
-								class="text-primary animate-spin"
-							/>
-						</div>
-					{:else}
-						<AuthForm />
-					{/if}
+				<!-- Not authenticated -->
+				<div class="p-8 text-center">
+					<PropertyIcon
+						key={'description'}
+						value={'lock'}
+						size={48}
+						class="mx-auto mb-4 text-gray-400"
+					/>
+					<h3 class="mb-2 text-lg font-medium text-gray-900">Sign in to use social features</h3>
+					<p class="mb-4 text-gray-600">
+						Connect with other travelers, share your stories, and discover amazing places.
+					</p>
+					<p class="text-sm text-gray-500">
+						Click the profile button to sign in or create an account.
+					</p>
 				</div>
 			{:else}
-				<!-- Authenticated - show tabs and content -->
+				<!-- Main content -->
 				<div class="flex h-full flex-col">
 					<!-- Tab navigation -->
 					<div class="flex border-b border-gray-200">
@@ -163,11 +141,7 @@
 
 					<!-- Tab content -->
 					<div class="flex-1 overflow-y-auto">
-						{#if activeTab === 'auth'}
-							<div class="p-5">
-								<UserProfile />
-							</div>
-						{:else if activeTab === 'feed'}
+						{#if activeTab === 'feed'}
 							<div class="p-4">
 								<ActivityFeed />
 							</div>

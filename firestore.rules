@@ -1,4 +1,4 @@
-// Firestore Security Rules for FeaturesDB and StoriesDB sync
+// Firestore Security Rules for FeaturesDB, StoriesDB sync, and Social Features
 // Copy these rules to your Firebase Console -> Firestore Database -> Rules
 
 rules_version = '2';
@@ -20,9 +20,19 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
       
+      // ==================== STORIES ACCESS RULES (UPDATED FOR SOCIAL FEATURES) ====================
       // Allow authenticated users to read/write their own stories
+      // PLUS allow listing and reading PUBLIC stories from other users
       match /stories/{storyId} {
+        // Users can always read/write their own stories
         allow read, write: if request.auth != null && request.auth.uid == userId;
+        
+        // Allow authenticated users to LIST (query) other users' story collections
+        // This is needed for the social feed to work
+        allow list: if request.auth != null;
+        
+        // Allow authenticated users to READ public stories from other users
+        allow read: if request.auth != null && resource.data.isPublic == true;
       }
       
       // Allow authenticated users to read/write their own story categories
@@ -39,6 +49,57 @@ service cloud.firestore {
       match /sync_metadata/{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+    }
+    
+    // ==================== SOCIAL FEATURES RULES ====================
+    
+    // User profiles - read public profiles, write own profile
+    match /userProfiles/{userId} {
+      // Anyone can read public profiles, users can read their own private profiles
+      allow read: if resource.data.isPublic == true || 
+                     (request.auth != null && request.auth.uid == userId);
+      
+      // Users can write/update their own profile
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow authenticated users to update follower/following counts
+      // This is needed for the follow/unfollow functionality
+      allow update: if request.auth != null;
+    }
+    
+    // User follows - read/write own follow relationships
+    match /userFollows/{followId} {
+      // Allow reading if user is involved in the relationship (for direct document access)
+      allow read: if request.auth != null && 
+                     (followId.matches('^' + request.auth.uid + '_.*') || 
+                      followId.matches('.*_' + request.auth.uid + '$'));
+      
+      // Allow reading for queries where user is follower or followee
+      allow read: if request.auth != null && 
+                     (resource.data.followerId == request.auth.uid || 
+                      resource.data.followeeId == request.auth.uid);
+      
+      // Allow writing if user is the follower in the relationship
+      allow write: if request.auth != null && 
+                      (followId.matches('^' + request.auth.uid + '_.*') ||
+                       request.data.followerId == request.auth.uid);
+    }
+    
+    // Activity feed - read public activities, write own activities
+    match /activityFeed/{activityId} {
+      // Anyone can read public activities
+      allow read: if resource.data.isPublic == true;
+      
+      // Users can only write their own activities
+      // Check both the activityId pattern and the userId field
+      allow write: if request.auth != null && 
+                      (activityId.matches('^' + request.auth.uid + '_.*') ||
+                       request.data.userId == request.auth.uid);
+    }
+    
+    // User notifications - read/write own notifications only
+    match /userNotifications/{notificationId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
     }
     
     // Deny all other access

@@ -4,6 +4,7 @@
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
+	import { userStore } from '$lib/stores/UserStore.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import StoryEditor from '../stories/StoryEditor.svelte';
 
@@ -274,6 +275,20 @@
 
 			console.log('✅ Story saved successfully:', savedStory);
 			hasUnsavedChanges = false;
+
+			// Create social activity for the story
+			try {
+				const activityType = isEditing ? 'story_updated' : 'story_created';
+				await userStore.createActivity(activityType, {
+					storyId: savedStory.id,
+					itemTitle: savedStory.title,
+					itemDescription: savedStory.description || undefined
+				});
+				console.log(`✅ Created social activity: ${activityType}`);
+			} catch (activityError) {
+				console.error('⚠️ Failed to create social activity:', activityError);
+				// Don't fail the story save if social activity fails
+			}
 
 			if (onSave) {
 				console.log('📤 Calling onSave callback');
