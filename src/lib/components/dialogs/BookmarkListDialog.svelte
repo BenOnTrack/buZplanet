@@ -11,20 +11,6 @@
 		onListCreated?: (list: BookmarkList) => void;
 	} = $props();
 
-	// Form state
-	let formData = $state({
-		name: '',
-		description: '',
-		category: '',
-		color: '#3B82F6' // Default blue color
-	});
-
-	let formErrors = $state({
-		name: ''
-	});
-
-	let isSubmitting = $state(false);
-
 	// Available colors for lists
 	const availableColors = [
 		{ name: 'Blue', value: '#3B82F6' },
@@ -36,6 +22,20 @@
 		{ name: 'Indigo', value: '#6366F1' },
 		{ name: 'Gray', value: '#6B7280' }
 	];
+
+	// Form state
+	let formData = $state({
+		name: '',
+		description: '',
+		category: '',
+		color: availableColors.find((c) => c.name === 'Blue')?.value || availableColors[0].value
+	});
+
+	let formErrors = $state({
+		name: ''
+	});
+
+	let isSubmitting = $state(false);
 
 	// Reset form when dialog opens (side effect) - this one is legitimate as it modifies state
 	$effect(() => {
@@ -74,8 +74,26 @@
 			// Import featuresDB here to avoid circular imports
 			const { featuresDB } = await import('$lib/stores/FeaturesDB.svelte');
 
-			// Ensure database is initialized
-			await featuresDB.ensureInitialized();
+			// Ensure database is initialized with better error handling
+			if (!featuresDB.initialized) {
+				console.log('FeaturesDB not initialized, waiting...');
+				await featuresDB.ensureInitialized();
+
+				// Wait a bit more if still not ready
+				let attempts = 0;
+				while (!featuresDB.initialized && attempts < 10) {
+					console.log(`Waiting for FeaturesDB initialization... attempt ${attempts + 1}`);
+					await new Promise((resolve) => setTimeout(resolve, 200));
+					attempts++;
+				}
+
+				// Final check
+				if (!featuresDB.initialized) {
+					throw new Error(
+						'Database initialization timed out. Please refresh the page and try again.'
+					);
+				}
+			}
 
 			console.log('Creating bookmark list with data:', {
 				name: formData.name.trim(),

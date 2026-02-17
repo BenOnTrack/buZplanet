@@ -12,7 +12,7 @@
 	// Component state
 	let profile = $state<UserProfile | null>(null);
 	let loading = $state(true);
-	let followStatus = $state<'none' | 'following' | 'pending' | 'follower' | 'mutual'>('none');
+	let followStatus = $state<'none' | 'following' | 'follower' | 'mutual'>('none');
 	let isCurrentUser = $state(false);
 
 	// Load profile data
@@ -51,7 +51,7 @@
 				followStatus = followStatus === 'mutual' ? 'follower' : 'none';
 			} else {
 				await userStore.followUser(profile.id);
-				followStatus = profile.isPublic ? 'following' : 'pending';
+				followStatus = 'following'; // Always accepted since all profiles are public
 			}
 		} catch (error) {
 			console.error('Follow action failed:', error);
@@ -63,8 +63,6 @@
 		switch (followStatus) {
 			case 'following':
 				return 'Unfollow';
-			case 'pending':
-				return 'Request Sent';
 			case 'mutual':
 				return 'Following';
 			case 'follower':
@@ -79,8 +77,6 @@
 			case 'following':
 			case 'mutual':
 				return 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:text-gray-800';
-			case 'pending':
-				return 'bg-yellow-100 text-yellow-700 cursor-not-allowed';
 			case 'follower':
 				return 'bg-blue-600 text-white hover:bg-blue-700';
 			default:
@@ -135,13 +131,6 @@
 					<h1 class="truncate text-2xl font-bold text-gray-900">
 						{profile.displayName}
 					</h1>
-					{#if !profile.isPublic}
-						<span
-							class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800"
-						>
-							Private
-						</span>
-					{/if}
 				</div>
 
 				<p class="mt-1 text-gray-600">@{profile.username}</p>
@@ -155,7 +144,6 @@
 				<button
 					onclick={handleFollowToggle}
 					onkeydown={(e) => e.key === 'Enter' && handleFollowToggle()}
-					disabled={followStatus === 'pending'}
 					class="rounded-md px-4 py-2 font-medium transition-colors {getFollowButtonClass()}"
 					tabindex="0"
 					aria-label="{getFollowButtonText()} {profile.displayName}"
@@ -232,8 +220,6 @@
 					<p class="text-sm text-gray-600">
 						{profile.displayName} follows you
 					</p>
-				{:else if followStatus === 'pending'}
-					<p class="text-sm text-gray-600">Follow request pending</p>
 				{/if}
 			</div>
 		{/if}

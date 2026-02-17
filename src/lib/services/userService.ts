@@ -17,8 +17,7 @@ import {
 	type Unsubscribe
 } from 'firebase/firestore';
 import { db } from '$lib/firebase';
-import { user } from '$lib/stores/auth';
-import { get } from 'svelte/store';
+import { authState } from '$lib/stores/auth.svelte';
 
 /**
  * Service for managing user profiles and social features
@@ -39,7 +38,7 @@ export class UserService {
 	 * Create or update user profile
 	 */
 	async createOrUpdateProfile(profileData: Partial<UserProfile>): Promise<UserProfile> {
-		const currentUser = get(user);
+		const currentUser = authState.user;
 		if (!currentUser) {
 			throw new Error('User must be authenticated');
 		}
@@ -72,9 +71,6 @@ export class UserService {
 				id: currentUser.uid,
 				username: profileData.username || this.generateUsername(currentUser.email) || 'user',
 				displayName: profileData.displayName || currentUser.displayName || 'Anonymous',
-				isPublic: profileData.isPublic ?? true,
-				allowFollowers: profileData.allowFollowers ?? true,
-				showActivity: profileData.showActivity ?? true,
 				followerCount: 0,
 				followingCount: 0,
 				publicStoryCount: 0,
@@ -142,10 +138,11 @@ export class UserService {
 
 	/**
 	 * Search users by username or display name
+	 * All user profiles are public, so no privacy filtering is needed
 	 */
 	async searchUsers(searchTerm: string, maxResults: number = 20): Promise<UserSearchResult[]> {
 		try {
-			const currentUser = get(user);
+			const currentUser = authState.user;
 			const searchLower = searchTerm.toLowerCase();
 
 			// Search by username (exact prefix match)
@@ -153,17 +150,14 @@ export class UserService {
 				collection(db, 'userProfiles'),
 				where('username', '>=', searchLower),
 				where('username', '<=', searchLower + '\uf8ff'),
-				where('isPublic', '==', true),
 				limit(maxResults)
 			);
 
-			// Search by display name (we'll need to implement full-text search later)
-			// For now, we'll do a simple prefix search
+			// Search by display name (prefix search)
 			const displayNameQuery = query(
 				collection(db, 'userProfiles'),
 				where('displayName', '>=', searchTerm),
 				where('displayName', '<=', searchTerm + '\uf8ff'),
-				where('isPublic', '==', true),
 				limit(maxResults)
 			);
 
@@ -226,7 +220,7 @@ export class UserService {
 	 * Follow a user
 	 */
 	async followUser(followeeId: string): Promise<UserFollow> {
-		const currentUser = get(user);
+		const currentUser = authState.user;
 		if (!currentUser) {
 			throw new Error('User must be authenticated');
 		}
@@ -248,7 +242,7 @@ export class UserService {
 			// Continue anyway - might be first time
 		}
 
-		// Get the followee's profile to check privacy settings
+		// Get the followee's profile
 		let followeeProfile: UserProfile;
 		try {
 			const profile = await this.getProfile(followeeId);
@@ -262,21 +256,17 @@ export class UserService {
 			throw error;
 		}
 
-		if (!followeeProfile.allowFollowers) {
-			throw new Error('User does not allow followers');
-		}
-
 		const now = Date.now();
 
-		// Create follow relationship (simple document creation first)
+		// Create follow relationship (always accepted since all profiles are public)
 		const followId = `${currentUser.uid}_${followeeId}`;
 		const followData: UserFollow = {
 			id: followId,
 			followerId: currentUser.uid,
 			followeeId: followeeId,
-			status: followeeProfile.isPublic ? 'accepted' : 'pending',
+			status: 'accepted', // Always accepted since all profiles are public
 			dateCreated: now,
-			dateAccepted: followeeProfile.isPublic ? now : undefined,
+			dateAccepted: now,
 			notifyOnStories: true,
 			notifyOnFeatures: false,
 			notifyOnLists: true,
@@ -297,47 +287,39 @@ export class UserService {
 			throw error;
 		}
 
-		// Update follower counts if immediately accepted
-		if (followeeProfile.isPublic) {
-			console.log('Updating follower counts for public profile');
+		// Update follower counts (always updated since follows are always accepted)
+		console.log('Updating follower counts');
+		try {
+			// Update followee's follower count
+			const followeeRef = doc(db, 'userProfiles', followeeId);
+			await updateDoc(followeeRef, {
+				followerCount: increment(1),
+				dateModified: now
+			});
+			console.log('Updated followee follower count');
+
+			// Update current user's following count
+			const currentUserRef = doc(db, 'userProfiles', currentUser.uid);
+			await updateDoc(currentUserRef, {
+				followingCount: increment(1),
+				dateModified: now
+			});
+			console.log('Updated current user following count');
+
+			// Create activity feed item
 			try {
-				// Update followee's follower count
-				const followeeRef = doc(db, 'userProfiles', followeeId);
-				await updateDoc(followeeRef, {
-					followerCount: increment(1),
-					dateModified: now
+				await this.createActivityItem('user_followed', {
+					targetUserId: followeeId
 				});
-				console.log('Updated followee follower count');
-
-				// Update current user's following count
-				const currentUserRef = doc(db, 'userProfiles', currentUser.uid);
-				await updateDoc(currentUserRef, {
-					followingCount: increment(1),
-					dateModified: now
-				});
-				console.log('Updated current user following count');
-
-				// Create activity feed item
-				try {
-					await this.createActivityItem('user_followed', {
-						targetUserId: followeeId
-					});
-					console.log('Created activity feed item');
-				} catch (error) {
-					console.error('Error creating activity:', error);
-					// Don't throw - follow was successful
-				}
+				console.log('Created activity feed item');
 			} catch (error) {
-				console.error('Error updating follower counts:', error);
-				// Don't throw - the follow was created successfully
+				console.error('Error creating activity:', error);
+				// Don't throw - follow was successful
 			}
-		} else {
-			console.log('Private profile - follow request is pending');
+		} catch (error) {
+			console.error('Error updating follower counts:', error);
+			// Don't throw - the follow was created successfully
 		}
-
-		// TODO: Add count updates later after basic follow works
-		// TODO: Add activity creation later
-		// TODO: Add notifications later
 
 		return followData;
 	}
@@ -346,7 +328,7 @@ export class UserService {
 	 * Unfollow a user
 	 */
 	async unfollowUser(followeeId: string): Promise<void> {
-		const currentUser = get(user);
+		const currentUser = authState.user;
 		if (!currentUser) {
 			throw new Error('User must be authenticated');
 		}
@@ -410,77 +392,6 @@ export class UserService {
 	}
 
 	/**
-	 * Accept a follow request
-	 */
-	async acceptFollowRequest(followerId: string): Promise<void> {
-		const currentUser = get(user);
-		if (!currentUser) {
-			throw new Error('User must be authenticated');
-		}
-
-		const followId = `${followerId}_${currentUser.uid}`;
-		const followRef = doc(db, 'userFollows', followId);
-
-		// Check if follow request exists
-		const followDoc = await getDoc(followRef);
-		if (!followDoc.exists()) {
-			throw new Error('Follow request not found');
-		}
-
-		const followData = followDoc.data() as UserFollow;
-		if (followData.status !== 'pending') {
-			throw new Error('Follow request is not pending');
-		}
-
-		const batch = writeBatch(db);
-		const now = Date.now();
-
-		// Update follow status
-		batch.update(followRef, {
-			status: 'accepted',
-			dateAccepted: now,
-			dateModified: now
-		});
-
-		// Update follower counts
-		const followeeRef = doc(db, 'userProfiles', currentUser.uid);
-		batch.update(followeeRef, {
-			followerCount: increment(1),
-			dateModified: now
-		});
-
-		const followerRef = doc(db, 'userProfiles', followerId);
-		batch.update(followerRef, {
-			followingCount: increment(1),
-			dateModified: now
-		});
-
-		await batch.commit();
-
-		// Create notification for accepted follow
-		await this.createNotification(followerId, 'follow_accepted', {
-			fromUserId: currentUser.uid,
-			message: `${currentUser.displayName || currentUser.email} accepted your follow request`
-		});
-	}
-
-	/**
-	 * Reject a follow request
-	 */
-	async rejectFollowRequest(followerId: string): Promise<void> {
-		const currentUser = get(user);
-		if (!currentUser) {
-			throw new Error('User must be authenticated');
-		}
-
-		const followId = `${followerId}_${currentUser.uid}`;
-		const followRef = doc(db, 'userFollows', followId);
-
-		// Delete the follow request
-		await deleteDoc(followRef);
-	}
-
-	/**
 	 * Get follow relationship between two users
 	 */
 	async getFollowRelationship(followerId: string, followeeId: string): Promise<UserFollow | null> {
@@ -502,11 +413,10 @@ export class UserService {
 
 	/**
 	 * Get follow status between current user and another user
+	 * Note: 'pending' status is no longer possible since all follows are automatically accepted
 	 */
-	async getFollowStatus(
-		userId: string
-	): Promise<'none' | 'following' | 'pending' | 'follower' | 'mutual'> {
-		const currentUser = get(user);
+	async getFollowStatus(userId: string): Promise<'none' | 'following' | 'follower' | 'mutual'> {
+		const currentUser = authState.user;
 		if (!currentUser || currentUser.uid === userId) {
 			return 'none';
 		}
@@ -520,8 +430,6 @@ export class UserService {
 			return 'mutual';
 		} else if (following?.status === 'accepted') {
 			return 'following';
-		} else if (following?.status === 'pending') {
-			return 'pending';
 		} else if (follower?.status === 'accepted') {
 			return 'follower';
 		}
@@ -534,7 +442,7 @@ export class UserService {
 	 */
 	async getFollowing(userId?: string, limitCount: number = 50): Promise<UserProfile[]> {
 		try {
-			const targetUserId = userId || get(user)?.uid;
+			const targetUserId = userId || authState.user?.uid;
 			if (!targetUserId) return [];
 
 			const q = query(
@@ -569,7 +477,7 @@ export class UserService {
 	 */
 	async getFollowers(userId?: string, limitCount: number = 50): Promise<UserProfile[]> {
 		try {
-			const targetUserId = userId || get(user)?.uid;
+			const targetUserId = userId || authState.user?.uid;
 			if (!targetUserId) return [];
 
 			const q = query(
@@ -599,46 +507,6 @@ export class UserService {
 		}
 	}
 
-	/**
-	 * Get pending follow requests for current user
-	 */
-	async getPendingFollowRequests(): Promise<
-		{ follow: UserFollow; followerProfile: UserProfile }[]
-	> {
-		try {
-			const currentUser = get(user);
-			if (!currentUser) return [];
-
-			const q = query(
-				collection(db, 'userFollows'),
-				where('followeeId', '==', currentUser.uid),
-				where('status', '==', 'pending'),
-				orderBy('dateCreated', 'desc'),
-				limit(20)
-			);
-
-			const querySnapshot = await getDocs(q);
-			const requests: { follow: UserFollow; followerProfile: UserProfile }[] = [];
-
-			for (const doc of querySnapshot.docs) {
-				const followData = doc.data() as UserFollow;
-				const followerProfile = await this.getProfile(followData.followerId);
-
-				if (followerProfile) {
-					requests.push({
-						follow: followData,
-						followerProfile
-					});
-				}
-			}
-
-			return requests;
-		} catch (error) {
-			console.error('Error getting pending follow requests:', error);
-			return [];
-		}
-	}
-
 	// ==================== ACTIVITY FEED ====================
 
 	/**
@@ -655,13 +523,35 @@ export class UserService {
 			itemDescription?: string;
 		}
 	): Promise<void> {
-		const currentUser = get(user);
+		const currentUser = authState.user;
 		if (!currentUser) return;
 
 		const userProfile = await this.getProfile(currentUser.uid);
-		if (!userProfile || !userProfile.showActivity) return;
+		if (!userProfile) return; // Removed showActivity check since all users show activity
 
 		const activityId = `${currentUser.uid}_${type}_${Date.now()}`;
+
+		// For story activities, check if the specific story is public
+		let isPublicActivity = true; // Default to public since all user profiles are public
+
+		if ((type === 'story_created' || type === 'story_updated') && data.storyId) {
+			try {
+				// Import storiesDB dynamically to avoid circular imports
+				const { storiesDB } = await import('$lib/stores/StoriesDB.svelte');
+				const story = await storiesDB.getStoryById(data.storyId);
+				if (story) {
+					// Activity is public only if the story is public
+					isPublicActivity = story.isPublic;
+				} else {
+					// If we can't find the story, don't make activity public
+					isPublicActivity = false;
+				}
+			} catch (error) {
+				console.error('Error checking story public status for activity:', error);
+				// If we can't check story status, default to not public for safety
+				isPublicActivity = false;
+			}
+		}
 
 		// Base activity data with required fields
 		const activityData: any = {
@@ -671,7 +561,7 @@ export class UserService {
 			dateCreated: Date.now(),
 			userDisplayName: userProfile.displayName,
 			userUsername: userProfile.username,
-			isPublic: userProfile.isPublic,
+			isPublic: isPublicActivity,
 			lastSyncTimestamp: Date.now(),
 			firestoreId: activityId
 		};
@@ -694,7 +584,7 @@ export class UserService {
 	 */
 	async getActivityFeed(limitCount: number = 50): Promise<ActivityFeedItem[]> {
 		try {
-			const currentUser = get(user);
+			const currentUser = authState.user;
 			if (!currentUser) return [];
 
 			// Get list of users current user is following
@@ -773,7 +663,7 @@ export class UserService {
 	 */
 	async getNotifications(limitCount: number = 50): Promise<UserNotification[]> {
 		try {
-			const currentUser = get(user);
+			const currentUser = authState.user;
 			if (!currentUser) return [];
 
 			const q = query(
@@ -807,7 +697,7 @@ export class UserService {
 	 * Mark all notifications as read
 	 */
 	async markAllNotificationsAsRead(): Promise<void> {
-		const currentUser = get(user);
+		const currentUser = authState.user;
 		if (!currentUser) return;
 
 		const q = query(
@@ -940,7 +830,7 @@ export class UserService {
 	 * Listen to real-time notifications
 	 */
 	listenToNotifications(callback: (notifications: UserNotification[]) => void): Unsubscribe {
-		const currentUser = get(user);
+		const currentUser = authState.user;
 		if (!currentUser) {
 			return () => {}; // Return empty unsubscribe function
 		}

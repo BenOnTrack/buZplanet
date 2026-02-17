@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { user } from '$lib/stores/auth';
+import { authState } from '$lib/stores/auth.svelte';
 import { db } from '$lib/firebase';
 import { userStore } from '$lib/stores/UserStore.svelte';
 import type { User } from 'firebase/auth';
@@ -35,7 +35,7 @@ import {
 class StoriesDB {
 	// Storage configuration - with Firestore sync
 	private readonly DB_NAME = 'StoriesDB';
-	private readonly DB_VERSION = 2; // UPDATED: New version for followed stories store
+	private readonly DB_VERSION = 3; // UPDATED: New version for user-isolated followed stories cache
 	private readonly STORIES_STORE_NAME = 'userStories';
 	private readonly FOLLOWED_STORIES_STORE_NAME = 'followedStories'; // NEW: Cache for followed users' stories
 	private readonly STORY_VERSIONS_STORE_NAME = 'userStoryVersions';
@@ -54,9 +54,6 @@ class StoriesDB {
 	private isInitialized = $state(false);
 	private initPromise: Promise<void> | null = null;
 	private currentUser: User | null = null;
-	private userUnsubscribe: (() => void) | null = null;
-
-	// Firestore sync state
 	private firestoreUnsubscribe: Unsubscribe | null = null;
 	private followedStoriesUnsubscribes: Map<string, Unsubscribe> = new Map(); // NEW: Track followed users' listeners
 	private isSyncing = $state(false);
@@ -90,36 +87,47 @@ class StoriesDB {
 				this.stopFirestoreSync();
 			});
 
-			// Subscribe to auth state changes
-			this.userUnsubscribe = user.subscribe(async (currentUser) => {
-				const previousUser = this.currentUser;
-				this.currentUser = currentUser;
-
-				// If user changed, reinitialize storage for new user
-				if (previousUser?.uid !== currentUser?.uid) {
-					this.stopFirestoreSync(); // Stop previous user's sync
-					this.stopFollowedStoriesSync(); // NEW: Stop followed stories sync
-					this.isInitialized = false;
-					this.initPromise = null;
-
-					// Reset stats when user changes
-					this._stats = { total: 0, public: 0, categories: 0, totalViews: 0 };
-					this._changeSignal++;
-					this.syncConflicts = [];
-					this.lastSyncTimestamp = 0;
-
-					await this.initializeDatabase();
-
-					// Start sync for new authenticated user
-					if (currentUser && this.isOnline) {
-						this.startFirestoreSync();
-						// Start followed stories sync after a brief delay to let user data load
-						setTimeout(() => this.startFollowedStoriesSync(), 2000); // Increased delay
-					}
-				}
-			});
+			// Initialize with default state
+			this.isInitialized = false;
+			this.initPromise = null;
 		} else {
 			this.isInitialized = true;
+		}
+	}
+
+	/**
+	 * Handle user change - called from components when auth state changes
+	 */
+	async handleUserChange(newUser: User | null): Promise<void> {
+		if (!browser) return;
+
+		const previousUser = this.currentUser;
+		this.currentUser = newUser;
+
+		// If user changed, reinitialize storage for new user
+		if (previousUser?.uid !== newUser?.uid) {
+			this.stopFirestoreSync(); // Stop previous user's sync
+			this.stopFollowedStoriesSync(); // Stop followed stories sync
+			this.isInitialized = false;
+			this.initPromise = null;
+
+			// Reset stats when user changes
+			this._stats = { total: 0, public: 0, categories: 0, totalViews: 0 };
+			this._changeSignal++;
+			this.syncConflicts = [];
+			this.lastSyncTimestamp = 0;
+
+			await this.initializeDatabase();
+
+			// Note: No need to clear followed stories cache - it's now user-isolated by compound key
+			// Each user can only access their own followed stories cache
+
+			// Start sync for new authenticated user
+			if (newUser && this.isOnline) {
+				this.startFirestoreSync();
+				// Start followed stories sync after a brief delay to let user data load
+				setTimeout(() => this.startFollowedStoriesSync(), 2000);
+			}
 		}
 	}
 
@@ -214,6 +222,14 @@ class StoriesDB {
 
 			request.onupgradeneeded = (event) => {
 				const db = (event.target as IDBOpenDBRequest).result;
+				const oldVersion = event.oldVersion;
+
+				// Handle migration from version 2 to 3 (user-isolated followed stories)
+				if (oldVersion <= 2 && db.objectStoreNames.contains(this.FOLLOWED_STORIES_STORE_NAME)) {
+					console.log('🔄 Migrating followed stories cache to user-isolated structure');
+					// Delete old followed stories store to recreate with new key structure
+					db.deleteObjectStore(this.FOLLOWED_STORIES_STORE_NAME);
+				}
 
 				// Create user stories object store
 				let storiesStore: IDBObjectStore;
@@ -229,7 +245,7 @@ class StoriesDB {
 				let followedStoriesStore: IDBObjectStore;
 				if (!db.objectStoreNames.contains(this.FOLLOWED_STORIES_STORE_NAME)) {
 					followedStoriesStore = db.createObjectStore(this.FOLLOWED_STORIES_STORE_NAME, {
-						keyPath: ['authorUserId', 'id'] // Compound key: authorUserId + storyId
+						keyPath: ['viewerUserId', 'authorUserId', 'id'] // Compound key: viewerUserId + authorUserId + storyId
 					});
 				} else {
 					followedStoriesStore = request.transaction!.objectStore(this.FOLLOWED_STORIES_STORE_NAME);
@@ -287,6 +303,7 @@ class StoriesDB {
 
 				// NEW: Create indexes for followed stories store
 				const followedStoryIndexesToCreate = [
+					{ name: 'viewerUserId', keyPath: 'viewerUserId', options: { unique: false } },
 					{ name: 'authorUserId', keyPath: 'authorUserId', options: { unique: false } },
 					{ name: this.INDEX_PUBLIC, keyPath: 'isPublic', options: { unique: false } },
 					{ name: this.INDEX_DATE_MODIFIED, keyPath: 'dateModified', options: { unique: false } },
@@ -342,10 +359,6 @@ class StoriesDB {
 	 * Clean up resources when component is destroyed
 	 */
 	destroy(): void {
-		if (this.userUnsubscribe) {
-			this.userUnsubscribe();
-			this.userUnsubscribe = null;
-		}
 		this.stopFirestoreSync();
 		this.stopFollowedStoriesSync(); // NEW: Clean up followed stories listeners
 	}
@@ -575,20 +588,22 @@ class StoriesDB {
 				const storyData = change.doc.data();
 				const storyId = change.doc.id;
 
-				// Create enhanced story with author info
+				// Create enhanced story with author info and viewer ID for security
 				const enhancedStory: Story & {
 					authorName: string;
 					authorUsername: string;
 					authorAvatarUrl?: string;
 					readOnly: boolean;
 					authorUserId: string;
+					viewerUserId: string; // Add current user ID for cache isolation
 				} = {
 					...storyData,
 					authorName: authorProfile.displayName,
 					authorUsername: authorProfile.username,
 					authorAvatarUrl: authorProfile.avatarUrl,
 					readOnly: true,
-					authorUserId: authorProfile.id
+					authorUserId: authorProfile.id,
+					viewerUserId: this.currentUser!.uid // Current user who is viewing/following
 				} as any;
 
 				switch (change.type) {
@@ -1514,13 +1529,19 @@ class StoriesDB {
 	 * Store followed story locally without triggering sync
 	 */
 	private async storeFollowedStoryLocally(story: any): Promise<void> {
-		if (!this.db) return;
+		if (!this.db || !this.currentUser) return;
 
 		const transaction = this.db.transaction([this.FOLLOWED_STORIES_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.FOLLOWED_STORIES_STORE_NAME);
 
+		// Ensure story has viewerUserId for proper cache isolation
+		const storyWithViewer = {
+			...story,
+			viewerUserId: this.currentUser.uid
+		};
+
 		await new Promise<void>((resolve, reject) => {
-			const cleanStory = JSON.parse(JSON.stringify(story));
+			const cleanStory = JSON.parse(JSON.stringify(storyWithViewer));
 			const request = store.put(cleanStory);
 			request.onsuccess = () => resolve();
 			request.onerror = () => reject(request.error);
@@ -1531,30 +1552,34 @@ class StoriesDB {
 	 * Remove followed story locally
 	 */
 	private async removeFollowedStoryLocally(authorUserId: string, storyId: string): Promise<void> {
-		if (!this.db) return;
+		if (!this.db || !this.currentUser) return;
 
 		const transaction = this.db.transaction([this.FOLLOWED_STORIES_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.FOLLOWED_STORIES_STORE_NAME);
 
 		await new Promise<void>((resolve, reject) => {
-			const request = store.delete([authorUserId, storyId]);
+			// Use the full compound key: viewerUserId + authorUserId + storyId
+			const request = store.delete([this.currentUser!.uid, authorUserId, storyId]);
 			request.onsuccess = () => resolve();
 			request.onerror = () => reject(request.error);
 		});
 	}
 
 	/**
-	 * Get all followed stories from local cache
+	 * Get all followed stories from local cache (for current user only)
 	 */
 	private async getAllFollowedStoriesFromCache(): Promise<Story[]> {
-		if (!this.db) return [];
+		if (!this.db || !this.currentUser) return [];
 
+		const currentUserId = this.currentUser.uid;
 		const transaction = this.db.transaction([this.FOLLOWED_STORIES_STORE_NAME], 'readonly');
 		const store = transaction.objectStore(this.FOLLOWED_STORIES_STORE_NAME);
+		const index = store.index('viewerUserId');
 
 		return new Promise((resolve, reject) => {
 			const stories: Story[] = [];
-			const request = store.openCursor();
+			// Only get stories for the current user
+			const request = index.openCursor(IDBKeyRange.only(currentUserId));
 
 			request.onsuccess = (event) => {
 				const cursor = (event.target as IDBRequest).result;
@@ -1790,7 +1815,8 @@ class StoriesDB {
 	// ==================== SOCIAL FEATURES ====================
 
 	/**
-	 * Get public stories from users that the current user follows (FROM CACHE - NO FIRESTORE REQUESTS)
+	 * Get public stories from users that the current user follows (FROM USER-ISOLATED CACHE)
+	 * Security: Each user can only access their own followed stories cache via compound key isolation
 	 */
 	async getStoriesFromFollowedUsers(limit = 20): Promise<Story[]> {
 		if (!this.currentUser) {
@@ -1799,14 +1825,14 @@ class StoriesDB {
 		}
 
 		try {
-			// NEW: Read from local cache instead of making Firestore requests
-			console.log('💾 Reading followed stories from local cache...');
+			// Read from user-isolated cache - only current user's followed stories
+			console.log('💾 Reading followed stories from user-isolated cache...');
 			const cachedStories = await this.getAllFollowedStoriesFromCache();
 
 			// Apply limit and return
 			const limitedStories = cachedStories.slice(0, limit);
 			console.log(
-				`✅ Returning ${limitedStories.length} cached followed stories (from ${cachedStories.length} total)`
+				`✅ Returning ${limitedStories.length} cached followed stories for user ${this.currentUser.uid} (from ${cachedStories.length} total)`
 			);
 			return limitedStories;
 		} catch (error) {

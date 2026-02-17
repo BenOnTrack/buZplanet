@@ -57,7 +57,6 @@ export class FirebaseEmulatorUtils {
 					email: user.email,
 					displayName: userData.displayName || email.split('@')[0],
 					bio: userData.bio || '',
-					isPublic: userData.isPublic ?? true,
 					followersCount: 0,
 					followingCount: 0,
 					createdAt: new Date().toISOString(),
@@ -187,8 +186,7 @@ export class FirebaseEmulatorUtils {
 			if (!user) {
 				user = await this.createTestUser(testEmail, testPassword, {
 					displayName: 'Test User',
-					bio: 'This is a test user for development',
-					isPublic: true
+					bio: 'This is a test user for development'
 				});
 			}
 

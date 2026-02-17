@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { user } from '$lib/stores/auth';
+import { authState } from '$lib/stores/auth.svelte';
 import { db } from '$lib/firebase';
 import type { User } from 'firebase/auth';
 import {
@@ -48,7 +48,6 @@ class FeaturesDB {
 	private isInitialized = $state(false);
 	private initPromise: Promise<void> | null = null;
 	private currentUser: User | null = null;
-	private userUnsubscribe: (() => void) | null = null;
 
 	// Firestore sync state
 	private firestoreUnsubscribe: Unsubscribe | null = null;
@@ -84,33 +83,41 @@ class FeaturesDB {
 				this.stopFirestoreSync();
 			});
 
-			// Subscribe to auth state changes
-			this.userUnsubscribe = user.subscribe(async (currentUser) => {
-				const previousUser = this.currentUser;
-				this.currentUser = currentUser;
-
-				// If user changed, reinitialize storage for new user
-				if (previousUser?.uid !== currentUser?.uid) {
-					this.stopFirestoreSync(); // Stop previous user's sync
-					this.isInitialized = false;
-					this.initPromise = null;
-
-					// Reset stats when user changes
-					this._stats = { total: 0, bookmarked: 0, visited: 0, todo: 0, lists: 0 };
-					this._bookmarksVersion++;
-					this.syncConflicts = [];
-					this.lastSyncTimestamp = 0;
-
-					await this.initializeDatabase();
-
-					// Start sync for new authenticated user
-					if (currentUser && this.isOnline) {
-						this.startFirestoreSync();
-					}
-				}
-			});
+			// Initialize with default state
+			this.isInitialized = false;
+			this.initPromise = null;
 		} else {
 			this.isInitialized = true;
+		}
+	}
+
+	/**
+	 * Handle user change - called from components when auth state changes
+	 */
+	async handleUserChange(newUser: User | null): Promise<void> {
+		if (!browser) return;
+
+		const previousUser = this.currentUser;
+		this.currentUser = newUser;
+
+		// If user changed, reinitialize storage for new user
+		if (previousUser?.uid !== newUser?.uid) {
+			this.stopFirestoreSync(); // Stop previous user's sync
+			this.isInitialized = false;
+			this.initPromise = null;
+
+			// Reset stats when user changes
+			this._stats = { total: 0, bookmarked: 0, visited: 0, todo: 0, lists: 0 };
+			this._bookmarksVersion++;
+			this.syncConflicts = [];
+			this.lastSyncTimestamp = 0;
+
+			await this.initializeDatabase();
+
+			// Start sync for new authenticated user
+			if (newUser && this.isOnline) {
+				this.startFirestoreSync();
+			}
 		}
 	}
 
@@ -1518,10 +1525,6 @@ class FeaturesDB {
 	 * Clean up resources when component is destroyed
 	 */
 	destroy(): void {
-		if (this.userUnsubscribe) {
-			this.userUnsubscribe();
-			this.userUnsubscribe = null;
-		}
 		this.stopFirestoreSync();
 	}
 

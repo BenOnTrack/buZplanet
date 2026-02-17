@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
-	import { appState } from '$lib/stores/AppState.svelte';
+	import { getFeatureDisplayName } from '$lib/utils/stories';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 
 	let {
@@ -206,16 +206,32 @@
 		});
 	}
 
-	// Get feature's primary name based on language preference, then fallback to name, then formatted category
+	// Get feature's primary name based on language preference using centralized function
 	function getFeatureName(feature: TableFeature): string {
-		const currentLanguage = appState.language;
-		return (
-			feature.names[currentLanguage] ||
-			feature.names.name ||
-			(feature.category ? formatFeatureProperty(feature.category) : '') ||
-			Object.values(feature.names)[0] ||
-			'Unnamed'
-		);
+		// Create a compatible SearchResult-like object for the centralized function
+		const compatibleFeature: SearchResult = {
+			id: feature.id,
+			names: feature.names,
+			class: feature.class || '',
+			subclass: feature.subclass,
+			category: feature.category,
+			lng: 0, // Not used for name display
+			lat: 0, // Not used for name display
+			database: '', // Not used for name display
+			layer: '', // Not used for name display
+			zoom: 14, // Not used for name display
+			tileX: 0, // Not used for name display
+			tileY: 0 // Not used for name display
+		};
+
+		// Use centralized function that handles language preferences automatically
+		const displayName = getFeatureDisplayName(compatibleFeature);
+		if (displayName !== 'Unknown Feature') {
+			return displayName;
+		}
+
+		// Additional fallback specific to TableFeature - use formatted category if available
+		return feature.category ? formatFeatureProperty(feature.category) : 'Unnamed';
 	}
 
 	// Get feature's secondary name for display below primary name

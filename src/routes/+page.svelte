@@ -12,6 +12,9 @@
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { appInitializer } from '$lib/utils/app-initialization';
 	import { appState } from '$lib/stores/AppState.svelte';
+	import { authState } from '$lib/stores/auth.svelte';
+	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
+	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index.js';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -20,6 +23,8 @@
 		status:
 			| 'pending'
 			| 'initializing'
+			| 'auth-waiting'
+			| 'appstate-loading'
 			| 'worker-ready'
 			| 'appstate-ready'
 			| 'protocol-ready'
@@ -36,6 +41,7 @@
 	});
 
 	let isAppReady = $derived(initState.status === 'complete');
+	let isMapReady = $derived(isAppReady && !authState.loading && appState.isReady);
 	let showDebugPanel = $state(false);
 
 	// Search functionality
@@ -108,7 +114,31 @@
 	// Subscribe to initialization state changes
 	let unsubscribe: (() => void) | null = null;
 
-	onMount(() => {
+	// Auth monitoring after initial setup
+	let hasCompletedInitialAuth = false;
+	$effect(() => {
+		// Only handle changes after app is fully ready
+		if (initState.status !== 'complete') return;
+
+		const currentUser = authState.user;
+
+		// Skip the first run after initialization is complete
+		if (!hasCompletedInitialAuth) {
+			hasCompletedInitialAuth = true;
+			return;
+		}
+
+		console.log(
+			`🔄 Auth change detected after initialization: ${currentUser ? `User ${currentUser.uid}` : 'Anonymous'}`
+		);
+
+		// Update AppState and databases
+		appState.handleUserChange(currentUser);
+		featuresDB.handleUserChange(currentUser);
+		storiesDB.handleUserChange(currentUser);
+	});
+
+	onMount(async () => {
 		// Subscribe to initialization state
 		unsubscribe = appInitializer.subscribe((state) => {
 			initState = state;
@@ -122,17 +152,15 @@
 
 		window.addEventListener('app-cleanup', handleAppCleanup);
 
-		// Start initialization
-		appInitializer
-			.initialize()
-			.then((result) => {
-				if (!result.success) {
-					console.error('App initialization failed:', result.error);
-				}
-			})
-			.catch((error) => {
-				console.error('Unexpected initialization error:', error);
-			});
+		// Start initialization with proper auth sequence
+		try {
+			const result = await initializeAppWithAuth();
+			if (!result.success) {
+				console.error('App initialization failed:', result.error);
+			}
+		} catch (error) {
+			console.error('Unexpected initialization error:', error);
+		}
 
 		return () => {
 			window.removeEventListener('app-cleanup', handleAppCleanup);
@@ -160,6 +188,50 @@
 			console.warn('Failed to terminate worker:', error);
 		}
 	});
+
+	/**
+	 * Initialize app with proper auth -> AppState -> worker sequence
+	 */
+	async function initializeAppWithAuth() {
+		try {
+			// Step 1: Wait for auth state to be determined
+			initState.status = 'auth-waiting';
+			console.log('🔐 Waiting for authentication to be determined...');
+
+			// Wait for auth loading to complete
+			while (authState.loading) {
+				await new Promise((resolve) => setTimeout(resolve, 50)); // Poll every 50ms
+			}
+
+			const currentUser = authState.user;
+			console.log(`✅ Auth determined: ${currentUser ? `User ${currentUser.uid}` : 'Anonymous'}`);
+
+			// Step 2: Load AppState for the authenticated user
+			initState.status = 'appstate-loading';
+			console.log('🔧 Loading AppState for user...');
+
+			await appState.handleUserChange(currentUser);
+			console.log(
+				`✅ AppState loaded! Map view: [${appState.mapView.center.join(', ')}] @ z${appState.mapView.zoom}`
+			);
+
+			// Step 2.5: Initialize databases with the authenticated user
+			console.log('💾 Initializing databases for user...');
+			featuresDB.handleUserChange(currentUser);
+			storiesDB.handleUserChange(currentUser);
+
+			// Step 3: Now initialize the worker and rest of the app
+			console.log('🚀 Starting worker initialization...');
+			const result = await appInitializer.initialize();
+
+			return result;
+		} catch (error) {
+			console.error('❌ Auth-based initialization failed:', error);
+			initState.status = 'error';
+			initState.error = error instanceof Error ? error.message : 'Unknown error';
+			return { success: false, error: initState.error };
+		}
+	}
 
 	// Development testing functions
 	async function testWorker() {
@@ -210,7 +282,7 @@
 			/>
 		</div>
 
-		<MapView ready={isAppReady} />
+		<MapView ready={isMapReady} />
 		<BottomNavigation />
 
 		<!-- Search Results Drawer -->

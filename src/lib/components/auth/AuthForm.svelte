@@ -1,12 +1,5 @@
 <script lang="ts">
-	import {
-		signIn,
-		signUp,
-		signInWithGoogle,
-		authError,
-		loading,
-		clearAuthError
-	} from '$lib/stores/auth';
+	import { authState } from '$lib/stores/auth.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 
 	let isSignUp = $state(false);
@@ -16,13 +9,12 @@
 	let displayName = $state('');
 	let formError = $state('');
 
-	const errorMessage = $derived($authError || formError);
-	const isLoading = $derived($loading);
+	const errorMessage = $derived(authState.authError || formError);
 
 	// Clear errors when switching between forms
 	function toggleForm() {
 		isSignUp = !isSignUp;
-		clearAuthError();
+		authState.clearAuthError();
 		formError = '';
 		email = '';
 		password = '';
@@ -52,13 +44,13 @@
 			}
 
 			try {
-				await signUp(email, password, displayName || undefined);
+				await authState.signUp(email, password, displayName || undefined);
 			} catch (error) {
 				// Error is handled by the auth store
 			}
 		} else {
 			try {
-				await signIn(email, password);
+				await authState.signIn(email, password);
 			} catch (error) {
 				// Error is handled by the auth store
 			}
@@ -67,7 +59,7 @@
 
 	async function handleGoogleSignIn() {
 		try {
-			await signInWithGoogle();
+			await authState.signInWithGoogle();
 		} catch (error) {
 			// Error is handled by the auth store
 		}
@@ -85,7 +77,7 @@
 					bind:value={displayName}
 					class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 					placeholder="Enter your name"
-					disabled={isLoading}
+					disabled={authState.loading}
 				/>
 			</div>
 		{/if}
@@ -99,7 +91,7 @@
 				required
 				class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 				placeholder="Enter your email"
-				disabled={isLoading}
+				disabled={authState.loading}
 			/>
 		</div>
 
@@ -112,7 +104,7 @@
 				required
 				class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 				placeholder="Enter your password"
-				disabled={isLoading}
+				disabled={authState.loading}
 			/>
 		</div>
 
@@ -126,7 +118,7 @@
 					required
 					class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 					placeholder="Confirm your password"
-					disabled={isLoading}
+					disabled={authState.loading}
 				/>
 			</div>
 		{/if}
@@ -141,10 +133,10 @@
 	<div class="space-y-3">
 		<button
 			type="submit"
-			disabled={isLoading}
+			disabled={authState.loading}
 			class="bg-primary text-primary-foreground ring-offset-background hover:bg-primary/90 focus-visible:ring-ring inline-flex h-10 w-full items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
 		>
-			{#if isLoading}
+			{#if authState.loading}
 				<PropertyIcon key={'description'} value={'loading'} size={16} class="mr-2 animate-spin" />
 			{/if}
 			{isSignUp ? 'Create Account' : 'Sign In'}
@@ -162,7 +154,7 @@
 		<button
 			type="button"
 			onclick={handleGoogleSignIn}
-			disabled={isLoading}
+			disabled={authState.loading}
 			class="border-input bg-background ring-offset-background hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex h-10 w-full items-center justify-center rounded-md border px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
 		>
 			<PropertyIcon key={'description'} value={'google'} size={16} class="mr-2" />
@@ -176,7 +168,7 @@
 			type="button"
 			onclick={toggleForm}
 			class="text-primary font-medium underline-offset-4 hover:underline"
-			disabled={isLoading}
+			disabled={authState.loading}
 		>
 			{isSignUp ? 'Sign in' : 'Sign up'}
 		</button>

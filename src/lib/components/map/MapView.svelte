@@ -247,26 +247,17 @@
 		layers: []
 	});
 
-	// Get initial view from AppState - only use when AppState is initialized
+	// Get initial view from AppState - should be ready when this component renders
 	let currentView = $derived.by(() => {
-		// Use defaults if AppState is not initialized
-		if (!appState.initialized) {
-			return {
-				center: [0, 0] as [number, number],
-				zoom: 2,
-				bearing: 0,
-				pitch: 0
-			};
-		}
-
-		// Safely access AppState values
 		try {
-			return {
+			const view = {
 				center: appState.mapView.center as [number, number],
 				zoom: appState.mapView.zoom,
 				bearing: appState.mapView.bearing || 0,
 				pitch: appState.mapView.pitch || 0
 			};
+			console.log(`🗺️ Initializing map with: [${view.center.join(', ')}] @ z${view.zoom}`);
+			return view;
 		} catch (error) {
 			console.warn('Error accessing AppState, using defaults:', error);
 			return {
@@ -278,7 +269,7 @@
 		}
 	});
 
-	// Only render map when ready prop is true (AppState initialization is now more robust)
+	// Only render map when ready prop is true
 	let shouldRenderMap = $derived(ready);
 
 	// Debounce timer for saving map state
@@ -365,7 +356,6 @@
 			if (mapInstance) {
 				// Register map instance with MapControl
 				mapControl.setMapInstance(mapInstance);
-
 				// Add event handlers to update map state (but not save immediately)
 				mapInstance.on('moveend', updateMapState);
 				mapInstance.on('zoomend', updateMapState);

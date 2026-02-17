@@ -2,18 +2,17 @@
 	import { Dialog } from 'bits-ui';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
-	import { user, loading } from '$lib/stores/auth';
+	import { authState } from '$lib/stores/auth.svelte';
 	import { userStore } from '$lib/stores/UserStore.svelte';
 	import AuthForm from '$lib/components/auth/AuthForm.svelte';
 	import UserProfile from '$lib/components/auth/UserProfile.svelte';
 	import UserSearch from '$lib/components/UserSearch.svelte';
-	import FollowRequests from '$lib/components/FollowRequests.svelte';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 	import NotificationsPanel from '$lib/components/NotificationsPanel.svelte';
 	import ProfileEditor from '$lib/components/ProfileEditor.svelte';
 
-	const currentUser = $derived($user);
-	const isLoading = $derived($loading);
+	const currentUser = $derived(authState.user);
+	const isLoading = $derived(authState.loading);
 
 	let activeTab = $state('auth');
 	let showNotifications = $state(false);
@@ -21,8 +20,7 @@
 	const tabs = [
 		{ id: 'auth', label: 'Account', icon: 'lock' },
 		{ id: 'feed', label: 'Feed', icon: 'home' },
-		{ id: 'search', label: 'People', icon: 'search' },
-		{ id: 'requests', label: 'Requests', icon: 'user-plus' }
+		{ id: 'search', label: 'People', icon: 'search' }
 	];
 
 	function switchTab(tabId: string) {
@@ -79,9 +77,6 @@
 					{:else if activeTab === 'search'}
 						<PropertyIcon key={'description'} value={'search'} size={20} class="mr-2" />
 						Find People
-					{:else if activeTab === 'requests'}
-						<PropertyIcon key={'description'} value={'user-plus'} size={20} class="mr-2" />
-						Follow Requests
 					{/if}
 				</Dialog.Title>
 
@@ -150,13 +145,6 @@
 							>
 								<PropertyIcon key={'description'} value={tab.icon} size={16} />
 								<span>{tab.label}</span>
-								{#if tab.id === 'requests' && userStore.hasPendingRequests}
-									<span
-										class="ml-1 inline-flex items-center rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800"
-									>
-										{userStore.pendingFollowRequests.length}
-									</span>
-								{/if}
 							</button>
 						{/each}
 					</div>
@@ -181,10 +169,6 @@
 									<h3 class="mb-3 text-lg font-semibold text-gray-900">Find People</h3>
 									<UserSearch />
 								</div>
-							</div>
-						{:else if activeTab === 'requests'}
-							<div class="p-4">
-								<FollowRequests />
 							</div>
 						{/if}
 					</div>

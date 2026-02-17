@@ -6,6 +6,7 @@
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { appState } from '$lib/stores/AppState.svelte';
+	import { getFeatureDisplayName } from '$lib/utils/stories';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import FeaturesTable from '$lib/components/table/FeaturesTable.svelte';
@@ -237,16 +238,16 @@
 		}
 	}
 
-	// Get feature's primary name based on language preference, then fallback to name, then formatted category
+	// Get feature's primary name based on language preference using centralized function
 	function getFeatureName(feature: StoredFeature): string {
-		const currentLanguage = appState.language;
-		return (
-			feature.names[currentLanguage] ||
-			feature.names.name ||
-			(feature.category ? formatFeatureProperty(feature.category) : null) ||
-			Object.values(feature.names)[0] ||
-			'Unnamed'
-		);
+		// Use centralized function that handles language preferences automatically
+		const displayName = getFeatureDisplayName(feature);
+		if (displayName !== 'Unknown Feature') {
+			return displayName;
+		}
+
+		// Additional fallback specific to StoredFeature - use formatted category if available
+		return feature.category ? formatFeatureProperty(feature.category) : 'Unnamed';
 	}
 
 	// Filter functions for the Filters component

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Dialog, Label, Separator } from 'bits-ui';
 	import Plus from 'phosphor-svelte/lib/Plus';
-	import BookmarkListDialog from '$lib/components/dialogs/BookmarkList.svelte';
+	import BookmarkListDialog from '$lib/components/dialogs/BookmarkListDialog.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte.js';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
@@ -24,7 +24,7 @@
 	let isSaving = $state(false);
 	let createListDialogOpen = $state(false);
 
-	// Get feature display name
+	// Get feature display name using the language utility
 	function getFeatureDisplayName(feature: any): string {
 		if (!feature || !feature.properties) return 'Selected Feature';
 		const props = feature.properties;
@@ -245,7 +245,7 @@
 											<div class="flex items-center gap-2">
 												{#if list.color}
 													<div
-														class="h-3 w-3 flex-shrink-0 rounded-full"
+														class="h-3 w-3 shrink-0 rounded-full"
 														style="background-color: {list.color}"
 													></div>
 												{/if}

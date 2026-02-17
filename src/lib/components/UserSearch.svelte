@@ -51,8 +51,6 @@
 		switch (status) {
 			case 'following':
 				return 'Unfollow';
-			case 'pending':
-				return 'Pending';
 			case 'mutual':
 				return 'Following';
 			case 'follower':
@@ -67,8 +65,6 @@
 			case 'following':
 			case 'mutual':
 				return 'bg-gray-200 text-gray-700 hover:bg-gray-300';
-			case 'pending':
-				return 'bg-yellow-100 text-yellow-700 cursor-not-allowed';
 			case 'follower':
 				return 'bg-blue-600 text-white hover:bg-blue-700';
 			default:
@@ -166,7 +162,6 @@
 							onkeydown={(e) =>
 								e.key === 'Enter' &&
 								handleFollowToggle(result.user.id, result.followStatus || 'none')}
-							disabled={result.followStatus === 'pending'}
 							class="rounded-md px-3 py-1 text-sm transition-colors {getFollowButtonClass(
 								result.followStatus || 'none'
 							)}"

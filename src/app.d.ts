@@ -411,11 +411,6 @@ declare global {
 		location?: string; // User's location (optional)
 		website?: string; // Personal website/social link
 
-		// Privacy settings
-		isPublic: boolean; // Whether profile is publicly visible
-		allowFollowers: boolean; // Whether user accepts followers
-		showActivity: boolean; // Whether to show activity in feeds
-
 		// Social stats
 		followerCount: number;
 		followingCount: number;
@@ -502,7 +497,7 @@ declare global {
 		user: UserProfile;
 		score: number; // Relevance score
 		matchedFields: string[]; // Which fields matched
-		followStatus?: 'none' | 'following' | 'pending' | 'follower' | 'mutual';
+		followStatus?: 'none' | 'following' | 'follower' | 'mutual';
 		mutualFollowers?: UserProfile[]; // Mutual followers (limited to first few)
 		mutualFollowerCount?: number;
 	}

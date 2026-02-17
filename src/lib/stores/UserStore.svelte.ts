@@ -1,6 +1,5 @@
 import { userService } from '$lib/services/userService';
-import { user } from '$lib/stores/auth';
-import { get } from 'svelte/store';
+import { authState } from '$lib/stores/auth.svelte';
 import type { Unsubscribe } from 'firebase/firestore';
 
 class UserStore {
@@ -17,7 +16,6 @@ class UserStore {
 	followers = $state<UserProfile[]>([]);
 	following = $state<UserProfile[]>([]);
 	notifications = $state<UserNotification[]>([]);
-	pendingFollowRequests = $state<{ follow: UserFollow; followerProfile: UserProfile }[]>([]);
 
 	// Activity feed
 	activityFeed = $state<ActivityFeedItem[]>([]);
@@ -37,7 +35,7 @@ class UserStore {
 	 * Initialize user data when user logs in
 	 */
 	async initializeUserData() {
-		const currentUser = get(user);
+		const currentUser = authState.user;
 		if (!currentUser) return;
 
 		try {
@@ -78,7 +76,6 @@ class UserStore {
 		this.followers = [];
 		this.following = [];
 		this.notifications = [];
-		this.pendingFollowRequests = [];
 		this.activityFeed = [];
 		this.userSearchResults = [];
 
@@ -155,12 +152,7 @@ class UserStore {
 	 * Load all social data for current user
 	 */
 	private async loadSocialData() {
-		await Promise.all([
-			this.loadFollowers(),
-			this.loadFollowing(),
-			this.loadPendingRequests(),
-			this.loadActivityFeed()
-		]);
+		await Promise.all([this.loadFollowers(), this.loadFollowing(), this.loadActivityFeed()]);
 	}
 
 	/**
@@ -188,17 +180,6 @@ class UserStore {
 			console.error('Error loading following:', error);
 		} finally {
 			this.followingLoading = false;
-		}
-	}
-
-	/**
-	 * Load pending follow requests
-	 */
-	async loadPendingRequests() {
-		try {
-			this.pendingFollowRequests = await userService.getPendingFollowRequests();
-		} catch (error) {
-			console.error('Error loading pending requests:', error);
 		}
 	}
 
@@ -254,14 +235,8 @@ class UserStore {
 		try {
 			const followData = await userService.followUser(userId);
 
-			// Update local state
-			await this.loadFollowing();
-
-			// Update search results if present
-			this.updateUserSearchFollowStatus(
-				userId,
-				followData.status === 'accepted' ? 'following' : 'pending'
-			);
+			// Update local state if present
+			this.updateUserSearchFollowStatus(userId, 'following');
 		} catch (error) {
 			console.error('Error following user:', error);
 			throw error;
@@ -275,10 +250,7 @@ class UserStore {
 		try {
 			await userService.unfollowUser(userId);
 
-			// Update local state
-			await this.loadFollowing();
-
-			// Update search results if present
+			// Update local state if present
 			this.updateUserSearchFollowStatus(userId, 'none');
 		} catch (error) {
 			console.error('Error unfollowing user:', error);
@@ -287,41 +259,9 @@ class UserStore {
 	}
 
 	/**
-	 * Accept a follow request
-	 */
-	async acceptFollowRequest(followerId: string): Promise<void> {
-		try {
-			await userService.acceptFollowRequest(followerId);
-
-			// Update local state
-			await Promise.all([this.loadFollowers(), this.loadPendingRequests()]);
-		} catch (error) {
-			console.error('Error accepting follow request:', error);
-			throw error;
-		}
-	}
-
-	/**
-	 * Reject a follow request
-	 */
-	async rejectFollowRequest(followerId: string): Promise<void> {
-		try {
-			await userService.rejectFollowRequest(followerId);
-
-			// Update local state
-			await this.loadPendingRequests();
-		} catch (error) {
-			console.error('Error rejecting follow request:', error);
-			throw error;
-		}
-	}
-
-	/**
 	 * Get follow status for a specific user
 	 */
-	async getFollowStatus(
-		userId: string
-	): Promise<'none' | 'following' | 'pending' | 'follower' | 'mutual'> {
+	async getFollowStatus(userId: string): Promise<'none' | 'following' | 'follower' | 'mutual'> {
 		return await userService.getFollowStatus(userId);
 	}
 
@@ -371,27 +311,6 @@ class UserStore {
 		return this.notifications.filter((n) => !n.read).length;
 	}
 
-	/**
-	 * Check if user has any pending follow requests
-	 */
-	get hasPendingRequests(): boolean {
-		return this.pendingFollowRequests.length > 0;
-	}
-
-	/**
-	 * Check if current user can be followed
-	 */
-	get canBeFollowed(): boolean {
-		return this.currentProfile?.allowFollowers ?? false;
-	}
-
-	/**
-	 * Check if current user's profile is public
-	 */
-	get isPublicProfile(): boolean {
-		return this.currentProfile?.isPublic ?? false;
-	}
-
 	// ==================== HELPER METHODS ====================
 
 	/**
@@ -399,7 +318,7 @@ class UserStore {
 	 */
 	private updateUserSearchFollowStatus(
 		userId: string,
-		status: 'none' | 'following' | 'pending' | 'follower' | 'mutual'
+		status: 'none' | 'following' | 'follower' | 'mutual'
 	) {
 		this.userSearchResults = this.userSearchResults.map((result) =>
 			result.user.id === userId ? { ...result, followStatus: status } : result

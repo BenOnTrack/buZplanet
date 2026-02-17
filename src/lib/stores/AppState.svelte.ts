@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { user } from '$lib/stores/auth';
+import { authState } from '$lib/stores/auth.svelte';
 import type { User } from 'firebase/auth';
 
 const DEFAULT_COLOR_MAPPINGS: ColorMappings = {
@@ -54,9 +54,9 @@ class AppState {
 
 	private db: IDBDatabase | null = null;
 	private isInitialized = $state(false);
+	private isLoading = $state(false); // Track if we're currently loading user config
 	private initPromise: Promise<void> | null = null;
 	private currentUser: User | null = null;
-	private userUnsubscribe: (() => void) | null = null;
 
 	constructor() {
 		// Only initialize in browser environment
@@ -64,25 +64,51 @@ class AppState {
 			// Initialize with default state first to ensure app works without auth
 			this.isInitialized = true;
 
-			// Subscribe to auth state changes for user-specific local config
-			this.userUnsubscribe = user.subscribe(async (currentUser) => {
-				const previousUser = this.currentUser;
-				this.currentUser = currentUser;
-
-				// If user changed, reinitialize storage for new user
-				if (previousUser?.uid !== currentUser?.uid) {
-					// Reset to defaults when user changes
-					this._mapView = { ...DEFAULT_CONFIG.mapView };
-					this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
-					this._language = DEFAULT_CONFIG.language;
-
-					// Load user-specific configuration if available
-					await this.initializeStorage();
-				}
-			});
+			// Load initial config for anonymous user
+			this.initializeStorage();
 		} else {
 			// In SSR, mark as initialized with defaults
 			this.isInitialized = true;
+		}
+	}
+
+	/**
+	 * Handle user change - called from components when auth state changes
+	 */
+	async handleUserChange(newUser: User | null): Promise<void> {
+		if (!browser) return;
+
+		const previousUser = this.currentUser;
+		console.log(
+			`🔄 handleUserChange: ${previousUser?.uid || 'anonymous'} -> ${newUser?.uid || 'anonymous'}`
+		);
+
+		// If user changed, reinitialize storage for new user
+		if (previousUser?.uid !== newUser?.uid) {
+			this.isLoading = true; // Set loading state
+			this.currentUser = newUser;
+
+			// Reset promise to allow re-initialization for new user
+			this.initPromise = null;
+
+			try {
+				// Reset to defaults when user changes
+				console.log('🔄 Resetting to defaults before loading user config');
+				this._mapView = { ...DEFAULT_CONFIG.mapView };
+				this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
+				this._language = DEFAULT_CONFIG.language;
+
+				// Load user-specific configuration if available
+				console.log('🔍 Loading user-specific configuration...');
+				await this.initializeStorage();
+
+				console.log(`✅ AppState loaded for user: ${newUser?.uid || 'anonymous'}`);
+				console.log(`🗺️ Map view: [${this._mapView.center.join(', ')}] @ z${this._mapView.zoom}`);
+			} finally {
+				this.isLoading = false; // Clear loading state
+			}
+		} else {
+			console.log('ℹ️ Same user, no change needed');
 		}
 	}
 
@@ -113,6 +139,16 @@ class AppState {
 	// Getter for initialization status
 	get initialized(): boolean {
 		return this.isInitialized;
+	}
+
+	// Getter for loading status
+	get isLoadingConfig(): boolean {
+		return this.isLoading;
+	}
+
+	// Check if AppState is ready to be used (initialized and not loading)
+	get isReady(): boolean {
+		return this.isInitialized && !this.isLoading;
 	}
 
 	/**
@@ -192,10 +228,15 @@ class AppState {
 	 * Load configuration from local storage for current user
 	 */
 	private async loadConfig(): Promise<void> {
-		if (!this.db) return;
+		if (!this.db) {
+			console.log('💾 No database connection, using defaults');
+			return;
+		}
 
 		try {
 			const storageKey = this.getCurrentUserStorageKey();
+			console.log(`🔍 Loading config for key: ${storageKey}`);
+
 			const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
 			const store = transaction.objectStore(this.STORE_NAME);
 			const request = store.get(storageKey);
@@ -206,6 +247,8 @@ class AppState {
 			});
 
 			if (result && result.value) {
+				console.log('✅ Found saved config:', result.value);
+
 				// Load and merge saved config with defaults, updating separate states
 				this._mapView = {
 					...DEFAULT_CONFIG.mapView,
@@ -216,6 +259,12 @@ class AppState {
 					...result.value.colorMappings
 				};
 				this._language = result.value.language || DEFAULT_CONFIG.language;
+
+				console.log(
+					`🗺️ Loaded map view: [${this._mapView.center.join(', ')}] @ z${this._mapView.zoom}`
+				);
+			} else {
+				console.log('⚠️ No saved config found, using defaults');
 			}
 		} catch (error) {
 			console.error('Failed to load config:', error);
@@ -391,10 +440,7 @@ class AppState {
 	 * Clean up resources when component is destroyed
 	 */
 	destroy(): void {
-		if (this.userUnsubscribe) {
-			this.userUnsubscribe();
-			this.userUnsubscribe = null;
-		}
+		// Effects clean up automatically in Svelte 5
 	}
 }
 

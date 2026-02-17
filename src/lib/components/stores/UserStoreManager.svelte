@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { userStore } from '$lib/stores/UserStore.svelte';
-	import { user } from '$lib/stores/auth';
+	import { authState } from '$lib/stores/auth.svelte';
 	import { onMount, onDestroy } from 'svelte';
 
 	// This component manages the UserStore lifecycle and effects
@@ -8,7 +8,7 @@
 
 	// Watch for auth changes using $effect
 	$effect(() => {
-		const currentUser = $user;
+		const currentUser = authState.user;
 
 		// Only react to actual changes
 		if (currentUser !== lastUser) {

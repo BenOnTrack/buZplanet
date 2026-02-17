@@ -53,18 +53,22 @@ service cloud.firestore {
     
     // ==================== SOCIAL FEATURES RULES ====================
     
-    // User profiles - read public profiles, write own profile
+    // User profiles - ALL profiles are public (no privacy settings)
     match /userProfiles/{userId} {
-      // Anyone can read public profiles, users can read their own private profiles
-      allow read: if resource.data.isPublic == true || 
-                     (request.auth != null && request.auth.uid == userId);
+      // Anyone authenticated can read any user profile (all profiles are public)
+      allow read: if request.auth != null;
       
       // Users can write/update their own profile
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write, update: if request.auth != null && request.auth.uid == userId;
       
-      // Allow authenticated users to update follower/following counts
-      // This is needed for the follow/unfollow functionality
-      allow update: if request.auth != null;
+      // Allow authenticated users to update follower/following counts for follow operations
+      // This allows updating other users' follower counts when following/unfollowing
+      allow update: if request.auth != null && 
+                      // Only allow updating specific follower/following count fields
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followerCount', 'followingCount', 'dateModified']));
+      
+      // Allow listing user profiles for search functionality
+      allow list: if request.auth != null;
     }
     
     // User follows - read/write own follow relationships

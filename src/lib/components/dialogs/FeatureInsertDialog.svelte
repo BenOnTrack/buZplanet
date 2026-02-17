@@ -2,6 +2,7 @@
 	import { Dialog, Label } from 'bits-ui';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
+	import { getFeatureDisplayName } from '$lib/utils/stories';
 
 	let {
 		open = $bindable(false),
@@ -14,16 +15,6 @@
 		onInsertFeature?: () => void;
 		customDisplayText?: string;
 	} = $props();
-
-	// Get display name for feature
-	function getFeatureDisplayName(feature: StoredFeature | SearchResult): string {
-		if ('names' in feature) {
-			// It's either type, try to get the best name
-			const names = 'names' in feature ? feature.names : {};
-			return names.name || names['name:en'] || Object.values(names)[0] || 'Unknown Feature';
-		}
-		return 'Unknown Feature';
-	}
 
 	// Handle form submission
 	function handleSubmit(event: Event) {

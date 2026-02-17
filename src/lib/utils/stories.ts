@@ -1,4 +1,5 @@
 import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
+import { getDisplayName } from '$lib/utils/language';
 
 /**
  * Story utilities - centralized functions for story-related operations
@@ -162,12 +163,13 @@ export async function updateFeatureStatuses(
 
 /**
  * Get display name for a feature (StoredFeature or SearchResult)
+ * Uses the language setting from AppState via the language utility, falling back appropriately
  */
 export function getFeatureDisplayName(feature: StoredFeature | SearchResult): string {
 	if ('names' in feature) {
-		// It's either type, try to get the best name
+		// It's either type, try to get the best name using the language utility
 		const names = 'names' in feature ? feature.names : {};
-		return names.name || names['name:en'] || Object.values(names)[0] || 'Unknown Feature';
+		return getDisplayName(names) || 'Unknown Feature';
 	}
 	return 'Unknown Feature';
 }

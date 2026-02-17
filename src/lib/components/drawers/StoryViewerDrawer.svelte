@@ -5,7 +5,7 @@
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
-	import SocialStoriesList from '$lib/components/stories/SocialStoriesList.svelte';
+	import StoriesList from '$lib/components/stories/StoriesList.svelte';
 	import StoryViewer from '$lib/components/stories/StoryViewer.svelte';
 	import StoryEditorDrawer from '$lib/components/drawers/StoryEditorDrawer.svelte';
 
@@ -318,7 +318,7 @@
 
 						<!-- Scrollable Stories Content -->
 						<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">
-							<SocialStoriesList
+							<StoriesList
 								onStorySelect={handleStorySelect}
 								onNewStory={handleNewStory}
 								onStoriesCountUpdate={handleStoriesCountUpdate}

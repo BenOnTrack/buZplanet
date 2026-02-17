@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { Drawer } from 'vaul-svelte';
-	import { clsx } from 'clsx';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
