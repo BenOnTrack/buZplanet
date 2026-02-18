@@ -138,7 +138,7 @@
 		storiesDB.handleUserChange(currentUser);
 	});
 
-	onMount(async () => {
+	onMount(() => {
 		// Subscribe to initialization state
 		unsubscribe = appInitializer.subscribe((state) => {
 			initState = state;
@@ -154,10 +154,11 @@
 
 		// Start initialization with proper auth sequence
 		try {
-			const result = await initializeAppWithAuth();
-			if (!result.success) {
-				console.error('App initialization failed:', result.error);
-			}
+			initializeAppWithAuth().then((result) => {
+				if (!result.success) {
+					console.error('App initialization failed:', result.error);
+				}
+			});
 		} catch (error) {
 			console.error('Unexpected initialization error:', error);
 		}

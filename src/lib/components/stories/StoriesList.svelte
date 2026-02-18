@@ -168,6 +168,32 @@
 		}
 		return (story as any).authorUsername;
 	}
+
+	// Handle story deletion
+	async function handleDeleteStory(story: Story, event: Event) {
+		event.preventDefault();
+		event.stopPropagation();
+
+		// Only allow deletion of user's own stories
+		if (!isUserStory(story)) {
+			return;
+		}
+
+		if (
+			!confirm(`Are you sure you want to delete "${story.title}"? This action cannot be undone.`)
+		) {
+			return;
+		}
+
+		try {
+			await storiesDB.deleteStory(story.id);
+			console.log(`✅ Successfully deleted story: ${story.title}`);
+			// UI will automatically update due to reactivity
+		} catch (error) {
+			console.error('❌ Failed to delete story:', error);
+			alert('Failed to delete story. Please try again.');
+		}
+	}
 </script>
 
 <div class={clsx('social-stories-list', className)}>

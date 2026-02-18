@@ -11,6 +11,8 @@
 	const statusMessages = {
 		pending: 'Starting up...',
 		initializing: 'Initializing worker...',
+		'auth-waiting': 'Waiting for authentication...',
+		'appstate-loading': 'Loading app state...',
 		'worker-ready': 'Worker ready, loading app state...',
 		'appstate-ready': 'App state loaded, setting up protocols...',
 		'protocol-ready': 'Protocols ready, finalizing setup...',
@@ -22,6 +24,8 @@
 	const statusEmojis = {
 		pending: '⏳',
 		initializing: '🔄',
+		'auth-waiting': '🔐',
+		'appstate-loading': '🗺️',
 		'worker-ready': '⚙️',
 		'appstate-ready': '🗺️',
 		'protocol-ready': '🔗',
@@ -37,6 +41,8 @@
 			<span
 				class="status-emoji"
 				class:spinning={state.status === 'initializing' ||
+					state.status === 'auth-waiting' ||
+					state.status === 'appstate-loading' ||
 					state.status === 'worker-ready' ||
 					state.status === 'appstate-ready' ||
 					state.status === 'protocol-ready' ||
@@ -56,7 +62,7 @@
 			</div>
 		{/if}
 
-		{#if state.status === 'initializing' || state.status === 'worker-ready' || state.status === 'appstate-ready' || state.status === 'protocol-ready' || state.status === 'database-scanning'}
+		{#if state.status === 'initializing' || state.status === 'auth-waiting' || state.status === 'appstate-loading' || state.status === 'worker-ready' || state.status === 'appstate-ready' || state.status === 'protocol-ready' || state.status === 'database-scanning'}
 			<div class="progress-bar">
 				<div
 					class="progress-fill"

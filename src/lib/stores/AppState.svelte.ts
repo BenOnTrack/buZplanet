@@ -92,13 +92,8 @@ class AppState {
 			this.initPromise = null;
 
 			try {
-				// Reset to defaults when user changes
-				console.log('🔄 Resetting to defaults before loading user config');
-				this._mapView = { ...DEFAULT_CONFIG.mapView };
-				this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
-				this._language = DEFAULT_CONFIG.language;
-
-				// Load user-specific configuration if available
+				// Load user-specific configuration directly without resetting first
+				// This prevents the map from being initialized with default coordinates
 				console.log('🔍 Loading user-specific configuration...');
 				await this.initializeStorage();
 
@@ -229,7 +224,7 @@ class AppState {
 	 */
 	private async loadConfig(): Promise<void> {
 		if (!this.db) {
-			console.log('💾 No database connection, using defaults');
+			console.log('💾 No database connection, using current values or defaults');
 			return;
 		}
 
@@ -265,6 +260,28 @@ class AppState {
 				);
 			} else {
 				console.log('⚠️ No saved config found, using defaults');
+				// Only set defaults if switching from completely uninitialized state
+				// (Check if mapView exactly matches the default values - indicates uninitialized)
+				const isDefaultState =
+					this._mapView.center[0] === 0 &&
+					this._mapView.center[1] === 0 &&
+					this._mapView.zoom === 2;
+
+				if (isDefaultState) {
+					console.log('🔄 Setting defaults for uninitialized state');
+					this._mapView = { ...DEFAULT_CONFIG.mapView };
+					this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
+					this._language = DEFAULT_CONFIG.language;
+				} else {
+					console.log('🔐 Preserving current map view state');
+					// Keep current mapView state, but ensure other settings have defaults
+					if (Object.keys(this._colorMappings).length === 0) {
+						this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
+					}
+					if (!this._language) {
+						this._language = DEFAULT_CONFIG.language;
+					}
+				}
 			}
 		} catch (error) {
 			console.error('Failed to load config:', error);

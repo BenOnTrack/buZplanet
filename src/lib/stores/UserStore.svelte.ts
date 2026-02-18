@@ -175,7 +175,26 @@ class UserStore {
 	async loadFollowing() {
 		try {
 			this.followingLoading = true;
+			const previousFollowingIds = this.following.map((u) => u.id);
 			this.following = await userService.getFollowing();
+
+			// Check if following list changed - if so, refresh stories sync
+			const newFollowingIds = this.following.map((u) => u.id);
+			const followingChanged =
+				previousFollowingIds.length !== newFollowingIds.length ||
+				previousFollowingIds.some((id) => !newFollowingIds.includes(id)) ||
+				newFollowingIds.some((id) => !previousFollowingIds.includes(id));
+
+			if (followingChanged) {
+				console.log('🔄 Following list changed, refreshing followed stories sync');
+				// Import storiesDB dynamically to avoid circular imports
+				try {
+					const { storiesDB } = await import('$lib/stores/StoriesDB.svelte');
+					await storiesDB.refreshFollowedStoriesSync();
+				} catch (syncError) {
+					console.error('Error refreshing followed stories sync:', syncError);
+				}
+			}
 		} catch (error) {
 			console.error('Error loading following:', error);
 		} finally {
@@ -237,6 +256,9 @@ class UserStore {
 
 			// Update local state if present
 			this.updateUserSearchFollowStatus(userId, 'following');
+
+			// Reload following list to get updated data
+			await this.loadFollowing();
 		} catch (error) {
 			console.error('Error following user:', error);
 			throw error;
@@ -252,6 +274,9 @@ class UserStore {
 
 			// Update local state if present
 			this.updateUserSearchFollowStatus(userId, 'none');
+
+			// Reload following list to get updated data
+			await this.loadFollowing();
 		} catch (error) {
 			console.error('Error unfollowing user:', error);
 			throw error;

@@ -1,13 +1,11 @@
 {
 	"name": "buzplanet",
 	"private": true,
-	"version": "0.0.63",
+	"version": "0.0.64",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
-		"dev:vite": "vite dev",
-		"dev:emulator": "VITE_USE_FIREBASE_EMULATOR=true vite dev",
-		"emulator": "firebase emulators:start",
+		"dev": "VITE_USE_FIREBASE_EMULATOR=true vite dev",
+		"emulator": "firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data",
 		"emulator:export": "firebase emulators:export ./emulator-data",
 		"emulator:import": "firebase emulators:start --import=./emulator-data",
 		"build": "NODE_OPTIONS=--max-old-space-size=8192 vite build",

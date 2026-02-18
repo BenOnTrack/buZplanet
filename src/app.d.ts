@@ -197,7 +197,9 @@ declare global {
 		| 'protocol-ready'
 		| 'database-scanning'
 		| 'complete'
-		| 'error';
+		| 'error'
+		| 'auth-waiting'
+		| 'appstate-loading';
 
 	interface InitializationState {
 		status: InitializationStatus;
@@ -305,6 +307,9 @@ declare global {
 	interface Window {
 		testWorker: () => Promise<void>;
 		workerStatus: () => void;
+		debugStoriesSync: () => Promise<void>;
+		testFollowedStoriesSync: () => Promise<void>;
+		debugStorySync: (authorUserId: string, storyId: string) => Promise<void>;
 	}
 
 	// ==================== STORIES INTERFACES ====================
@@ -368,6 +373,15 @@ declare global {
 
 		// Search optimization - denormalized searchable text
 		searchText: string; // Concatenated text for full-text search
+
+		// Social fields (for followed stories)
+		authorName?: string; // Display name of story author (for followed stories)
+		authorUsername?: string; // Username of story author (for followed stories)
+		authorAvatarUrl?: string; // Avatar URL of story author (for followed stories)
+		authorUserId?: string; // User ID of story author (for followed stories)
+		readOnly?: boolean; // Whether story is read-only (for followed stories)
+		viewerUserId?: string; // Current user viewing the story (for cache isolation)
+		originalStoryId?: string; // Original story ID for followed stories (before prefixing)
 	}
 
 	/**

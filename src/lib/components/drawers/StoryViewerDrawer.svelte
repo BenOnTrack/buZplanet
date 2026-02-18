@@ -8,6 +8,7 @@
 	import StoriesList from '$lib/components/stories/StoriesList.svelte';
 	import StoryViewer from '$lib/components/stories/StoryViewer.svelte';
 	import StoryEditorDrawer from '$lib/components/drawers/StoryEditorDrawer.svelte';
+	import FollowedStoryCategoryEditDialog from '$lib/components/dialogs/FollowedStoryCategoryEditDialog.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
@@ -31,6 +32,10 @@
 		if (!currentStory) return false;
 		return (currentStory as any).readOnly === true;
 	});
+
+	// Category edit dialog state for followed stories
+	let categoryEditDialogOpen = $state(false);
+	let storyToEditCategories = $state<Story | null>(null);
 
 	// Load categories when drawer opens
 	$effect(() => {
@@ -124,6 +129,48 @@
 		storyToEdit = null;
 	}
 
+	// Handle category editing for followed stories
+	function handleEditFollowedStoryCategories(story: Story) {
+		storyToEditCategories = story;
+		categoryEditDialogOpen = true;
+	}
+
+	// Handle followed story category save
+	function handleFollowedStoryCategorySave(updatedStory: Story) {
+		console.log('✅ Followed story categories updated:', updatedStory.id);
+
+		// If we were viewing this story, update it
+		if (currentStory && currentStory.id === updatedStory.id) {
+			currentStory = updatedStory;
+		}
+
+		// Close dialog
+		categoryEditDialogOpen = false;
+		storyToEditCategories = null;
+
+		// Trigger UI update
+		console.log('🔄 Followed story category update complete');
+	}
+
+	// Handle story deletion
+	async function handleDeleteStory(story: Story) {
+		if (
+			!confirm(`Are you sure you want to delete "${story.title}"? This action cannot be undone.`)
+		) {
+			return;
+		}
+
+		try {
+			await storiesDB.deleteStory(story.id);
+			console.log(`✅ Successfully deleted story: ${story.title}`);
+			// Go back to list view
+			backToList();
+		} catch (error) {
+			console.error('❌ Failed to delete story:', error);
+			alert('Failed to delete story. Please try again.');
+		}
+	}
+
 	// Back to list from story view
 	function backToList() {
 		console.log('⬅️ Back to list clicked, current state:', {
@@ -199,7 +246,7 @@
 									NEW
 								</button>
 							{:else if currentStory && !isCurrentStoryReadOnly}
-								<!-- Edit button only for user's own stories -->
+								<!-- Edit button for user's own stories -->
 								<button
 									class="rounded bg-blue-500 px-3 py-1 text-sm font-medium text-white hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
 									onclick={() => currentStory && handleEditStory(currentStory)}
@@ -211,6 +258,38 @@
 									}}
 									title="Edit story"
 									aria-label="Edit story"
+								>
+									EDIT
+								</button>
+
+								<!-- Delete button for user's own stories -->
+								<button
+									class="rounded bg-red-500 px-3 py-1 text-sm font-medium text-white hover:bg-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
+									onclick={() => currentStory && handleDeleteStory(currentStory)}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											currentStory && handleDeleteStory(currentStory);
+										}
+									}}
+									title="Delete story"
+									aria-label="Delete story"
+								>
+									DELETE
+								</button>
+							{:else if currentStory && isCurrentStoryReadOnly}
+								<!-- Edit categories button for followed stories -->
+								<button
+									class="rounded bg-orange-500 px-3 py-1 text-sm font-medium text-white hover:bg-orange-600 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:outline-none"
+									onclick={() => currentStory && handleEditFollowedStoryCategories(currentStory)}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											currentStory && handleEditFollowedStoryCategories(currentStory);
+										}
+									}}
+									title="Edit categories for this story"
+									aria-label="Edit categories for this story"
 								>
 									EDIT
 								</button>
@@ -343,6 +422,13 @@
 	story={storyToEdit}
 	onSave={handleStorySave}
 	onCancel={handleEditorCancel}
+/>
+
+<!-- Followed Story Category Edit Dialog -->
+<FollowedStoryCategoryEditDialog
+	bind:open={categoryEditDialogOpen}
+	story={storyToEditCategories}
+	onSave={handleFollowedStoryCategorySave}
 />
 
 <style>
