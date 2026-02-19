@@ -63,7 +63,7 @@
 		updateViewportHeight();
 
 		// Listen for viewport changes (virtual keyboard show/hide)
-		const cleanup = [];
+		const cleanup: (() => void)[] = [];
 		if (window.visualViewport) {
 			window.visualViewport.addEventListener('resize', updateViewportHeight);
 			cleanup.push(() => {
