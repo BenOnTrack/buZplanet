@@ -6,6 +6,7 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import UpdateNotification from '$lib/components/pwa/UpdateNotification.svelte';
 	import PWAInstallPrompt from '$lib/components/pwa/PWAInstallPrompt.svelte';
+	import SyncStatus from '$lib/components/debug/SyncStatus.svelte';
 
 	let { children } = $props();
 </script>
@@ -17,6 +18,9 @@
 <!-- PWA Components -->
 <UpdateNotification />
 <PWAInstallPrompt />
+
+<!-- Debug Components -->
+<SyncStatus />
 
 <div style="display:none">
 	{#each locales as locale}

@@ -14,7 +14,6 @@ import {
 	where,
 	onSnapshot,
 	serverTimestamp,
-	Timestamp,
 	orderBy,
 	limit as firestoreLimit,
 	getDocs,
@@ -27,6 +26,7 @@ import {
 	generateSearchText,
 	isDefaultCategory
 } from '$lib/utils/stories';
+import { offlineSyncManager } from '$lib/utils/offline-sync';
 
 /**
  * Stories Database management class using Svelte 5 runes
@@ -76,15 +76,19 @@ class StoriesDB {
 	constructor() {
 		if (browser) {
 			// Listen to online/offline events
-			window.addEventListener('online', () => {
+			window.addEventListener('online', async () => {
 				this.isOnline = true;
+				console.log('🌐 StoriesDB: Connection restored - starting sync');
 				if (this.currentUser) {
 					this.startFirestoreSync();
+					// Process any pending offline changes immediately
+					await offlineSyncManager.processSyncQueue();
 				}
 			});
 
 			window.addEventListener('offline', () => {
 				this.isOnline = false;
+				console.log('📴 StoriesDB: Connection lost - sync paused');
 				this.stopFirestoreSync();
 			});
 
@@ -169,12 +173,17 @@ class StoriesDB {
 
 			await this.initializeDatabase();
 
+			// Initialize offline sync manager for new user
+			await offlineSyncManager.initialize(newUser?.uid || null);
+
 			// Note: No need to clear followed stories cache - it's now user-isolated by compound key
 			// Each user can only access their own followed stories cache
 
 			// Start sync for new authenticated user
 			if (newUser && this.isOnline) {
 				this.startFirestoreSync();
+				// Process any pending offline changes first
+				setTimeout(() => offlineSyncManager.processSyncQueue(), 1000);
 				// Start followed stories sync after a brief delay to let user data load
 				setTimeout(() => this.startFollowedStoriesSync(), 2000);
 			}
@@ -1135,9 +1144,9 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Sync to Firestore if online
-		if (this.isOnline && this.currentUser) {
-			this.syncStoryToFirestore(story);
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('story', 'create', story.id, story);
 		}
 
 		return story;
@@ -1175,9 +1184,9 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Sync to Firestore if online and authenticated
-		if (this.isOnline && this.currentUser) {
-			this.syncCategoryToFirestore(category);
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('category', 'create', category.id, category);
 		}
 
 		return category;
@@ -1450,9 +1459,9 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Sync to Firestore if online
-		if (this.isOnline && this.currentUser) {
-			this.syncStoryToFirestore(updatedStory);
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('story', 'update', updatedStory.id, updatedStory);
 		}
 
 		return updatedStory;
@@ -1477,9 +1486,9 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Sync deletion to Firestore if online
-		if (this.isOnline && this.currentUser) {
-			this.deleteStoryFromFirestore(id);
+		// Queue deletion for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('story', 'delete', id);
 		}
 	}
 
@@ -1616,9 +1625,9 @@ class StoriesDB {
 
 		await this.updateStats();
 
-		// Sync to Firestore if online (view count updates)
-		if (this.isOnline && this.currentUser) {
-			this.syncStoryToFirestore(story);
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('story', 'update', story.id, story);
 		}
 	}
 

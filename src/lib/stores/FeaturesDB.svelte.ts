@@ -12,13 +12,13 @@ import {
 	where,
 	onSnapshot,
 	serverTimestamp,
-	Timestamp,
 	orderBy,
 	limit as firestoreLimit,
 	type DocumentData,
 	type QuerySnapshot,
 	type Unsubscribe
 } from 'firebase/firestore';
+import { offlineSyncManager } from '$lib/utils/offline-sync';
 
 /**
  * Features Database management class using Svelte 5 runes
@@ -71,15 +71,19 @@ class FeaturesDB {
 	constructor() {
 		if (browser) {
 			// Listen to online/offline events
-			window.addEventListener('online', () => {
+			window.addEventListener('online', async () => {
 				this.isOnline = true;
+				console.log('🌐 FeaturesDB: Connection restored - starting sync');
 				if (this.currentUser) {
 					this.startFirestoreSync();
+					// Process any pending offline changes immediately
+					await offlineSyncManager.processSyncQueue();
 				}
 			});
 
 			window.addEventListener('offline', () => {
 				this.isOnline = false;
+				console.log('📴 FeaturesDB: Connection lost - sync paused');
 				this.stopFirestoreSync();
 			});
 
@@ -114,9 +118,14 @@ class FeaturesDB {
 
 			await this.initializeDatabase();
 
+			// Initialize offline sync manager for new user
+			await offlineSyncManager.initialize(newUser?.uid || null);
+
 			// Start sync for new authenticated user
 			if (newUser && this.isOnline) {
 				this.startFirestoreSync();
+				// Process any pending offline changes first
+				setTimeout(() => offlineSyncManager.processSyncQueue(), 1000);
 			}
 		}
 	}
@@ -449,9 +458,9 @@ class FeaturesDB {
 		await this.updateStats();
 		this.triggerBookmarkChange(); // Trigger reactivity
 
-		// Sync to Firestore if online
-		if (this.isOnline && this.currentUser) {
-			this.syncFeatureToFirestore(storedFeature);
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('feature', 'create', storedFeature.id, storedFeature);
 		}
 
 		return storedFeature;
@@ -598,9 +607,9 @@ class FeaturesDB {
 		await this.updateStats();
 		this.triggerBookmarkChange(); // Trigger reactivity
 
-		// Sync to Firestore if online
-		if (this.isOnline && this.currentUser) {
-			this.syncFeatureToFirestore(feature);
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('feature', 'update', feature.id, feature);
 		}
 
 		return feature;
@@ -1076,9 +1085,9 @@ class FeaturesDB {
 		await this.updateStats();
 		this.triggerBookmarkChange(); // Trigger reactivity
 
-		// Sync deletion to Firestore if online
-		if (this.isOnline && this.currentUser) {
-			this.deleteFeatureFromFirestore(id);
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('feature', 'delete', id);
 		}
 	}
 
@@ -1265,12 +1274,9 @@ class FeaturesDB {
 		await this.updateStats();
 		console.log('Updated stats after creating list');
 
-		// Sync to Firestore if online
-		if (this.isOnline && this.currentUser) {
-			console.log('Syncing new bookmark list to Firestore...');
-			this.syncBookmarkListToFirestore(bookmarkList);
-		} else {
-			console.log('Skipping Firestore sync - offline or not authenticated');
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('list', 'create', bookmarkList.id, bookmarkList);
 		}
 
 		return bookmarkList;
@@ -1348,9 +1354,9 @@ class FeaturesDB {
 
 		await this.updateStats();
 
-		// Sync to Firestore if online
-		if (this.isOnline && this.currentUser) {
-			this.syncBookmarkListToFirestore(list);
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('list', 'update', list.id, list);
 		}
 
 		return list;
@@ -1389,9 +1395,9 @@ class FeaturesDB {
 			request.onerror = () => reject(request.error);
 		});
 
-		// Sync deletion to Firestore if online
-		if (this.isOnline && this.currentUser) {
-			this.deleteBookmarkListFromFirestore(listId);
+		// Queue for sync (handles both online and offline scenarios)
+		if (this.currentUser) {
+			await offlineSyncManager.queueChange('list', 'delete', listId);
 		}
 
 		await this.updateStats();
