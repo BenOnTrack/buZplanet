@@ -39,6 +39,114 @@
 	}
 	let activeSnapPoint = $state<string | number>('200px');
 	let activeTab = $state('info');
+
+	// Reactive window dimensions for responsive snappoints
+	let windowHeight = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+	// Listen for window resize events
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+
+		function handleResize() {
+			windowHeight = window.innerHeight;
+		}
+
+		window.addEventListener('resize', handleResize);
+		return () => window.removeEventListener('resize', handleResize);
+	});
+
+	// Calculate responsive snappoints - use a more stable approach
+	function calculateSnapPoints(): [number, number, number] {
+		// Fallback values if window is not available
+		if (typeof window === 'undefined') return [0.25, 0.5, 0.75];
+
+		const viewportHeight = windowHeight;
+		const isSmallMobile = viewportHeight <= 667; // iPhone SE, etc.
+		const isMobile = viewportHeight <= 896; // Most phones
+		const isTablet = viewportHeight > 896 && viewportHeight <= 1366; // Tablets
+
+		// Base snappoints for different device types
+		let compactPercent: number;
+		let mediumPercent: number;
+		let fullPercent: number;
+
+		if (isSmallMobile) {
+			compactPercent = Math.max(0.2, 140 / viewportHeight); // Slightly reduced
+			mediumPercent = 0.45;
+			fullPercent = 0.9; // Increased from 0.8 to test limits
+		} else if (isMobile) {
+			compactPercent = Math.max(0.18, 145 / viewportHeight); // Slightly reduced
+			mediumPercent = 0.5;
+			fullPercent = 0.92; // Increased from 0.85 to test mobile limits
+		} else if (isTablet) {
+			compactPercent = Math.max(0.13, 125 / viewportHeight); // Slightly reduced
+			mediumPercent = 0.4;
+			fullPercent = 0.75;
+		} else {
+			// Desktop/large screens - slightly more conservative
+			compactPercent = Math.max(0.07, 110 / viewportHeight); // Reduced from 0.08 and 120px
+			mediumPercent = 0.35;
+			fullPercent = 0.7;
+		}
+
+		// Content-based height adjustment - with tighter spacing
+		if (hasFeature) {
+			let estimatedHeight = 90; // Title + close button (reduced from 100)
+			estimatedHeight += 32; // Fixed feature name container (reduced from 40)
+
+			if (hasClassificationData(feature)) {
+				estimatedHeight += 28; // Classification grid (reduced from 32)
+			}
+
+			estimatedHeight += 56; // Action buttons (reduced from 60)
+			estimatedHeight += 4; // Minimal bottom spacing (reduced from 8)
+			// Total: ~210px maximum - tighter fit
+
+			const calculatedPercent = estimatedHeight / viewportHeight;
+			compactPercent = Math.max(compactPercent, calculatedPercent);
+		}
+
+		// Ensure bounds
+		compactPercent = Math.min(compactPercent, 0.4);
+		mediumPercent = Math.max(mediumPercent, compactPercent + 0.1);
+		fullPercent = Math.max(fullPercent, mediumPercent + 0.1);
+
+		// Round to avoid floating point precision issues
+		compactPercent = Math.round(compactPercent * 100) / 100;
+		mediumPercent = Math.round(mediumPercent * 100) / 100;
+		fullPercent = Math.round(fullPercent * 100) / 100;
+
+		return [compactPercent, mediumPercent, fullPercent];
+	}
+
+	// Static snappoints that update only when necessary
+	let snapPoints = $state<[number, number, number]>([0.25, 0.5, 0.75]);
+
+	// Update snappoints when window size or feature changes
+	$effect(() => {
+		// Throttle updates to avoid too frequent recalculations
+		const newSnapPoints = calculateSnapPoints();
+
+		// Only update if values actually changed significantly
+		const [currentCompact, currentMedium, currentFull] = snapPoints;
+		const [newCompact, newMedium, newFull] = newSnapPoints;
+
+		if (
+			Math.abs(currentCompact - newCompact) > 0.02 ||
+			Math.abs(currentMedium - newMedium) > 0.02 ||
+			Math.abs(currentFull - newFull) > 0.02
+		) {
+			snapPoints = newSnapPoints;
+		}
+	});
+
+	// Update active snap point when feature changes
+	$effect(() => {
+		if (feature && open) {
+			// Reset to compact view when feature changes
+			activeSnapPoint = snapPoints[0];
+		}
+	});
 	// Derived values for display
 	let hasFeature = $derived.by(() => feature !== null && feature !== undefined);
 
@@ -420,16 +528,86 @@
 		// Open in new tab
 		window.open(osmUrl, '_blank', 'noopener,noreferrer');
 	}
+
+	function handleLocation(feature: MapGeoJSONFeature | null) {
+		if (!feature) return;
+
+		// Get coordinates from feature geometry
+		let coordinates: [number, number] | null = null;
+
+		if (feature.geometry.type === 'Point') {
+			coordinates = feature.geometry.coordinates as [number, number];
+		} else if (feature.geometry.type === 'LineString') {
+			// Calculate centroid of line string
+			const coords = feature.geometry.coordinates as [number, number][];
+			coordinates = calculateLineStringCentroid(coords);
+		} else if (feature.geometry.type === 'Polygon') {
+			// Calculate centroid of polygon
+			const coords = feature.geometry.coordinates[0] as [number, number][]; // Use outer ring
+			coordinates = calculatePolygonCentroid(coords);
+		} else if (feature.geometry.type === 'MultiPolygon') {
+			// Calculate centroid of the first polygon in the multipolygon
+			const coords = feature.geometry.coordinates[0][0] as [number, number][]; // First polygon, outer ring
+			coordinates = calculatePolygonCentroid(coords);
+		} else if (feature.geometry.type === 'MultiLineString') {
+			// Calculate centroid of the first linestring in the multilinestring
+			const coords = feature.geometry.coordinates[0] as [number, number][];
+			coordinates = calculateLineStringCentroid(coords);
+		}
+
+		if (coordinates) {
+			const [lng, lat] = coordinates;
+			console.log('Opening Google Maps for location:', { lat, lng });
+
+			// Construct Google Maps URL
+			const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}&z=16`;
+
+			// Open in new tab
+			window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
+		} else {
+			console.warn(
+				'Could not determine coordinates for feature geometry type:',
+				feature.geometry.type
+			);
+		}
+	}
+
+	// Helper function to calculate centroid of a LineString
+	function calculateLineStringCentroid(coordinates: [number, number][]): [number, number] {
+		if (coordinates.length === 0) return [0, 0];
+		if (coordinates.length === 1) return coordinates[0];
+
+		// Find the middle point along the line
+		const middleIndex = Math.floor(coordinates.length / 2);
+		return coordinates[middleIndex];
+	}
+
+	// Helper function to calculate centroid of a polygon using the centroid formula
+	function calculatePolygonCentroid(coordinates: [number, number][]): [number, number] {
+		if (coordinates.length === 0) return [0, 0];
+		if (coordinates.length === 1) return coordinates[0];
+
+		// Simple arithmetic mean of all vertices (works well for most cases)
+		let sumLng = 0;
+		let sumLat = 0;
+		let count = 0;
+
+		for (const [lng, lat] of coordinates) {
+			if (typeof lng === 'number' && typeof lat === 'number') {
+				sumLng += lng;
+				sumLat += lat;
+				count++;
+			}
+		}
+
+		if (count === 0) return [0, 0];
+
+		return [sumLng / count, sumLat / count];
+	}
 </script>
 
 <!-- Selected Feature Drawer -->
-<Drawer.Root
-	{open}
-	onOpenChange={handleOpenChange}
-	snapPoints={[0.25, 0.5, 0.75]}
-	bind:activeSnapPoint
-	modal={false}
->
+<Drawer.Root {open} onOpenChange={handleOpenChange} {snapPoints} bind:activeSnapPoint modal={false}>
 	<Drawer.Overlay
 		class="fixed inset-0 bg-black/40"
 		style="pointer-events: none;z-index: {Z_INDEX.SELECTED_FEATURE_DRAWER_OVERLAY}"
@@ -441,11 +619,11 @@
 		>
 			<div
 				class={clsx('flex w-full flex-col p-4 pt-5', {
-					'overflow-y-auto': activeSnapPoint === 1 || activeSnapPoint === '1',
-					'overflow-hidden': activeSnapPoint !== 1 && activeSnapPoint !== '1'
+					'overflow-y-auto': activeSnapPoint === snapPoints[1] || activeSnapPoint === snapPoints[2],
+					'overflow-hidden': activeSnapPoint === snapPoints[0]
 				})}
 			>
-				<div class="mb-4 flex items-center justify-between">
+				<div class="mb-2 flex items-center justify-between">
 					<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
 						<PropertyIcon key={'category'} value={feature?.properties.category} size={20} />
 						{#if hasFeature}
@@ -460,16 +638,18 @@
 					</Drawer.Close>
 				</div>
 
-				<div class="space-y-4">
-					{#if hasFeature}
-						<div class="space-y-4">
-							<!-- Individual feature name (only if name exists and different from main title) -->
-							{#if getFeatureName(feature) && getFeatureName(feature) !== getDisplayName(feature)}
-								<h3 class="text-lg font-medium text-gray-700">
-									<span class="truncate">{getFeatureName(feature)}</span>
-								</h3>
-							{/if}
+				<!-- Fixed height container for feature name to maintain consistent spacing -->
+				<div class="mb-2 flex min-h-[24px] items-start">
+					{#if hasFeature && getFeatureName(feature) && getFeatureName(feature) !== getDisplayName(feature)}
+						<h3 class="text-lg font-medium text-gray-700">
+							<span class="truncate">{getFeatureName(feature)}</span>
+						</h3>
+					{/if}
+				</div>
 
+				<div class="space-y-2">
+					{#if hasFeature}
+						<div class="space-y-2">
 							<!-- Classification grid -->
 							{#if hasClassificationData(feature)}
 								{@const classData = getClassificationData(feature)}
@@ -479,7 +659,16 @@
 										<div
 											class="flex min-h-[2rem] items-center justify-center rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900"
 										>
-											{classData.class || '-'}
+											{#if classData.class}
+												{#if classData.class.length > 10}
+													<!-- Use icon for long class names -->
+													<PropertyIcon key="class" value={feature?.properties.class} size={16} />
+												{:else}
+													{classData.class}
+												{/if}
+											{:else}
+												-
+											{/if}
 										</div>
 									</div>
 									<!-- Subclass -->
@@ -487,7 +676,20 @@
 										<div
 											class="flex min-h-[2rem] items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-gray-900"
 										>
-											{classData.subclass || '-'}
+											{#if classData.subclass}
+												{#if classData.subclass.length > 10}
+													<!-- Use icon for long subclass names -->
+													<PropertyIcon
+														key="subclass"
+														value={feature?.properties.subclass}
+														size={16}
+													/>
+												{:else}
+													{classData.subclass}
+												{/if}
+											{:else}
+												-
+											{/if}
 										</div>
 									</div>
 									<!-- Category -->
@@ -495,14 +697,27 @@
 										<div
 											class="flex min-h-[2rem] items-center justify-center rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900"
 										>
-											{classData.category || '-'}
+											{#if classData.category}
+												{#if classData.category.length > 10}
+													<!-- Use icon for long category names -->
+													<PropertyIcon
+														key="category"
+														value={feature?.properties.category}
+														size={16}
+													/>
+												{:else}
+													{classData.category}
+												{/if}
+											{:else}
+												-
+											{/if}
 										</div>
 									</div>
 								</div>
 							{/if}
 
 							<!-- Action buttons grid -->
-							<div class="grid grid-cols-4 gap-3">
+							<div class="grid grid-cols-5 gap-2">
 								<button
 									class={clsx(
 										'flex flex-col items-center justify-center gap-1 rounded-md px-2 py-3 text-xs font-medium transition-colors focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none',
@@ -547,7 +762,7 @@
 								</button>
 								<button
 									class={clsx(
-										'flex flex-col items-center justify-center gap-1 rounded-md px-2 py-3 text-xs font-medium transition-colors focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none',
+										'relative flex flex-col items-center justify-center gap-1 rounded-md px-2 py-3 text-xs font-medium transition-colors focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none',
 										{
 											'border border-green-300 bg-green-100 text-green-800':
 												featureStatus.visitedDates.length > 0,
@@ -569,15 +784,13 @@
 										size={20}
 										color={featureStatus.bookmarked ? 'border-green-300' : 'black'}
 									/>
-									<span>
-										{#if featureStatus.visitedDates.length === 0}
-											Never Visited
-										{:else if featureStatus.visitedDates.length === 1}
-											Visited 1x
-										{:else}
-											Visited {featureStatus.visitedDates.length}x
-										{/if}
-									</span>
+									{#if featureStatus.visitedDates.length > 0}
+										<span
+											class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-green-600 text-[10px] font-bold text-white"
+										>
+											{featureStatus.visitedDates.length}
+										</span>
+									{/if}
 								</button>
 								<button
 									class={clsx(
@@ -590,7 +803,18 @@
 									disabled={featureStatus.loading}
 								>
 									<PropertyIcon key={'description'} value={'update'} size={20} color={'black'} />
-									<span>Update</span>
+								</button>
+								<button
+									class={clsx(
+										'flex flex-col items-center justify-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-3 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none',
+										{
+											'cursor-not-allowed opacity-50': featureStatus.loading
+										}
+									)}
+									onclick={() => handleLocation(feature)}
+									disabled={featureStatus.loading}
+								>
+									<PropertyIcon key={'description'} value={'location'} size={20} color={'black'} />
 								</button>
 							</div>
 
@@ -613,7 +837,7 @@
 
 								<Tabs.Content value="info" class="mt-4">
 									{#if feature}
-										<div class="space-y-2 text-sm">
+										<div class="max-h-80 space-y-2 overflow-y-auto text-sm">
 											{#if feature.properties?.opening_hours}
 												<OpeningHoursDisplay
 													openingHours={feature.properties.opening_hours}

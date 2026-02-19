@@ -306,14 +306,19 @@ export class UserService {
 			});
 			console.log('Updated current user following count');
 
-			// Create activity feed item
+			// Create activity feed item (background operation - don't wait)
 			try {
-				await this.createActivityItem('user_followed', {
+				this.createActivityItem('user_followed', {
 					targetUserId: followeeId
-				});
-				console.log('Created activity feed item');
+				})
+					.then(() => {
+						console.log('Created activity feed item');
+					})
+					.catch((error) => {
+						console.error('Error creating activity:', error);
+					});
 			} catch (error) {
-				console.error('Error creating activity:', error);
+				console.error('Error queueing activity creation:', error);
 				// Don't throw - follow was successful
 			}
 		} catch (error) {
@@ -510,7 +515,7 @@ export class UserService {
 	// ==================== ACTIVITY FEED ====================
 
 	/**
-	 * Create an activity feed item
+	 * Create an activity feed item (non-blocking)
 	 */
 	async createActivityItem(
 		type: ActivityType,
@@ -575,8 +580,18 @@ export class UserService {
 		if (data.itemDescription) activityData.itemDescription = data.itemDescription;
 		if (userProfile.avatarUrl) activityData.userAvatarUrl = userProfile.avatarUrl;
 
-		const activityRef = doc(db, 'activityFeed', activityId);
-		await setDoc(activityRef, activityData);
+		// Save to Firestore in background (non-blocking)
+		try {
+			const activityRef = doc(db, 'activityFeed', activityId);
+			setDoc(activityRef, activityData).catch((error) => {
+				console.error('Background activity creation failed:', error);
+				// Activity creation failure doesn't affect main operations
+			});
+			console.log('Activity creation queued in background');
+		} catch (error) {
+			console.error('Failed to queue activity creation:', error);
+			// Don't throw - activity creation is not critical
+		}
 	}
 
 	/**

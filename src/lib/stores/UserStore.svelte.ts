@@ -351,7 +351,7 @@ class UserStore {
 	}
 
 	/**
-	 * Create activity item (wrapper for service method)
+	 * Create activity item (wrapper for service method - non-blocking)
 	 */
 	async createActivity(
 		type: ActivityType,
@@ -364,13 +364,20 @@ class UserStore {
 			itemDescription?: string;
 		}
 	): Promise<void> {
-		try {
-			await userService.createActivityItem(type, data);
-			// Optionally refresh activity feed
-			await this.loadActivityFeed();
-		} catch (error) {
-			console.error('Error creating activity:', error);
-		}
+		// Create activity in background - don't wait for completion
+		userService
+			.createActivityItem(type, data)
+			.then(() => {
+				console.log('Activity created successfully');
+				// Optionally refresh activity feed in background
+				this.loadActivityFeed().catch(() => {
+					// Ignore refresh errors
+				});
+			})
+			.catch((error) => {
+				console.error('Error creating activity:', error);
+				// Activity creation is not critical - don't affect UI
+			});
 	}
 
 	/**

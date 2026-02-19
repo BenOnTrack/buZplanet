@@ -250,10 +250,6 @@
 			{#if dropdownOpen && schedule && !schedule.error && !schedule.is24_7 && !schedule.isClosed}
 				<div class="schedule-dropdown">
 					<div class="schedule-table">
-						<div class="schedule-header">
-							<span class="day-column">Day</span>
-							<span class="hours-column">Hours</span>
-						</div>
 						{#each Object.entries(schedule.days) as [day, periods]}
 							<div class="schedule-row {isToday(day) ? 'today' : ''}">
 								<span class="day-name">{getDayDisplayName(day)}</span>
@@ -347,35 +343,36 @@
 		border: 1px solid #d1d5db;
 		border-radius: 0.375rem;
 		background-color: #f9fafb;
-		padding: 0.75rem;
+		padding: 0.5rem;
 	}
 
 	.header {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.125rem;
 	}
 
 	.title-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.375rem;
 	}
 
 	.icon {
-		font-size: 1rem;
+		font-size: 0.875rem;
 	}
 
 	.title {
 		font-weight: 600;
 		color: #374151;
 		flex: 1;
+		font-size: 0.875rem;
 	}
 
 	.status-badge {
 		border-radius: 9999px;
-		padding: 0.25rem 0.5rem;
-		font-size: 0.75rem;
+		padding: 0.125rem 0.375rem;
+		font-size: 0.6875rem;
 		font-weight: 600;
 		text-transform: uppercase;
 	}
@@ -397,10 +394,10 @@
 		width: 100%;
 		background: none;
 		border: none;
-		padding: 0.25rem 0;
+		padding: 0.125rem 0;
 		cursor: pointer;
 		color: #6b7280;
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 	}
 
 	.dropdown-toggle:hover {
@@ -431,7 +428,7 @@
 	}
 
 	.schedule-dropdown {
-		margin-top: 0.75rem;
+		margin-top: 0.5rem;
 		border: 1px solid #e5e7eb;
 		border-radius: 0.375rem;
 		background-color: white;
@@ -443,25 +440,11 @@
 		flex-direction: column;
 	}
 
-	.schedule-header {
-		display: grid;
-		grid-template-columns: 1fr 2fr;
-		gap: 0.75rem;
-		padding: 0.75rem;
-		background-color: #f3f4f6;
-		border-bottom: 1px solid #e5e7eb;
-		font-weight: 600;
-		font-size: 0.8125rem;
-		color: #374151;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
 	.schedule-row {
 		display: grid;
 		grid-template-columns: 1fr 2fr;
-		gap: 0.75rem;
-		padding: 0.75rem;
+		gap: 0.5rem;
+		padding: 0.375rem 0.5rem;
 		border-bottom: 1px solid #f3f4f6;
 	}
 
@@ -476,7 +459,7 @@
 
 	.day-name {
 		color: #374151;
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 	}
 
 	.day-hours {
@@ -484,7 +467,7 @@
 		flex-wrap: wrap;
 		align-items: center;
 		color: #6b7280;
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 	}
 
 	.time-range {

@@ -1144,9 +1144,12 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Queue for sync (handles both online and offline scenarios)
+		// Queue for sync (handles both online and offline scenarios) - non-blocking
 		if (this.currentUser) {
-			await offlineSyncManager.queueChange('story', 'create', story.id, story);
+			offlineSyncManager.queueChange('story', 'create', story.id, story).catch((error) => {
+				console.error('Failed to queue story for sync:', error);
+				// Sync queuing failure doesn't affect local save
+			});
 		}
 
 		return story;
@@ -1184,9 +1187,12 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Queue for sync (handles both online and offline scenarios)
+		// Queue for sync (handles both online and offline scenarios) - non-blocking
 		if (this.currentUser) {
-			await offlineSyncManager.queueChange('category', 'create', category.id, category);
+			offlineSyncManager.queueChange('category', 'create', category.id, category).catch((error) => {
+				console.error('Failed to queue category for sync:', error);
+				// Sync queuing failure doesn't affect local save
+			});
 		}
 
 		return category;
@@ -1459,9 +1465,14 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Queue for sync (handles both online and offline scenarios)
+		// Queue for sync (handles both online and offline scenarios) - non-blocking
 		if (this.currentUser) {
-			await offlineSyncManager.queueChange('story', 'update', updatedStory.id, updatedStory);
+			offlineSyncManager
+				.queueChange('story', 'update', updatedStory.id, updatedStory)
+				.catch((error) => {
+					console.error('Failed to queue story update for sync:', error);
+					// Sync queuing failure doesn't affect local save
+				});
 		}
 
 		return updatedStory;
@@ -1486,9 +1497,12 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Queue deletion for sync (handles both online and offline scenarios)
+		// Queue deletion for sync (handles both online and offline scenarios) - non-blocking
 		if (this.currentUser) {
-			await offlineSyncManager.queueChange('story', 'delete', id);
+			offlineSyncManager.queueChange('story', 'delete', id).catch((error) => {
+				console.error('Failed to queue story deletion for sync:', error);
+				// Sync queuing failure doesn't affect local deletion
+			});
 		}
 	}
 
@@ -1625,9 +1639,12 @@ class StoriesDB {
 
 		await this.updateStats();
 
-		// Queue for sync (handles both online and offline scenarios)
+		// Queue for sync (handles both online and offline scenarios) - non-blocking
 		if (this.currentUser) {
-			await offlineSyncManager.queueChange('story', 'update', story.id, story);
+			offlineSyncManager.queueChange('story', 'update', story.id, story).catch((error) => {
+				console.error('Failed to queue story view count update for sync:', error);
+				// Sync queuing failure doesn't affect local update
+			});
 		}
 	}
 

@@ -39,6 +39,7 @@
 	// Mobile focus management
 	let isMobileFocused = $state(false);
 	let focusedElement = $state<HTMLElement | null>(null);
+	let viewportHeight = $state('100vh');
 
 	// Detect mobile device
 	let isMobile = $state(false);
@@ -46,6 +47,39 @@
 		isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
 			navigator.userAgent
 		);
+	});
+
+	// Handle viewport height changes (for virtual keyboard)
+	$effect(() => {
+		if (!isMobile || typeof window === 'undefined') return;
+
+		function updateViewportHeight() {
+			// Use the actual viewport height, accounting for virtual keyboard
+			const newHeight = window.visualViewport?.height || window.innerHeight;
+			viewportHeight = `${newHeight}px`;
+			console.log('📱 Viewport height updated:', viewportHeight);
+		}
+
+		updateViewportHeight();
+
+		// Listen for viewport changes (virtual keyboard show/hide)
+		const cleanup = [];
+		if (window.visualViewport) {
+			window.visualViewport.addEventListener('resize', updateViewportHeight);
+			cleanup.push(() => {
+				window.visualViewport?.removeEventListener('resize', updateViewportHeight);
+			});
+		} else {
+			// Fallback for browsers without visualViewport
+			window.addEventListener('resize', updateViewportHeight);
+			cleanup.push(() => {
+				window.removeEventListener('resize', updateViewportHeight);
+			});
+		}
+
+		return () => {
+			cleanup.forEach((fn) => fn());
+		};
 	});
 
 	// Handle mobile focus events
@@ -61,6 +95,7 @@
 			// Also check if it's not inside the story editor
 			const storyEditor = target.closest('.story-editor');
 			if (!storyEditor) {
+				console.log('📱 Mobile focus detected:', target);
 				isMobileFocused = true;
 				focusedElement = target;
 
@@ -87,6 +122,7 @@
 					'input[type="text"], input[type="email"], input[type="password"], textarea'
 				)
 			) {
+				console.log('📱 Mobile blur detected - removing focus');
 				isMobileFocused = false;
 				focusedElement = null;
 
@@ -99,6 +135,7 @@
 				// Check if the focused element is inside story editor
 				const storyEditor = activeElement.closest('.story-editor');
 				if (storyEditor) {
+					console.log('📱 Focus moved to story editor - removing mobile focus');
 					isMobileFocused = false;
 					focusedElement = null;
 
@@ -112,26 +149,52 @@
 		}, 150);
 	}
 
-	// Handle viewport changes on mobile
+	// Handle viewport changes on mobile - improved version
 	$effect(() => {
 		if (!isMobile) return;
 
 		function handleViewportChange() {
 			// Force redraw to handle keyboard appearance/disappearance
-			if (isMobileFocused) {
-				const drawer = document.querySelector('.story-editor-drawer-mobile');
-				if (drawer) {
-					drawer.scrollTop = drawer.scrollTop; // Force reflow
+			const drawer = document.querySelector('.story-editor-drawer-mobile');
+			if (drawer) {
+				// Force reflow and ensure proper height
+				drawer.scrollTop = drawer.scrollTop;
+
+				// If keyboard disappeared but we're still marked as focused, check if we should unfocus
+				if (isMobileFocused) {
+					const activeElement = document.activeElement as HTMLElement;
+					if (
+						!activeElement ||
+						!activeElement.matches(
+							'input[type="text"], input[type="email"], input[type="password"], textarea'
+						)
+					) {
+						console.log('📱 Keyboard disappeared - removing mobile focus');
+						isMobileFocused = false;
+						focusedElement = null;
+						drawer.classList.remove('mobile-focused');
+					}
 				}
 			}
 		}
 
-		window.addEventListener('resize', handleViewportChange);
-		window.addEventListener('orientationchange', handleViewportChange);
+		// More aggressive event listening for mobile viewport changes
+		const events = ['resize', 'orientationchange', 'scroll'];
+		const cleanup = events.map((event) => {
+			window.addEventListener(event, handleViewportChange);
+			return () => window.removeEventListener(event, handleViewportChange);
+		});
+
+		// Also listen to visual viewport if available
+		if (window.visualViewport) {
+			window.visualViewport.addEventListener('resize', handleViewportChange);
+			cleanup.push(() =>
+				window.visualViewport?.removeEventListener('resize', handleViewportChange)
+			);
+		}
 
 		return () => {
-			window.removeEventListener('resize', handleViewportChange);
-			window.removeEventListener('orientationchange', handleViewportChange);
+			cleanup.forEach((fn) => fn());
 		};
 	});
 
@@ -257,34 +320,33 @@
 					isPublic
 				});
 
-				// Create new story with timeout
-				const createStoryPromise = storiesDB.createStory(title.trim(), [...content], {
+				// Create new story - saves locally immediately and queues background sync
+				savedStory = await storiesDB.createStory(title.trim(), [...content], {
 					description: description.trim() || undefined,
 					categories: [...categories],
 					isPublic
 				});
-
-				// Add timeout to prevent hanging
-				const timeoutPromise = new Promise((_, reject) => {
-					setTimeout(() => reject(new Error('Story creation timed out after 10 seconds')), 10000);
-				});
-
-				savedStory = (await Promise.race([createStoryPromise, timeoutPromise])) as Story;
-				console.log('✅ storiesDB.createStory completed');
+				console.log('✅ storiesDB.createStory completed - story saved locally');
 			}
 
 			console.log('✅ Story saved successfully:', savedStory);
 			hasUnsavedChanges = false;
 
-			// Create social activity for the story
+			// Create social activity for the story (background operation - don't wait)
 			try {
 				const activityType = isEditing ? 'story_updated' : 'story_created';
-				await userStore.createActivity(activityType, {
-					storyId: savedStory.id,
-					itemTitle: savedStory.title,
-					itemDescription: savedStory.description || undefined
-				});
-				console.log(`✅ Created social activity: ${activityType}`);
+				userStore
+					.createActivity(activityType, {
+						storyId: savedStory.id,
+						itemTitle: savedStory.title,
+						itemDescription: savedStory.description || undefined
+					})
+					.then(() => {
+						console.log(`✅ Created social activity: ${activityType}`);
+					})
+					.catch((activityError) => {
+						console.error('⚠️ Failed to create social activity:', activityError);
+					});
 			} catch (activityError) {
 				console.error('⚠️ Failed to create social activity:', activityError);
 				// Don't fail the story save if social activity fails
@@ -428,7 +490,9 @@
 					'h-[95vh]': isMobileFocused && isMobile
 				}
 			)}
-			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
+			style="z-index: {Z_INDEX.DRAWER_CONTENT}; {isMobile
+				? `max-height: min(95vh, ${viewportHeight});`
+				: ''}"
 			onfocusin={handleMobileFocus}
 			onfocusout={handleMobileBlur}
 		>
@@ -840,6 +904,10 @@
 		position: fixed !important;
 		bottom: 0 !important;
 		transform: translateY(0) !important;
+		/* Smooth transitions for height changes */
+		transition:
+			height 0.3s ease-in-out,
+			max-height 0.3s ease-in-out;
 	}
 
 	.story-editor-drawer-mobile.mobile-focused {
@@ -851,10 +919,16 @@
 		opacity: 1 !important;
 		/* Prevent Safari from moving the drawer */
 		transform: translateY(0) !important;
-		/* Add smooth transition */
-		transition:
-			height 0.3s ease-in-out,
-			max-height 0.3s ease-in-out;
+		/* Force immediate layout recalculation */
+		will-change: height, max-height;
+	}
+
+	/* When mobile focus is removed, ensure smooth transition back */
+	.story-editor-drawer-mobile:not(.mobile-focused) {
+		height: 50vh !important;
+		max-height: 50vh !important;
+		/* Force layout recalculation */
+		will-change: auto;
 	}
 
 	/* Fix for iOS Safari viewport issues */
@@ -869,6 +943,10 @@
 			/* Prevent Safari from doing weird things with the drawer */
 			-webkit-transform: translateZ(0);
 			transform: translateZ(0);
+			/* Ensure smooth transitions */
+			transition:
+				height 0.3s ease-in-out,
+				max-height 0.3s ease-in-out;
 		}
 
 		.story-editor-drawer-mobile.mobile-focused {
@@ -880,6 +958,15 @@
 			transform: translateZ(0);
 			/* Prevent bouncing */
 			-webkit-overflow-scrolling: touch;
+		}
+
+		/* Ensure proper restoration when keyboard disappears */
+		.story-editor-drawer-mobile:not(.mobile-focused) {
+			height: 50vh !important;
+			max-height: 50vh !important;
+			/* Force layout recalculation */
+			-webkit-transform: translateZ(0);
+			transform: translateZ(0);
 		}
 	}
 
