@@ -15,6 +15,7 @@
 	import { authState } from '$lib/stores/auth.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
+	import { offlineSyncManager } from '$lib/utils/offline-sync';
 	import { Z_INDEX } from '$lib/styles/z-index.js';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -235,6 +236,25 @@
 	}
 
 	// Development testing functions
+	// Sync status tracking
+	let queueStatus = $state<any>(null);
+	let featuresStatus = $derived(featuresDB.getSyncStatus());
+	let storiesStatus = $derived(storiesDB.getSyncStatus());
+
+	async function refreshSyncStatus() {
+		queueStatus = await offlineSyncManager.getQueueStatus();
+	}
+
+	// Refresh sync status every 5 seconds when debug panel is open
+	$effect(() => {
+		if (showDebugPanel && import.meta.env.DEV) {
+			const interval = setInterval(refreshSyncStatus, 5000);
+			refreshSyncStatus(); // Initial load
+			return () => clearInterval(interval);
+		}
+	});
+
+	// Development testing functions
 	async function testWorker() {
 		try {
 			const { getWorker } = await import('$lib/utils/worker');
@@ -325,6 +345,59 @@
 							>Clear Logs</button
 						>
 					</div>
+
+					<!-- Sync Status Section -->
+					<div class="sync-status-section">
+						<h4>🔄 Sync Status</h4>
+
+						<div class="status-row">
+							<strong>Connection:</strong>
+							{featuresStatus.online ? '🌐 Online' : '📴 Offline'}
+						</div>
+
+						<div class="status-row">
+							<strong>Features:</strong>
+							{featuresStatus.syncing ? '🔄 Syncing' : '✅ Ready'}
+							(Last: {featuresStatus.lastSync
+								? new Date(featuresStatus.lastSync).toLocaleTimeString()
+								: 'Never'})
+						</div>
+
+						<div class="status-row">
+							<strong>Stories:</strong>
+							{storiesStatus.syncing ? '🔄 Syncing' : '✅ Ready'}
+							(Last: {storiesStatus.lastSync
+								? new Date(storiesStatus.lastSync).toLocaleTimeString()
+								: 'Never'})
+						</div>
+
+						{#if queueStatus}
+							<div class="status-row">
+								<strong>Queue:</strong>
+								{queueStatus.totalItems} items pending
+								{#if queueStatus.isProcessing}
+									<span class="processing">🔄 Processing...</span>
+								{/if}
+							</div>
+
+							{#if queueStatus.totalItems > 0}
+								<div class="queue-details">
+									{#each Object.entries(queueStatus.itemsByType) as [type, count]}
+										<div class="queue-item">{type}: {count}</div>
+									{/each}
+								</div>
+							{/if}
+						{/if}
+
+						<button
+							onclick={() => offlineSyncManager.processSyncQueue()}
+							class="sync-button"
+							disabled={!featuresStatus.online}
+						>
+							Force Sync
+						</button>
+					</div>
+
 					<div class="debug-logs">
 						{#each initState.logs as log}
 							<div class="log-entry">{log}</div>
@@ -379,8 +452,9 @@
 		padding: 12px;
 		margin-top: 8px;
 		width: 400px;
-		max-height: 300px;
+		max-height: 500px;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		overflow-y: auto;
 	}
 
 	.debug-controls {
@@ -406,12 +480,69 @@
 	}
 
 	.debug-logs {
-		max-height: 200px;
+		max-height: 150px;
 		overflow-y: auto;
 		border: 1px solid #333;
 		border-radius: 3px;
 		padding: 8px;
 		background: rgba(0, 0, 0, 0.5);
+	}
+
+	/* Sync Status Styles */
+	.sync-status-section {
+		margin: 12px 0;
+		padding: 8px 0;
+		border-top: 1px solid #333;
+		border-bottom: 1px solid #333;
+	}
+
+	.sync-status-section h4 {
+		margin: 0 0 8px 0;
+		font-size: 11px;
+		font-weight: bold;
+	}
+
+	.status-row {
+		margin: 4px 0;
+		line-height: 1.3;
+		font-size: 10px;
+	}
+
+	.queue-details {
+		margin-left: 10px;
+		font-size: 9px;
+		opacity: 0.8;
+	}
+
+	.queue-item {
+		margin: 2px 0;
+	}
+
+	.processing {
+		color: #ffa500;
+		margin-left: 5px;
+	}
+
+	.sync-button {
+		margin-top: 8px;
+		background: #007acc;
+		color: white;
+		border: none;
+		padding: 4px 8px;
+		border-radius: 4px;
+		cursor: pointer;
+		font-size: 9px;
+		font-family: monospace;
+		transition: background-color 0.2s;
+	}
+
+	.sync-button:disabled {
+		background: #666;
+		cursor: not-allowed;
+	}
+
+	.sync-button:hover:not(:disabled) {
+		background: #005a9e;
 	}
 
 	.log-entry {

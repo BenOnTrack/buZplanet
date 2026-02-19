@@ -4,7 +4,7 @@
 		selectedListIds = $bindable([]),
 		getFilterCount
 	}: {
-		availableLists: BookmarkList[];
+		availableLists: BookmarkList[] | { id: string; name: string; color: string }[];
 		selectedListIds: string[];
 		getFilterCount: (
 			type: 'type' | 'list' | 'class' | 'subclass' | 'category',

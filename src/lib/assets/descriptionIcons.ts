@@ -49,6 +49,8 @@ export const descriptionIcons = {
 	drawer_timeline: 'fa6-solid:timeline',
 	filter: 'lucide:funnel',
 	filter_x: 'lucide:funnel-x',
+	chevron_down: 'lucide:chevron-down',
+	chevron_up: 'lucide:chevron-up',
 	handle: 'lucide:grip-horizontal',
 	heat: 'carbon:heat-map-02',
 	layers: 'lucide:layers',

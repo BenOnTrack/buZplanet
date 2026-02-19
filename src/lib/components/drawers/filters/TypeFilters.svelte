@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+
 	let {
 		availableTypes,
 		selectedTypes = $bindable([]),
@@ -25,13 +27,13 @@
 	function getTypeInfo(type: string) {
 		switch (type) {
 			case 'bookmarked':
-				return { icon: '⭐', label: 'Bookmarked' };
+				return { iconKey: 'description', iconValue: 'bookmark_true', label: 'Bookmarked' };
 			case 'todo':
-				return { icon: '✅', label: 'Todo' };
+				return { iconKey: 'description', iconValue: 'todo_true', label: 'Todo' };
 			case 'visited':
-				return { icon: '📍', label: 'Visited' };
+				return { iconKey: 'description', iconValue: 'visited_true', label: 'Visited' };
 			default:
-				return { icon: '?', label: 'Unknown' };
+				return { iconKey: 'description', iconValue: 'info', label: 'Unknown' };
 		}
 	}
 </script>
@@ -51,7 +53,7 @@
 				role="checkbox"
 				aria-checked={isSelected}
 			>
-				<span class="filter-icon">{typeInfo.icon}</span>
+				<PropertyIcon key={typeInfo.iconKey} value={typeInfo.iconValue} size={16} />
 				<span class="filter-text">{typeInfo.label}</span>
 				<span class="filter-count">{count}</span>
 			</button>
@@ -101,10 +103,6 @@
 		border-color: rgb(147 197 253);
 		color: rgb(30 58 138);
 		box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-	}
-
-	.filter-icon {
-		font-size: 1rem;
 	}
 
 	.filter-text {

@@ -10,7 +10,8 @@
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import FeaturesTable from '$lib/components/table/FeaturesTable.svelte';
-	import Filters from '$lib/components/ui/Filters.svelte';
+	import FilterManager from '$lib/components/drawers/filters/FilterManager.svelte';
+	import FilterStats from '$lib/components/drawers/filters/FilterStats.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
@@ -250,116 +251,6 @@
 		return feature.category ? formatFeatureProperty(feature.category) : 'Unnamed';
 	}
 
-	// Filter functions for the Filters component
-	function toggleFilter(type: string, value: string) {
-		if (type === 'type') {
-			toggleTypeFilter(value);
-		} else if (type === 'list') {
-			toggleListFilter(value);
-		} else if (type === 'class') {
-			toggleClassFilter(value);
-		} else if (type === 'subclass') {
-			toggleSubclassFilter(value);
-		} else if (type === 'category') {
-			toggleCategoryFilter(value);
-		}
-	}
-
-	function clearSearch(type: string) {
-		if (type === 'search') {
-			searchQuery = '';
-		}
-	}
-
-	function handleSearchChange(type: string, value: string) {
-		if (type === 'search') {
-			searchQuery = value;
-		}
-	}
-
-	// Create filters array for the Filters component
-	let filters = $derived.by(() => {
-		const filterGroups: FilterGroup[] = [];
-
-		// Search filter
-		filterGroups.push({
-			type: 'search' as const,
-			label: 'Search',
-			placeholder: 'Search features by name, class, category, or list...',
-			searchValue: searchQuery,
-			selectedValues: []
-		});
-
-		// Type filters
-		if (availableTypes.length > 0) {
-			filterGroups.push({
-				type: 'type' as const,
-				label: 'Filter by Type',
-				options: availableTypes.map((type) => ({
-					value: type,
-					count: getFilterCount('type', type)
-				})),
-				selectedValues: selectedTypes
-			});
-		}
-
-		// List filters
-		if (availableLists.length > 0) {
-			filterGroups.push({
-				type: 'list' as const,
-				label: 'Filter by List',
-				options: availableLists.map((list) => ({
-					value: list.id,
-					label: list.name,
-					color: list.color,
-					count: getFilterCount('list', list.id)
-				})),
-				selectedValues: selectedListIds
-			});
-		}
-
-		// Class filters
-		if (availableClasses.length > 0) {
-			filterGroups.push({
-				type: 'class' as const,
-				label: 'Filter by Class',
-				options: availableClasses.map((className) => ({
-					value: className,
-					count: getFilterCount('class', className)
-				})),
-				selectedValues: selectedClasses
-			});
-		}
-
-		// Subclass filters
-		if (availableSubclasses.length > 0) {
-			filterGroups.push({
-				type: 'subclass' as const,
-				label: 'Filter by Subclass',
-				options: availableSubclasses.map((subclassName) => ({
-					value: subclassName,
-					count: getFilterCount('subclass', subclassName)
-				})),
-				selectedValues: selectedSubclasses
-			});
-		}
-
-		// Category filters
-		if (availableCategories.length > 0) {
-			filterGroups.push({
-				type: 'category' as const,
-				label: 'Filter by Category',
-				options: availableCategories.map((categoryName) => ({
-					value: categoryName,
-					count: getFilterCount('category', categoryName)
-				})),
-				selectedValues: selectedCategories
-			});
-		}
-
-		return filterGroups;
-	});
-
 	function clearAllFilters() {
 		searchQuery = '';
 		selectedListIds = [];
@@ -501,32 +392,24 @@
 
 					<div class="mb-4">
 						<p class="text-sm text-gray-600">
-							{isLoading
-								? 'Loading...'
-								: hasActiveFilters
-									? `${filteredFeatures.length} of ${features.length} features`
-									: `${features.length} saved features`}
-							{#if hasActiveFilters}
-								<button
-									onclick={clearAllFilters}
-									class="ml-2 text-xs text-blue-600 hover:text-blue-800"
-								>
-									Clear all filters
-								</button>
-							{/if}
+							{isLoading ? 'Loading...' : ''}
 						</p>
 					</div>
 
 					{#if !isLoading && features.length > 0}
 						<!-- Filters Section -->
-						<Filters
-							{filters}
+						<FilterManager
+							{features}
+							{bookmarkLists}
+							bind:searchQuery
+							bind:selectedListIds
+							bind:selectedTypes
+							bind:selectedClasses
+							bind:selectedSubclasses
+							bind:selectedCategories
 							bind:expanded={filtersExpanded}
-							{hasActiveFilters}
-							onToggleFilter={toggleFilter}
-							onClearSearch={clearSearch}
-							onClearAll={clearAllFilters}
-							onSearchChange={handleSearchChange}
+							filteredCount={filteredFeatures.length}
+							totalCount={features.length}
 						/>
 					{/if}
 				</div>
@@ -574,25 +457,14 @@
 
 							<div class="px-4 pb-4">
 								{#if featuresDB.stats.total > 0}
-									<div class="mt-4 border-t border-gray-200 pt-4">
-										<div class="grid grid-cols-2 gap-4 text-sm">
-											<div class="text-center">
-												<div class="font-medium text-yellow-600">{featuresDB.stats.bookmarked}</div>
-												<div class="text-xs text-gray-500">Bookmarked</div>
-											</div>
-											<div class="text-center">
-												<div class="font-medium text-green-600">{featuresDB.stats.visited}</div>
-												<div class="text-xs text-gray-500">Visited</div>
-											</div>
-											<div class="text-center">
-												<div class="font-medium text-blue-600">{featuresDB.stats.todo}</div>
-												<div class="text-xs text-gray-500">Todo</div>
-											</div>
-											<div class="text-center">
-												<div class="font-medium text-purple-600">{featuresDB.stats.lists}</div>
-												<div class="text-xs text-gray-500">Lists</div>
-											</div>
-										</div>
+									<div class="mt-4">
+										<FilterStats
+											features={filteredFeatures}
+											{hasActiveFilters}
+											{clearAllFilters}
+											showStats={true}
+											showClearAllButton={false}
+										/>
 									</div>
 								{/if}
 							</div>

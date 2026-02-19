@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+
 	let {
 		availableSubclasses,
 		selectedSubclasses = $bindable([]),
@@ -36,6 +38,7 @@
 				role="checkbox"
 				aria-checked={isSelected}
 			>
+				<PropertyIcon key="subclass" value={subclassName} size={16} />
 				<span class="filter-text">{subclassName}</span>
 				<span class="filter-count">{count}</span>
 			</button>

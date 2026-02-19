@@ -3,7 +3,8 @@
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
-	import Filters from '$lib/components/ui/Filters.svelte';
+	import FilterManager from '$lib/components/drawers/filters/FilterManager.svelte';
+	import FilterStats from '$lib/components/drawers/filters/FilterStats.svelte';
 	import FeaturesTable from '$lib/components/table/FeaturesTable.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte.js';
 
@@ -30,11 +31,6 @@
 	let selectedTypes = $state<string[]>([]);
 	let selectedListIds = $state<string[]>([]);
 	let filtersExpanded = $state(false);
-
-	// Filtered results based on current filters (derived)
-	let filteredResults = $derived.by(() => {
-		return applyFilters(deduplicateResults(results));
-	});
 
 	// Deduplicate results by feature.id (keep first occurrence)
 	function deduplicateResults(results: SearchResult[]): SearchResult[] {
@@ -86,76 +82,11 @@
 		}
 	}
 
-	// Available filter options based on enhanced results
-	let availableTypes = $derived.by(() => {
-		const types = new Set<string>();
-		enhancedResults.forEach((result) => {
-			if (result.types) {
-				result.types.forEach((type) => types.add(type));
-			}
-			// Also add 'none' if there are results without types
-			if (!result.types || result.types.length === 0) {
-				types.add('none');
-			}
-		});
-		return Array.from(types).sort((a, b) => {
-			// Sort order: bookmarked, todo, visited, none
-			const order: Record<string, number> = { bookmarked: 0, todo: 1, visited: 2, none: 3 };
-			return order[a] - order[b];
-		});
-	});
+	// Apply ALL filters in one place to enhanced results
+	let finalFilteredResults = $derived.by(() => {
+		let filtered = enhancedResults;
 
-	let availableLists = $derived.by(() => {
-		const listMap = new Map<string, { name: string; color: string }>();
-		enhancedResults.forEach((result) => {
-			if (result.lists) {
-				result.lists.forEach((list) => {
-					listMap.set(list.id, { name: list.name, color: list.color });
-				});
-			}
-		});
-		return Array.from(listMap.entries())
-			.map(([id, data]) => ({
-				id,
-				name: data.name,
-				color: data.color
-			}))
-			.sort((a, b) => a.name.localeCompare(b.name));
-	});
-	let availableClasses = $derived.by(() => {
-		const classes = new Set<string>();
-		results.forEach((result) => {
-			if (result.class) {
-				classes.add(result.class);
-			}
-		});
-		return Array.from(classes).sort();
-	});
-
-	let availableSubclasses = $derived.by(() => {
-		const subclasses = new Set<string>();
-		results.forEach((result) => {
-			if (result.subclass) {
-				subclasses.add(result.subclass);
-			}
-		});
-		return Array.from(subclasses).sort();
-	});
-
-	let availableCategories = $derived.by(() => {
-		const categories = new Set<string>();
-		results.forEach((result) => {
-			if (result.category) {
-				categories.add(result.category);
-			}
-		});
-		return Array.from(categories).sort();
-	});
-
-	function applyFilters(results: SearchResult[]): SearchResult[] {
-		let filtered = [...results];
-
-		// Apply local search filter
+		// Apply search filter
 		if (localSearchQuery.trim()) {
 			const query = localSearchQuery.toLowerCase().trim();
 			filtered = filtered.filter((result) => {
@@ -169,7 +100,7 @@
 					result.class?.toLowerCase().includes(query) ||
 					result.subclass?.toLowerCase().includes(query) ||
 					result.category?.toLowerCase().includes(query) ||
-					result.database.toLowerCase().includes(query)
+					result.database?.toLowerCase().includes(query)
 				);
 			});
 		}
@@ -192,13 +123,6 @@
 				(result) => result.category && selectedCategories.includes(result.category)
 			);
 		}
-
-		return filtered;
-	}
-
-	// Apply additional filters to enhanced results (types and lists)
-	let finalFilteredResults = $derived.by(() => {
-		let filtered = enhancedResults;
 
 		// Apply type filters
 		if (selectedTypes.length > 0) {
@@ -237,74 +161,6 @@
 		selectedListIds = [];
 	}
 
-	// Toggle filter functions
-	function toggleFilter(type: string, value: string) {
-		if (type === 'class') {
-			toggleClassFilter(value);
-		} else if (type === 'subclass') {
-			toggleSubclassFilter(value);
-		} else if (type === 'category') {
-			toggleCategoryFilter(value);
-		} else if (type === 'type') {
-			toggleTypeFilter(value);
-		} else if (type === 'list') {
-			toggleListFilter(value);
-		}
-	}
-
-	function clearSearch(type: string) {
-		if (type === 'search') {
-			localSearchQuery = '';
-		}
-	}
-
-	function handleSearchChange(type: string, value: string) {
-		if (type === 'search') {
-			localSearchQuery = value;
-		}
-	}
-	function toggleClassFilter(className: string) {
-		if (selectedClasses.includes(className)) {
-			selectedClasses = selectedClasses.filter((c) => c !== className);
-		} else {
-			selectedClasses = [...selectedClasses, className];
-		}
-	}
-
-	function toggleSubclassFilter(subclassName: string) {
-		if (selectedSubclasses.includes(subclassName)) {
-			selectedSubclasses = selectedSubclasses.filter((s) => s !== subclassName);
-		} else {
-			selectedSubclasses = [...selectedSubclasses, subclassName];
-		}
-	}
-
-	function toggleCategoryFilter(categoryName: string) {
-		if (selectedCategories.includes(categoryName)) {
-			selectedCategories = selectedCategories.filter((c) => c !== categoryName);
-		} else {
-			selectedCategories = [...selectedCategories, categoryName];
-		}
-	}
-
-	// Toggle type filter
-	function toggleTypeFilter(type: string) {
-		if (selectedTypes.includes(type)) {
-			selectedTypes = selectedTypes.filter((t) => t !== type);
-		} else {
-			selectedTypes = [...selectedTypes, type];
-		}
-	}
-
-	// Toggle list filter
-	function toggleListFilter(listId: string) {
-		if (selectedListIds.includes(listId)) {
-			selectedListIds = selectedListIds.filter((id) => id !== listId);
-		} else {
-			selectedListIds = [...selectedListIds, listId];
-		}
-	}
-
 	// Check if any filters are active
 	let hasActiveFilters = $derived.by(() => {
 		return (
@@ -317,118 +173,9 @@
 		);
 	});
 
-	// Create filters array for the Filters component
-	let filters = $derived.by(() => {
-		const filterGroups: FilterGroup[] = [];
-
-		// Search filter
-		filterGroups.push({
-			type: 'search' as const,
-			label: 'Refine results',
-			placeholder: 'Further filter these results...',
-			searchValue: localSearchQuery,
-			selectedValues: []
-		});
-
-		// Type filters (only show if there are types available)
-		if (availableTypes.length > 0) {
-			filterGroups.push({
-				type: 'type' as const,
-				label: 'Filter by Type',
-				options: availableTypes.map((type) => ({
-					value: type,
-					count: getFilterCount('type', type)
-				})),
-				selectedValues: selectedTypes
-			});
-		}
-
-		// List filters (only show if there are lists available)
-		if (availableLists.length > 0) {
-			filterGroups.push({
-				type: 'list' as const,
-				label: 'Filter by List',
-				options: availableLists.map((list) => ({
-					value: list.id,
-					label: list.name,
-					color: list.color,
-					count: getFilterCount('list', list.id)
-				})),
-				selectedValues: selectedListIds
-			});
-		}
-
-		// Class filters
-		if (availableClasses.length > 0) {
-			filterGroups.push({
-				type: 'class' as const,
-				label: 'Filter by Class',
-				options: availableClasses.map((className) => ({
-					value: className,
-					count: getFilterCount('class', className)
-				})),
-				selectedValues: selectedClasses
-			});
-		}
-
-		// Subclass filters
-		if (availableSubclasses.length > 0) {
-			filterGroups.push({
-				type: 'subclass' as const,
-				label: 'Filter by Subclass',
-				options: availableSubclasses.map((subclassName) => ({
-					value: subclassName,
-					count: getFilterCount('subclass', subclassName)
-				})),
-				selectedValues: selectedSubclasses
-			});
-		}
-
-		// Category filters
-		if (availableCategories.length > 0) {
-			filterGroups.push({
-				type: 'category' as const,
-				label: 'Filter by Category',
-				options: availableCategories.map((categoryName) => ({
-					value: categoryName,
-					count: getFilterCount('category', categoryName)
-				})),
-				selectedValues: selectedCategories
-			});
-		}
-
-		return filterGroups;
-	});
-
-	// Get count for a filter
-	function getFilterCount(
-		type: 'class' | 'subclass' | 'category' | 'type' | 'list',
-		value: string
-	): number {
-		if (type === 'class') {
-			return deduplicateResults(results).filter((r) => r.class === value).length;
-		} else if (type === 'subclass') {
-			return deduplicateResults(results).filter((r) => r.subclass === value).length;
-		} else if (type === 'category') {
-			return deduplicateResults(results).filter((r) => r.category === value).length;
-		} else if (type === 'type') {
-			return enhancedResults.filter((r) => {
-				if (value === 'none') {
-					return !r.types || r.types.length === 0;
-				} else {
-					return r.types && r.types.includes(value as any);
-				}
-			}).length;
-		} else if (type === 'list') {
-			return enhancedResults.filter((r) => r.lists && r.lists.some((list) => list.id === value))
-				.length;
-		}
-		return 0;
-	}
-
-	// Match search results with stored features based on feature ID (using deduplicated results)
+	// Match search results with stored features based on feature ID (using raw deduplicated results)
 	let enhancedResults = $derived.by(() => {
-		return filteredResults.map((searchResult) => {
+		return deduplicateResults(results).map((searchResult) => {
 			const storedFeature = allStoredFeatures.find((stored) => stored.id === searchResult.id);
 			return {
 				...searchResult,
@@ -512,23 +259,12 @@
 						<p class="text-sm text-gray-600">
 							{#if isSearching}
 								{#if currentSearchingDatabase}
-									Searching {currentSearchingDatabase.replace(/\.mbtiles$/i, '')}... ({results.length}
-									results so far)
+									Searching {currentSearchingDatabase.replace(/\.mbtiles$/i, '')}...
 								{:else}
 									Starting search...
 								{/if}
 							{:else if searchQuery}
-								{hasActiveFilters
-									? `${finalFilteredResults.length} of ${deduplicateResults(results).length} results for "${searchQuery}"`
-									: `${deduplicateResults(results).length} results for "${searchQuery}"`}
-								{#if hasActiveFilters}
-									<button
-										onclick={clearAllFilters}
-										class="ml-2 text-xs text-blue-600 hover:text-blue-800"
-									>
-										Clear filters
-									</button>
-								{/if}
+								Results for "{searchQuery}"
 								<!-- Show search completion indicator -->
 								{#if results.length > 0}
 									<span class="ml-2 text-xs text-green-600">✓ Complete</span>
@@ -541,14 +277,18 @@
 
 					{#if !isSearching && results.length > 0}
 						<!-- Filters Section -->
-						<Filters
-							{filters}
+						<FilterManager
+							features={enhancedResults}
+							{bookmarkLists}
+							bind:searchQuery={localSearchQuery}
+							bind:selectedListIds
+							bind:selectedTypes
+							bind:selectedClasses
+							bind:selectedSubclasses
+							bind:selectedCategories
 							bind:expanded={filtersExpanded}
-							{hasActiveFilters}
-							onToggleFilter={toggleFilter}
-							onClearSearch={clearSearch}
-							onClearAll={clearAllFilters}
-							onSearchChange={handleSearchChange}
+							filteredCount={finalFilteredResults.length}
+							totalCount={deduplicateResults(results).length}
 						/>
 					{/if}
 				</div>
@@ -641,29 +381,14 @@
 
 							<div class="px-4 pb-4">
 								{#if results.length > 0}
-									<div class="mt-4 border-t border-gray-200 pt-4">
-										<div class="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
-											<div class="text-center">
-												<div class="font-medium text-blue-600">
-													{deduplicateResults(results).length}
-												</div>
-												<div class="text-xs text-gray-500">Total Results</div>
-											</div>
-											<div class="text-center">
-												<div class="font-medium text-green-600">{finalFilteredResults.length}</div>
-												<div class="text-xs text-gray-500">Filtered</div>
-											</div>
-											<div class="text-center">
-												<div class="font-medium text-purple-600">
-													{new Set(deduplicateResults(results).map((r) => r.database)).size}
-												</div>
-												<div class="text-xs text-gray-500">Sources</div>
-											</div>
-											<div class="text-center">
-												<div class="font-medium text-orange-600">{availableClasses.length}</div>
-												<div class="text-xs text-gray-500">Types</div>
-											</div>
-										</div>
+									<div class="mt-4">
+										<FilterStats
+											features={enhancedResults}
+											{hasActiveFilters}
+											{clearAllFilters}
+											showStats={true}
+											showClearAllButton={false}
+										/>
 									</div>
 								{/if}
 							</div>
