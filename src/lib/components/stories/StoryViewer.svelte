@@ -2,6 +2,7 @@
 	import { clsx } from 'clsx';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
+	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import {
 		updateFeatureStatuses,
@@ -28,12 +29,29 @@
 
 	// Reactive state for feature statuses - updates when features are modified
 	let featureStatuses = $state<Map<string, FeatureStatus>>(new Map());
-	let bookmarksVersion = $state(0);
 
-	// Track features DB reactivity
+	// Categories state that updates when storiesDB changes
+	let availableCategories = $state<StoryCategory[]>([]);
+
+	// Load categories when storiesDB changes
+	$effect(() => {
+		// React to changes in storiesDB
+		storiesDB.changeSignal;
+		loadCategories();
+	});
+
+	async function loadCategories() {
+		try {
+			availableCategories = await storiesDB.getAllCategories();
+		} catch (error) {
+			console.error('Error loading categories:', error);
+		}
+	}
+
+	// Track features DB reactivity - VALID DOM EFFECT
 	$effect(() => {
 		// This effect will re-run whenever bookmarks change in the database
-		bookmarksVersion = featuresDB.bookmarksVersion;
+		featuresDB.bookmarksVersion;
 		updateFeatureStatusesForContent();
 	});
 
@@ -80,13 +98,14 @@
 			<div class="categories-tags-container">
 				<div class="categories-tags-scroll">
 					<!-- Categories -->
-					{#each story.categories as category}
+					{#each story.categories as categoryId}
+						{@const categoryObj = availableCategories.find((cat) => cat.id === categoryId)}
 						<span
 							class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium whitespace-nowrap text-white"
-							style="background-color: {getCategoryColor(category)}"
+							style="background-color: {categoryObj?.color || getCategoryColor(categoryId)}"
 						>
 							<PropertyIcon key="description" value="category" size={12} />
-							{category}
+							{categoryObj?.name || categoryId}
 						</span>
 					{/each}
 				</div>

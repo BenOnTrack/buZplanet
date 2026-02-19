@@ -7,6 +7,8 @@
 	import { userStore } from '$lib/stores/UserStore.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import StoryEditor from '../stories/StoryEditor.svelte';
+	import CategoryManager from '$lib/components/categories/CategoryManager.svelte';
+	import ConfirmDialog from '$lib/components/dialogs/ConfirmDialog.svelte';
 
 	let {
 		open = $bindable(false),
@@ -29,32 +31,30 @@
 	let saving = $state(false);
 	let error = $state<string | null>(null);
 
-	// Available categories
+	// Available categories state for CategoryManager
 	let availableCategories = $state<StoryCategory[]>([]);
-	let newCategoryName = $state('');
-	let newCategoryColor = $state('#3B82F6');
-	let newCategoryIcon = $state('');
-	let showCreateCategory = $state(false);
+	let categoryManagerError = $state<string | null>(null);
+
+	// Confirmation dialog state
+	let confirmDiscardOpen = $state(false);
 
 	// Tab management
 	let activeTab = $state<'metadata' | 'content'>('content');
 
 	// Editor mode
 	let isEditing = $derived(story !== null);
-	let hasUnsavedChanges = $state(false);
 
-	// Load data when drawer opens
+	// Track unsaved changes - CONVERTED TO DERIVED
+	let hasUnsavedChanges = $derived.by(() => {
+		if (!open) return false;
+		return hasFormChanges();
+	});
+
+	// Load data when drawer opens - VALID SIDE EFFECT (calls async functions)
 	$effect(() => {
 		if (open) {
 			loadAvailableData();
 			initializeForm();
-		}
-	});
-
-	// Track unsaved changes
-	$effect(() => {
-		if (open) {
-			hasUnsavedChanges = hasFormChanges();
 		}
 	});
 
@@ -75,22 +75,22 @@
 			isPublic = false;
 			activeTab = 'content';
 		}
-		hasUnsavedChanges = false;
+		// Note: hasUnsavedChanges is now derived, no need to reset
 	}
 
-	// Check if form has changes
+	// Check if form has changes - MADE PURE (no state mutations)
 	function hasFormChanges(): boolean {
 		if (!story) {
 			// New story - has changes if any field is filled
 			return !!(title || description || content.length > 0 || categories.length > 0);
 		}
 
-		// Editing - compare with original
+		// Editing - compare with original (using pure operations)
 		return (
 			title !== story.title ||
 			description !== (story.description || '') ||
 			JSON.stringify(content) !== JSON.stringify(story.content) ||
-			JSON.stringify(categories.sort()) !== JSON.stringify([...story.categories].sort()) ||
+			JSON.stringify([...categories].sort()) !== JSON.stringify([...story.categories].sort()) ||
 			isPublic !== story.isPublic
 		);
 	}
@@ -102,6 +102,11 @@
 		} catch (err) {
 			console.error('Failed to load categories:', err);
 		}
+	}
+
+	// Handle category changes from CategoryManager
+	function handleCategoriesChange(categories: StoryCategory[]) {
+		availableCategories = categories;
 	}
 
 	// Save story
@@ -171,7 +176,7 @@
 			}
 
 			console.log('✅ Story saved successfully:', savedStory);
-			hasUnsavedChanges = false;
+			// Note: hasUnsavedChanges is now derived, no need to set
 
 			// Create social activity for the story (background operation - don't wait)
 			try {
@@ -214,12 +219,16 @@
 	// Cancel editing
 	function cancel() {
 		if (hasUnsavedChanges) {
-			const confirmDiscard = confirm(
-				'You have unsaved changes. Are you sure you want to discard them?'
-			);
-			if (!confirmDiscard) return;
+			// Show confirmation dialog instead of browser confirm
+			confirmDiscardOpen = true;
+			return;
 		}
 
+		performCancel();
+	}
+
+	// Perform the actual cancel operation
+	function performCancel() {
 		if (onCancel) {
 			onCancel();
 		}
@@ -243,61 +252,6 @@
 		}
 	}
 
-	// Create new category
-	async function createCategory() {
-		if (!newCategoryName.trim()) return;
-
-		try {
-			// Generate a unique ID for the category
-			const categoryId = newCategoryName
-				.trim()
-				.toLowerCase()
-				.replace(/\s+/g, '-')
-				.replace(/[^a-z0-9-]/g, '');
-
-			// Check if category already exists
-			const existingCategory = availableCategories.find((cat) => cat.id === categoryId);
-			if (existingCategory) {
-				error = `Category "${newCategoryName}" already exists`;
-				return;
-			}
-
-			// Create the category
-			const newCategory = await storiesDB.createCategory({
-				id: categoryId,
-				name: newCategoryName.trim(),
-				color: newCategoryColor,
-				icon: newCategoryIcon.trim() || undefined,
-				description: `Custom category: ${newCategoryName.trim()}`
-			});
-
-			// Add to available categories
-			availableCategories = [...availableCategories, newCategory].sort((a, b) =>
-				a.name.localeCompare(b.name)
-			);
-
-			// Auto-select the new category
-			categories = [...categories, categoryId];
-
-			// Reset form
-			cancelCreateCategory();
-
-			console.log('✅ Created new category:', newCategory);
-		} catch (err) {
-			console.error('❌ Failed to create category:', err);
-			error = 'Failed to create category. Please try again.';
-		}
-	}
-
-	// Cancel category creation
-	function cancelCreateCategory() {
-		showCreateCategory = false;
-		newCategoryName = '';
-		newCategoryColor = '#3B82F6';
-		newCategoryIcon = '';
-		error = null;
-	}
-
 	// Switch tabs
 	function switchTab(tab: 'metadata' | 'content') {
 		activeTab = tab;
@@ -318,7 +272,7 @@
 			style="z-index: {Z_INDEX.DRAWER_OVERLAY}"
 		/>
 		<Drawer.Content
-			class="fixed right-0 bottom-0 left-0 flex h-[50vh] max-h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class="story-editor-drawer fixed right-0 bottom-0 left-0 flex h-[50vh] max-h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-white"
 			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
 		>
 			<div class="mx-auto flex h-full w-full max-w-full flex-col overflow-hidden">
@@ -510,137 +464,17 @@
 								</div>
 
 								<!-- Categories -->
-								{#if availableCategories.length > 0}
-									<fieldset>
-										<legend class="mb-3 block text-sm font-medium text-gray-700">Categories</legend>
-										<div class="flex flex-wrap gap-2">
-											{#each availableCategories as category}
-												<button
-													class={clsx(
-														'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none',
-														{
-															'text-white': categories.includes(category.id),
-															'border border-gray-300 text-gray-700 hover:bg-gray-50':
-																!categories.includes(category.id)
-														}
-													)}
-													style={categories.includes(category.id)
-														? `background-color: ${category.color}`
-														: ''}
-													onclick={() => toggleCategory(category.id)}
-													onkeydown={(e) => {
-														if (e.key === 'Enter' || e.key === ' ') {
-															e.preventDefault();
-															toggleCategory(category.id);
-														}
-													}}
-												>
-													{category.icon || '📂'}
-													{category.name}
-												</button>
-											{/each}
-										</div>
-									</fieldset>
-								{/if}
-
-								<!-- Create New Category -->
 								<fieldset>
-									<legend class="mb-3 block text-sm font-medium text-gray-700"
-										>Create New Category</legend
-									>
-
-									{#if !showCreateCategory}
-										<button
-											class="inline-flex items-center gap-2 rounded-md border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-											onclick={() => (showCreateCategory = true)}
-										>
-											<PropertyIcon key="description" value="plus" size={16} />
-											Add Custom Category
-										</button>
-									{:else}
-										<div class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-											<!-- Category Name -->
-											<div>
-												<label
-													for="category-name"
-													class="mb-1 block text-sm font-medium text-gray-700"
-												>
-													Category Name *
-												</label>
-												<input
-													id="category-name"
-													bind:value={newCategoryName}
-													placeholder="e.g., Photography, Work, Family"
-													class="block w-full rounded-md border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-													required
-												/>
-											</div>
-
-											<!-- Category Color and Icon -->
-											<div class="grid grid-cols-2 gap-4">
-												<div>
-													<label
-														for="category-color"
-														class="mb-1 block text-sm font-medium text-gray-700"
-													>
-														Color
-													</label>
-													<input
-														id="category-color"
-														type="color"
-														bind:value={newCategoryColor}
-														class="block h-10 w-full rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-													/>
-												</div>
-												<div>
-													<label
-														for="category-icon"
-														class="mb-1 block text-sm font-medium text-gray-700"
-													>
-														Icon (optional)
-													</label>
-													<input
-														id="category-icon"
-														bind:value={newCategoryIcon}
-														placeholder="📸 💼 👨‍👩‍👧‍👦"
-														maxlength="2"
-														class="block w-full rounded-md border border-gray-300 px-3 py-2 text-center text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-													/>
-												</div>
-											</div>
-
-											<!-- Preview -->
-											{#if newCategoryName}
-												<div>
-													<p class="mb-2 text-sm text-gray-700">Preview:</p>
-													<span
-														class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-white"
-														style="background-color: {newCategoryColor}"
-													>
-														{newCategoryIcon || '📂'}
-														{newCategoryName}
-													</span>
-												</div>
-											{/if}
-
-											<!-- Actions -->
-											<div class="flex gap-2">
-												<button
-													class="flex-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-400"
-													onclick={createCategory}
-													disabled={!newCategoryName.trim()}
-												>
-													Create Category
-												</button>
-												<button
-													class="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-													onclick={cancelCreateCategory}
-												>
-													Cancel
-												</button>
-											</div>
-										</div>
-									{/if}
+									<legend class="mb-3 block text-sm font-medium text-gray-700">Categories</legend>
+									<CategoryManager
+										bind:availableCategories
+										bind:selectedCategories={categories}
+										bind:error={categoryManagerError}
+										onCategoriesChange={handleCategoriesChange}
+										showSelection={true}
+										allowDelete={false}
+										class="w-full"
+									/>
 								</fieldset>
 
 								<!-- Privacy Settings -->
@@ -670,3 +504,42 @@
 		</Drawer.Content>
 	</Drawer.Portal>
 </Drawer.Root>
+
+<!-- Discard Changes Confirmation Dialog -->
+<ConfirmDialog
+	bind:open={confirmDiscardOpen}
+	title="Discard Changes"
+	message="You have unsaved changes. Are you sure you want to discard them?"
+	variant="destructive"
+	confirmText="Discard"
+	onConfirm={performCancel}
+/>
+
+<style>
+	/* Modern mobile keyboard handling - industry standard approach */
+	.story-editor-drawer {
+		/* Use dynamic viewport units for mobile keyboard support */
+		height: 50dvh;
+		max-height: 50dvh;
+		/* Fallback for browsers that don't support dvh */
+		height: 50vh;
+		max-height: 50vh;
+		/* Prevent iOS bounce/scroll when keyboard appears */
+		position: fixed !important;
+		bottom: 0;
+		/* Use transform to prevent repositioning issues */
+		transform: translateZ(0);
+		/* Ensure proper z-stacking */
+		will-change: transform;
+	}
+
+	/* Ensure inputs don't trigger zoom on iOS */
+	:global(.story-editor-drawer input[type='text']),
+	:global(.story-editor-drawer input[type='email']),
+	:global(.story-editor-drawer input[type='password']),
+	:global(.story-editor-drawer textarea) {
+		font-size: 16px !important;
+		/* Prevent iOS zoom */
+		transform-origin: left top;
+	}
+</style>

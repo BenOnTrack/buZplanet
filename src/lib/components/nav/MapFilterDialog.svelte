@@ -18,31 +18,51 @@
 	// Reactive getters for all filter settings
 	const mapFilterSettings = $derived(() => {
 		if (!appState.initialized)
-			return { classes: new Set(), subclasses: new Set(), categories: new Set() };
+			return {
+				classes: new Set<string>(),
+				subclasses: new Set<string>(),
+				categories: new Set<string>()
+			};
 		return appState.filterSettings.map;
 	});
 
 	const heatFilterSettings = $derived(() => {
 		if (!appState.initialized)
-			return { classes: new Set(), subclasses: new Set(), categories: new Set() };
+			return {
+				classes: new Set<string>(),
+				subclasses: new Set<string>(),
+				categories: new Set<string>()
+			};
 		return appState.filterSettings.heat;
 	});
 
 	const bookmarkFilterSettings = $derived(() => {
 		if (!appState.initialized)
-			return { classes: new Set(), subclasses: new Set(), categories: new Set() };
+			return {
+				classes: new Set<string>(),
+				subclasses: new Set<string>(),
+				categories: new Set<string>()
+			};
 		return appState.filterSettings.bookmark;
 	});
 
 	const todoFilterSettings = $derived(() => {
 		if (!appState.initialized)
-			return { classes: new Set(), subclasses: new Set(), categories: new Set() };
+			return {
+				classes: new Set<string>(),
+				subclasses: new Set<string>(),
+				categories: new Set<string>()
+			};
 		return appState.filterSettings.todo;
 	});
 
 	const visitedFilterSettings = $derived(() => {
 		if (!appState.initialized)
-			return { classes: new Set(), subclasses: new Set(), categories: new Set() };
+			return {
+				classes: new Set<string>(),
+				subclasses: new Set<string>(),
+				categories: new Set<string>()
+			};
 		return appState.filterSettings.visited;
 	});
 

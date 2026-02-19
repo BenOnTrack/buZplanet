@@ -409,7 +409,7 @@ class AppState {
 			const store = transaction.objectStore(this.STORE_NAME);
 
 			// Create a plain object copy to avoid cloning issues with Svelte state
-			const plainConfig: AppConfig = {
+			const plainConfig = {
 				mapView: {
 					center: [...this._mapView.center] as [number, number],
 					zoom: this._mapView.zoom,

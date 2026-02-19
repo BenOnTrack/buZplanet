@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Drawer } from 'vaul-svelte';
+	import { Tabs } from 'bits-ui';
 	import { clsx } from 'clsx';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
@@ -9,6 +10,8 @@
 	import StoryViewer from '$lib/components/stories/StoryViewer.svelte';
 	import StoryEditorDrawer from '$lib/components/drawers/StoryEditorDrawer.svelte';
 	import FollowedStoryCategoryEditDialog from '$lib/components/dialogs/FollowedStoryCategoryEditDialog.svelte';
+	import CategoryManager from '$lib/components/categories/CategoryManager.svelte';
+	import ConfirmDialog from '$lib/components/dialogs/ConfirmDialog.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
@@ -16,6 +19,9 @@
 	type ViewMode = 'list' | 'view' | 'edit';
 	let viewMode = $state<ViewMode>('list');
 	let currentStory = $state<Story | null>(null);
+
+	// Tab state
+	let activeTab = $state('stories');
 
 	// Editor state
 	let editorOpen = $state(false);
@@ -27,6 +33,23 @@
 	let availableCategories = $state<StoryCategory[]>([]);
 	let filteredStoriesCount = $state<number | null>(null);
 
+	// Load categories when drawer opens or when storiesDB changes
+	$effect(() => {
+		if (open) {
+			// React to changes in storiesDB
+			storiesDB.changeSignal;
+			loadCategories();
+		}
+	});
+
+	async function loadCategories() {
+		try {
+			availableCategories = await storiesDB.getAllCategories();
+		} catch (error) {
+			console.error('Failed to load categories:', error);
+		}
+	}
+
 	// Check if current story is read-only (from a followed user)
 	let isCurrentStoryReadOnly = $derived.by(() => {
 		if (!currentStory) return false;
@@ -37,46 +60,25 @@
 	let categoryEditDialogOpen = $state(false);
 	let storyToEditCategories = $state<Story | null>(null);
 
-	// Load categories when drawer opens
-	$effect(() => {
-		if (open) {
-			loadCategories();
-		}
-	});
+	// Category management state
+	let categoryManagerError = $state<string | null>(null);
 
-	// Reset view when drawer closes
+	// Confirmation dialog state
+	let confirmDialogOpen = $state(false);
+	let storyToDelete = $state<Story | null>(null);
+
+	// Reset view when drawer closes - VALID SIDE EFFECT (external store mutation + state reset)
 	$effect(() => {
 		if (!open) {
 			viewMode = 'list';
 			currentStory = null;
 			searchQuery = '';
 			selectedCategories = [];
+			activeTab = 'stories';
 			// Make sure to disable story insertion mode when closing stories drawer
 			mapControl.setStoryInsertionMode(false);
 		}
 	});
-
-	// Debug reactive state changes
-	$effect(() => {
-		console.log('🔄 State change detected:', {
-			viewMode,
-			currentStory: currentStory?.id,
-			isCurrentStoryReadOnly
-		});
-	});
-
-	// Specifically track currentStory changes
-	$effect(() => {
-		console.log('📚 currentStory changed:', currentStory?.id || 'null');
-	});
-
-	async function loadCategories() {
-		try {
-			availableCategories = await storiesDB.getAllCategories();
-		} catch (error) {
-			console.error('Failed to load categories:', error);
-		}
-	}
 
 	// Handle story selection from list
 	function handleStorySelect(story: Story) {
@@ -154,20 +156,25 @@
 
 	// Handle story deletion
 	async function handleDeleteStory(story: Story) {
-		if (
-			!confirm(`Are you sure you want to delete "${story.title}"? This action cannot be undone.`)
-		) {
-			return;
-		}
+		// Show confirmation dialog
+		storyToDelete = story;
+		confirmDialogOpen = true;
+	}
+
+	// Perform the actual story deletion
+	async function performStoryDeletion() {
+		if (!storyToDelete) return;
 
 		try {
-			await storiesDB.deleteStory(story.id);
-			console.log(`✅ Successfully deleted story: ${story.title}`);
+			await storiesDB.deleteStory(storyToDelete.id);
+			console.log(`✅ Successfully deleted story: ${storyToDelete.title}`);
 			// Go back to list view
 			backToList();
 		} catch (error) {
 			console.error('❌ Failed to delete story:', error);
-			alert('Failed to delete story. Please try again.');
+			throw error; // Re-throw to prevent dialog from closing
+		} finally {
+			storyToDelete = null;
 		}
 	}
 
@@ -198,6 +205,13 @@
 		searchQuery = '';
 		selectedCategories = [];
 	}
+
+	// Handle category changes from CategoryManager
+	function handleCategoriesChange(categories: StoryCategory[]) {
+		availableCategories = categories;
+		// Trigger reload of categories in stories list if needed
+		loadCategories();
+	}
 </script>
 
 <!-- Stories Drawer -->
@@ -224,13 +238,15 @@
 										by {authorName}{authorUsername ? ` (@${authorUsername})` : ''}
 									</span>
 								{/if}
+							{:else if activeTab === 'categories'}
+								Manage Categories
 							{:else}
 								Stories
 							{/if}
 						</Drawer.Title>
 
 						<div class="flex items-center gap-2">
-							{#if viewMode === 'list'}
+							{#if viewMode === 'list' && activeTab === 'stories'}
 								<button
 									class="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
 									onclick={handleNewStory}
@@ -322,8 +338,44 @@
 						</div>
 					</div>
 
-					<!-- Search and Filters (only in list view) -->
+					<!-- Tabs -->
 					{#if viewMode === 'list'}
+						<Tabs.Root bind:value={activeTab} class="w-full">
+							<Tabs.List class="grid w-full grid-cols-2">
+								<Tabs.Trigger
+									value="stories"
+									class="flex items-center justify-center gap-2 rounded-tl-md border-b-2 border-transparent bg-white px-3 py-2 text-sm font-medium transition-all hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none data-[state=active]:border-blue-600 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600"
+								>
+									<PropertyIcon key="description" value="stories" size={16} />
+									Stories
+									{#if filteredStoriesCount !== null && filteredStoriesCount > 0}
+										<span
+											class="ml-1 rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700 data-[state=active]:bg-blue-200 data-[state=active]:text-blue-800"
+										>
+											{filteredStoriesCount}
+										</span>
+									{/if}
+								</Tabs.Trigger>
+								<Tabs.Trigger
+									value="categories"
+									class="flex items-center justify-center gap-2 rounded-tr-md border-b-2 border-transparent bg-white px-3 py-2 text-sm font-medium transition-all hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none data-[state=active]:border-blue-600 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600"
+								>
+									<PropertyIcon key="description" value="category" size={16} />
+									Categories
+									{#if availableCategories.length > 0}
+										<span
+											class="ml-1 rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700 data-[state=active]:bg-blue-200 data-[state=active]:text-blue-800"
+										>
+											{availableCategories.length}
+										</span>
+									{/if}
+								</Tabs.Trigger>
+							</Tabs.List>
+						</Tabs.Root>
+					{/if}
+
+					<!-- Search and Filters (only in stories tab) -->
+					{#if viewMode === 'list' && activeTab === 'stories'}
 						<div class="space-y-2">
 							<!-- Search -->
 							<div class="relative">
@@ -384,28 +436,52 @@
 				<div class="flex min-h-0 flex-1 flex-col">
 					<!-- Content based on view mode -->
 					{#if viewMode === 'list'}
-						<!-- Fixed Stories Header -->
-						<div class="flex-shrink-0 border-b border-gray-100 bg-white px-4 py-2">
-							<p class="text-sm text-gray-600">
-								{filteredStoriesCount !== null ? filteredStoriesCount : '...'} stor{filteredStoriesCount !==
-								1
-									? 'ies'
-									: 'y'}
-								{selectedCategories.length > 0 || searchQuery ? ' (filtered)' : ''}
-							</p>
-						</div>
+						<Tabs.Root bind:value={activeTab} class="flex h-full flex-col">
+							<Tabs.Content
+								value="stories"
+								class="flex h-full flex-col data-[state=inactive]:hidden"
+							>
+								<!-- Fixed Stories Header -->
+								<div class="flex-shrink-0 border-b border-gray-100 bg-white px-4 py-2">
+									<p class="text-sm text-gray-600">
+										{filteredStoriesCount !== null ? filteredStoriesCount : '...'} stor{filteredStoriesCount !==
+										1
+											? 'ies'
+											: 'y'}
+										{selectedCategories.length > 0 || searchQuery ? ' (filtered)' : ''}
+									</p>
+								</div>
 
-						<!-- Scrollable Stories Content -->
-						<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">
-							<StoriesList
-								onStorySelect={handleStorySelect}
-								onNewStory={handleNewStory}
-								onStoriesCountUpdate={handleStoriesCountUpdate}
-								{selectedCategories}
-								{searchQuery}
-								hideHeader={true}
-							/>
-						</div>
+								<!-- Scrollable Stories Content -->
+								<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">
+									<StoriesList
+										onStorySelect={handleStorySelect}
+										onNewStory={handleNewStory}
+										onStoriesCountUpdate={handleStoriesCountUpdate}
+										{selectedCategories}
+										{searchQuery}
+										hideHeader={true}
+									/>
+								</div>
+							</Tabs.Content>
+
+							<Tabs.Content
+								value="categories"
+								class="flex h-full flex-col data-[state=inactive]:hidden"
+							>
+								<!-- Categories Management Content -->
+								<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">
+									<CategoryManager
+										bind:availableCategories
+										bind:error={categoryManagerError}
+										onCategoriesChange={handleCategoriesChange}
+										showSelection={false}
+										allowDelete={true}
+										class="w-full"
+									/>
+								</div>
+							</Tabs.Content>
+						</Tabs.Root>
 					{:else if viewMode === 'view' && currentStory}
 						<!-- Story viewer takes full height with its own internal scrolling -->
 						<StoryViewer story={currentStory} showMetadata={true} class="h-full" />
@@ -429,6 +505,18 @@
 	bind:open={categoryEditDialogOpen}
 	story={storyToEditCategories}
 	onSave={handleFollowedStoryCategorySave}
+/>
+
+<!-- Story Deletion Confirmation Dialog -->
+<ConfirmDialog
+	bind:open={confirmDialogOpen}
+	title="Delete Story"
+	message={storyToDelete
+		? `Are you sure you want to delete "${storyToDelete.title}"?\n\nThis action cannot be undone.`
+		: ''}
+	variant="destructive"
+	confirmText="Delete"
+	onConfirm={performStoryDeletion}
 />
 
 <style>

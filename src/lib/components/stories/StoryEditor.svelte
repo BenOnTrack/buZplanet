@@ -31,6 +31,7 @@
 	let selectedFeature = $state<StoredFeature | SearchResult | null>(null);
 	let customDisplayText = $state('');
 	let showFeatureDialog = $state(false);
+	let lastRenderedContent = $state<string>(''); // Track what we last rendered to avoid cursor jumps
 
 	// Reactive state for feature statuses
 	let featureStatuses = $state<Map<string, FeatureStatus>>(new Map());
@@ -78,17 +79,28 @@
 		};
 	});
 
-	// Render content to HTML
+	// Render content to HTML - but avoid overwriting user input
 	$effect(() => {
 		if (editorElement && content) {
 			const newHTML = renderContentToHTML(content, featureStatuses);
-			if (editorElement.innerHTML !== newHTML) {
-				editorElement.innerHTML = newHTML;
+			const contentStr = JSON.stringify(content);
+
+			// Only update DOM if content actually changed from external source
+			if (contentStr !== lastRenderedContent) {
+				// Check if this change came from user input by comparing DOM
+				const currentHTML = editorElement.innerHTML;
+
+				// If DOM content doesn't match what we expect, it means external change
+				if (currentHTML !== newHTML || readonly) {
+					editorElement.innerHTML = newHTML;
+				}
+
+				lastRenderedContent = contentStr;
 			}
 		}
 	});
 
-	// Handle input changes
+	// Handle input changes - prevent cursor jumps
 	function handleInput() {
 		if (!editorElement || readonly) return;
 
@@ -96,8 +108,14 @@
 			const html = editorElement.innerHTML;
 			const newContent = parseHTMLToContent(html, content);
 
-			if (JSON.stringify(newContent) !== JSON.stringify(content)) {
+			// Only update if content actually changed
+			const newContentStr = JSON.stringify(newContent);
+			const oldContentStr = JSON.stringify(content);
+
+			if (newContentStr !== oldContentStr) {
 				content = newContent;
+				// Update our tracking variable to prevent re-render
+				lastRenderedContent = newContentStr;
 			}
 		} catch (error) {
 			console.error('Error processing input:', error);

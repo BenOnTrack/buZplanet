@@ -4,6 +4,7 @@
 	import { userStore } from '$lib/stores/UserStore.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { formatDate, getPreviewText, countFeatures } from '$lib/utils/stories';
+	import ConfirmDialog from '$lib/components/dialogs/ConfirmDialog.svelte';
 
 	let {
 		onStorySelect,
@@ -29,6 +30,10 @@
 	let categories = $state<StoryCategory[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+
+	// Confirmation dialog state
+	let confirmDeleteOpen = $state(false);
+	let storyToDelete = $state<Story | null>(null);
 
 	// Combined and filtered stories
 	let allStories = $derived.by(() => {
@@ -179,19 +184,24 @@
 			return;
 		}
 
-		if (
-			!confirm(`Are you sure you want to delete "${story.title}"? This action cannot be undone.`)
-		) {
-			return;
-		}
+		// Show confirmation dialog
+		storyToDelete = story;
+		confirmDeleteOpen = true;
+	}
+
+	// Perform the actual story deletion
+	async function performStoryDeletion() {
+		if (!storyToDelete) return;
 
 		try {
-			await storiesDB.deleteStory(story.id);
-			console.log(`✅ Successfully deleted story: ${story.title}`);
+			await storiesDB.deleteStory(storyToDelete.id);
+			console.log(`✅ Successfully deleted story: ${storyToDelete.title}`);
 			// UI will automatically update due to reactivity
 		} catch (error) {
 			console.error('❌ Failed to delete story:', error);
-			alert('Failed to delete story. Please try again.');
+			throw error; // Re-throw to prevent dialog from closing
+		} finally {
+			storyToDelete = null;
 		}
 	}
 </script>
@@ -410,6 +420,18 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Story Deletion Confirmation Dialog -->
+<ConfirmDialog
+	bind:open={confirmDeleteOpen}
+	title="Delete Story"
+	message={storyToDelete
+		? `Are you sure you want to delete "${storyToDelete.title}"?\n\nThis action cannot be undone.`
+		: ''}
+	variant="destructive"
+	confirmText="Delete"
+	onConfirm={performStoryDeletion}
+/>
 
 <style>
 	.story-card:focus {

@@ -1199,6 +1199,127 @@ class StoriesDB {
 	}
 
 	/**
+	 * Check if a category is used by any stories (both user stories and followed stories)
+	 */
+	async isCategoryInUse(
+		categoryId: string
+	): Promise<{ inUse: boolean; storyCount: number; storyTitles: string[] }> {
+		await this.ensureInitialized();
+		if (!this.db) return { inUse: false, storyCount: 0, storyTitles: [] };
+
+		const userId = this.getCurrentUserId();
+		const transaction = this.db.transaction(
+			[this.STORIES_STORE_NAME, this.FOLLOWED_STORIES_STORE_NAME],
+			'readonly'
+		);
+		const storiesStore = transaction.objectStore(this.STORIES_STORE_NAME);
+		const followedStoriesStore = transaction.objectStore(this.FOLLOWED_STORIES_STORE_NAME);
+
+		// Check user stories
+		const userStoriesCheck = await new Promise<{ count: number; titles: string[] }>(
+			(resolve, reject) => {
+				const storiesUsingCategory: { count: number; titles: string[] } = { count: 0, titles: [] };
+				const index = storiesStore.index(this.INDEX_USER_ID);
+				const request = index.openCursor(IDBKeyRange.only(userId));
+
+				request.onsuccess = (event) => {
+					const cursor = (event.target as IDBRequest).result;
+					if (cursor) {
+						const story = cursor.value as Story;
+						if (story.categories && story.categories.includes(categoryId)) {
+							storiesUsingCategory.count++;
+							storiesUsingCategory.titles.push(`"${story.title}" (your story)`);
+						}
+						cursor.continue();
+					} else {
+						resolve(storiesUsingCategory);
+					}
+				};
+
+				request.onerror = () => reject(request.error);
+			}
+		);
+
+		// Check followed stories
+		const followedStoriesCheck = await new Promise<{ count: number; titles: string[] }>(
+			(resolve, reject) => {
+				const storiesUsingCategory: { count: number; titles: string[] } = { count: 0, titles: [] };
+				const index = followedStoriesStore.index('viewerUserId');
+				const request = index.openCursor(IDBKeyRange.only(userId));
+
+				request.onsuccess = (event) => {
+					const cursor = (event.target as IDBRequest).result;
+					if (cursor) {
+						const story = cursor.value as Story & { authorName: string };
+						if (story.categories && story.categories.includes(categoryId)) {
+							storiesUsingCategory.count++;
+							storiesUsingCategory.titles.push(`"${story.title}" by ${story.authorName}`);
+						}
+						cursor.continue();
+					} else {
+						resolve(storiesUsingCategory);
+					}
+				};
+
+				request.onerror = () => reject(request.error);
+			}
+		);
+
+		// Combine results
+		const totalCount = userStoriesCheck.count + followedStoriesCheck.count;
+		const allTitles = [...userStoriesCheck.titles, ...followedStoriesCheck.titles];
+
+		return {
+			inUse: totalCount > 0,
+			storyCount: totalCount,
+			storyTitles: allTitles
+		};
+	}
+
+	/**
+	 * Delete a story category
+	 */
+	async deleteCategory(categoryId: string): Promise<void> {
+		await this.ensureInitialized();
+		if (!this.db) throw new Error('Database not initialized');
+
+		const userId = this.getCurrentUserId();
+
+		// Check if category is in use by any stories
+		const usageCheck = await this.isCategoryInUse(categoryId);
+		if (usageCheck.inUse) {
+			const storyList =
+				usageCheck.storyTitles.length <= 5
+					? usageCheck.storyTitles.join(', ')
+					: `${usageCheck.storyTitles.slice(0, 5).join(', ')} and ${usageCheck.storyCount - 5} more`;
+
+			throw new Error(
+				`Cannot delete category "${categoryId}" because it is used by ${usageCheck.storyCount} ${usageCheck.storyCount === 1 ? 'story' : 'stories'}: ${storyList}. Please remove this category from all stories before deleting it.`
+			);
+		}
+
+		const transaction = this.db.transaction([this.CATEGORIES_STORE_NAME], 'readwrite');
+		const store = transaction.objectStore(this.CATEGORIES_STORE_NAME);
+
+		await new Promise<void>((resolve, reject) => {
+			const request = store.delete([userId, categoryId]); // Use compound key
+			request.onsuccess = () => resolve();
+			request.onerror = () => reject(request.error);
+		});
+
+		await this.updateStats();
+		this.triggerChange();
+
+		// Queue deletion for sync (handles both online and offline scenarios) - non-blocking
+		if (this.currentUser) {
+			offlineSyncManager.queueChange('category', 'delete', categoryId).catch((error) => {
+				console.error('Failed to queue category deletion for sync:', error);
+				// Sync queuing failure doesn't affect local deletion
+			});
+		}
+	}
+
+	/**
 	 * Get stories by category
 	 */
 	async getStoriesByCategory(categoryId: string): Promise<Story[]> {
