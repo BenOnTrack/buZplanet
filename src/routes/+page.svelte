@@ -5,6 +5,7 @@
 	import UserStoreManager from '$lib/components/stores/UserStoreManager.svelte';
 	import FileManagerDialog from '$lib/components/nav/FileManagerDialog.svelte';
 	import SettingsDialog from '$lib/components/nav/SettingsDialog.svelte';
+	import MapFilterDialog from '$lib/components/nav/MapFilterDialog.svelte';
 	import LoadingScreen from '$lib/components/LoadingScreen.svelte';
 	import SearchBar from '$lib/components/nav/SearchBar.svelte';
 	import SearchResultsDrawer from '$lib/components/drawers/SearchResultsDrawer.svelte';
@@ -292,6 +293,7 @@
 		<UserStoreManager />
 		<FileManagerDialog />
 		<SettingsDialog />
+		<MapFilterDialog />
 
 		<!-- Search Bar -->
 		<div class="search-bar-container" style="z-index: {Z_INDEX.SEARCH_BAR}">
@@ -576,6 +578,9 @@
 		visibility: visible !important;
 		/* Force above MapLibre controls which typically use z-index 1 */
 		z-index: 200 !important;
+		/* Ensure proper centering even with side buttons */
+		margin-left: 0;
+		margin-right: 0;
 	}
 
 	.search-bar-container :global(.search-container) {
@@ -595,38 +600,58 @@
 	@media (max-width: 768px) {
 		.search-bar-container {
 			top: 16px;
-			padding: 0 20px;
-			max-width: 380px;
+			/* Reset to normal centering but with margin to avoid buttons */
+			left: 80px; /* Start after buttons */
+			right: 20px; /* Right margin */
+			transform: none; /* Remove transform */
+			width: auto; /* Auto width */
+			max-width: none; /* Remove max-width constraint */
+			padding: 0; /* Remove padding since we're using left/right positioning */
 		}
 	}
 
 	@media (max-width: 640px) {
 		.search-bar-container {
 			top: 14px;
-			padding: 0 16px;
-			max-width: 320px;
+			left: 80px; /* Start after buttons */
+			right: 16px; /* Right margin */
+			transform: none;
+			width: auto;
+			max-width: none;
+			padding: 0;
 		}
 	}
 
 	@media (max-width: 480px) {
 		.search-bar-container {
 			top: 12px;
-			padding: 0 12px;
-			max-width: 280px;
+			left: 80px; /* Start after buttons */
+			right: 12px; /* Right margin */
+			transform: none;
+			width: auto;
+			max-width: none;
+			padding: 0;
 		}
 	}
 
 	@media (max-width: 360px) {
 		.search-bar-container {
-			padding: 0 10px;
-			max-width: 240px;
+			left: 80px; /* Start after buttons */
+			right: 10px; /* Right margin */
+			transform: none;
+			width: auto;
+			max-width: none;
+			padding: 0;
 		}
 	}
 
-	/* Ensure search bar doesn't interfere with debug panel */
+	/* Ensure search bar stays centered on larger screens */
 	@media (min-width: 769px) {
 		.search-bar-container {
-			max-width: calc(100vw - 460px); /* Account for debug panel width */
+			/* Remove the debug panel constraint and keep centered */
+			max-width: 500px;
+			/* Add some padding to avoid overlapping with side buttons */
+			padding: 0 80px; /* Account for left side buttons */
 		}
 	}
 </style>

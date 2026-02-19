@@ -31,32 +31,26 @@
 	let selectedFeature = $state<StoredFeature | SearchResult | null>(null);
 	let customDisplayText = $state('');
 	let showFeatureDialog = $state(false);
-	let lastRenderedContent = $state<string>(''); // Track what we last rendered
 
-	// Reactive state for feature statuses - updates when features are modified
+	// Reactive state for feature statuses
 	let featureStatuses = $state<Map<string, FeatureStatus>>(new Map());
-	let bookmarksVersion = $state(0);
 
-	// Track features DB reactivity
+	// Update feature statuses when features DB changes
 	$effect(() => {
-		// This effect will re-run whenever bookmarks change in the database
-		bookmarksVersion = featuresDB.bookmarksVersion;
+		// React to bookmarks changes
+		featuresDB.bookmarksVersion;
 		updateFeatureStatusesForContent();
 	});
 
-	// Update all feature statuses using centralized function
+	// Update all feature statuses
 	async function updateFeatureStatusesForContent() {
-		if (!content || content.length === 0) return;
+		if (!content?.length) return;
 
 		featureStatuses = await updateFeatureStatuses(content);
-
-		// Update DOM if editor is mounted
-		if (editorElement) {
-			updateFeatureSpansColor();
-		}
+		updateFeatureSpansColor();
 	}
 
-	// Update colors of existing feature spans in the DOM
+	// Update DOM colors
 	function updateFeatureSpansColor() {
 		if (!editorElement) return;
 
@@ -66,70 +60,35 @@
 			if (featureId) {
 				const status = featureStatuses.get(featureId) || 'gray';
 
-				// Remove existing status classes
-				span.classList.remove(
-					'story-feature-gray',
-					'story-feature-blue',
-					'story-feature-red',
-					'story-feature-green'
-				);
-
-				// Add new status class
+				// Remove all status classes
+				span.className = span.className.replace(/story-feature-(gray|blue|red|green)/g, '');
 				span.classList.add(`story-feature-${status}`);
 			}
 		});
 	}
 
-	// Enable story insertion mode when editor is opened (if not readonly)
+	// Set story insertion mode
 	$effect(() => {
 		if (!readonly) {
 			mapControl.setStoryInsertionMode(true);
 		}
 
-		// Clean up story insertion mode when component is destroyed or becomes readonly
 		return () => {
 			mapControl.setStoryInsertionMode(false);
 		};
 	});
 
-	// Initialize editor when mounted or content changes externally
+	// Render content to HTML
 	$effect(() => {
-		if (editorElement && readonly) {
-			// For readonly mode, always update to show current content
+		if (editorElement && content) {
 			const newHTML = renderContentToHTML(content, featureStatuses);
-			editorElement.innerHTML = newHTML;
-		}
-	});
-
-	// Update feature statuses when content changes
-	$effect(() => {
-		if (content) {
-			updateFeatureStatusesForContent();
-		}
-	});
-
-	// Update the editor HTML when content changes from outside (not from user input)
-	$effect(() => {
-		if (editorElement && !readonly) {
-			const newHTML = renderContentToHTML(content, featureStatuses);
-			const contentStr = JSON.stringify(content);
-
-			// Only update DOM if content actually changed from external source
-			if (contentStr !== lastRenderedContent) {
-				// Check if this change came from user input by comparing DOM
-				const currentHTML = editorElement.innerHTML;
-
-				// If DOM content doesn't match what we expect, it means external change
-				if (currentHTML !== newHTML) {
-					editorElement.innerHTML = newHTML;
-				}
-
-				lastRenderedContent = contentStr;
+			if (editorElement.innerHTML !== newHTML) {
+				editorElement.innerHTML = newHTML;
 			}
 		}
 	});
 
-	// Update content when HTML changes (for typing)
+	// Handle input changes
 	function handleInput() {
 		if (!editorElement || readonly) return;
 
@@ -137,14 +96,8 @@
 			const html = editorElement.innerHTML;
 			const newContent = parseHTMLToContent(html, content);
 
-			// Only update if content actually changed
-			const newContentStr = JSON.stringify(newContent);
-			const oldContentStr = JSON.stringify(content);
-
-			if (newContentStr !== oldContentStr) {
+			if (JSON.stringify(newContent) !== JSON.stringify(content)) {
 				content = newContent;
-				// Update our tracking variable
-				lastRenderedContent = newContentStr;
 			}
 		} catch (error) {
 			console.error('Error processing input:', error);
@@ -152,126 +105,80 @@
 	}
 
 	// Handle feature clicks
-	function handleFeatureSpanClick(event: MouseEvent) {
-		if (readonly) {
-			const target = event.target as HTMLElement;
-			if (target.classList.contains('story-feature')) {
-				const featureId = target.getAttribute('data-feature-id');
-				const featureNode = content.find(
-					(node) => node.type === 'feature' && node.featureId === featureId
-				);
+	function handleFeatureClick(event: MouseEvent) {
+		if (!readonly) return;
 
-				if (featureNode && featureNode.type === 'feature') {
-					if (onFeatureClick) {
-						onFeatureClick(featureNode.feature);
+		const target = event.target as HTMLElement;
+		if (target.classList.contains('story-feature')) {
+			const featureId = target.getAttribute('data-feature-id');
+			const featureNode = content.find(
+				(node) => node.type === 'feature' && node.featureId === featureId
+			);
+
+			if (featureNode && featureNode.type === 'feature') {
+				if (onFeatureClick) {
+					onFeatureClick(featureNode.feature);
+				} else {
+					// Default behavior: zoom to feature
+					if ('geometry' in featureNode.feature) {
+						mapControl.zoomToAndSelectStoredFeature(featureNode.feature);
 					} else {
-						// Default behavior: zoom to feature and open drawer
-						if ('geometry' in featureNode.feature) {
-							// It's a StoredFeature
-							mapControl.zoomToAndSelectStoredFeature(featureNode.feature);
-						} else {
-							// It's a SearchResult
-							mapControl.zoomToAndSelectSearchResult(featureNode.feature);
-						}
+						mapControl.zoomToAndSelectSearchResult(featureNode.feature);
 					}
 				}
 			}
 		}
 	}
 
-	// Insert feature at cursor position
-	async function insertFeature() {
-		if (!selectedFeature) {
-			console.error('❌ No feature selected for insertion');
-			return;
-		}
-
-		console.log('🎯 Inserting feature:', selectedFeature);
-
-		try {
-			// Create display text
-			const displayText = customDisplayText || getFeatureDisplayName(selectedFeature);
-			console.log('📝 Display text:', displayText);
-
-			// Create feature node
-			const featureNode: StoryContentNode = {
-				type: 'feature',
-				featureId: selectedFeature.id,
-				displayText: getFeatureDisplayName(selectedFeature),
-				feature: selectedFeature,
-				customText: customDisplayText || undefined
-			};
-
-			console.log('🏗️ Created feature node:', featureNode);
-
-			// Add feature to content and add space after it
-			content = [...content, featureNode, { type: 'text', text: ' ' }];
-
-			console.log('✅ Feature inserted successfully! New content:', content);
-
-			// Reset state
-			selectedFeature = null;
-			customDisplayText = '';
-			showFeatureDialog = false;
-
-			// After content updates, focus at the end of the editor
-			setTimeout(() => {
-				if (editorElement) {
-					// Focus the editor
-					editorElement.focus();
-
-					// Move cursor to end
-					const selection = window.getSelection();
-					if (selection) {
-						const range = document.createRange();
-						range.selectNodeContents(editorElement);
-						range.collapse(false); // Collapse to end
-						selection.removeAllRanges();
-						selection.addRange(range);
-					}
-				}
-			}, 100);
-		} catch (error) {
-			console.error('❌ Failed to insert feature:', error);
-			// Make sure to reset state even on error
-			showFeatureDialog = false;
-		}
-	}
-
-	// Listen for map feature selection when in edit mode
+	// Listen for map feature selection
 	$effect(() => {
-		if (!readonly && mapControl.selectedFeature) {
-			console.log('🎯 Story Editor: Feature selected for insertion:', mapControl.selectedFeature);
+		if (readonly || !mapControl.selectedFeature) return;
 
-			// Convert MapGeoJSONFeature to usable format
-			const mapFeature = mapControl.selectedFeature;
+		const mapFeature = mapControl.selectedFeature;
 
-			// Try to find stored feature first
-			featuresDB
-				.getFeatureById(String(mapFeature.id))
-				.then((storedFeature) => {
-					if (storedFeature) {
-						console.log('✅ Found stored feature:', storedFeature);
-						selectedFeature = storedFeature;
-					} else {
-						console.log('🔄 Creating basic feature from map feature:', mapFeature);
-						// Create a basic feature from map feature
-						const basicFeature = createSearchResultFromMapFeature(mapFeature);
-
-						console.log('✅ Created basic feature:', basicFeature);
-						selectedFeature = basicFeature;
-					}
-				})
-				.catch((error) => {
-					console.error('❌ Error processing selected feature:', error);
-				});
-		}
+		featuresDB
+			.getFeatureById(String(mapFeature.id))
+			.then((storedFeature) => {
+				selectedFeature = storedFeature || createSearchResultFromMapFeature(mapFeature);
+			})
+			.catch(() => {
+				selectedFeature = createSearchResultFromMapFeature(mapFeature);
+			});
 	});
 
-	// Open feature insertion dialog
-	function openFeatureDialog() {
-		console.log('🚀 Story Editor: Opening feature insertion dialog');
-		showFeatureDialog = true;
+	// Insert feature
+	function insertFeature() {
+		if (!selectedFeature) return;
+
+		const featureNode: StoryContentNode = {
+			type: 'feature',
+			featureId: selectedFeature.id,
+			displayText: getFeatureDisplayName(selectedFeature),
+			feature: selectedFeature,
+			customText: customDisplayText || undefined
+		};
+
+		content = [...content, featureNode, { type: 'text', text: ' ' }];
+
+		// Reset state
+		selectedFeature = null;
+		customDisplayText = '';
+		showFeatureDialog = false;
+
+		// Focus editor
+		setTimeout(() => {
+			if (editorElement) {
+				editorElement.focus();
+				const selection = window.getSelection();
+				if (selection) {
+					const range = document.createRange();
+					range.selectNodeContents(editorElement);
+					range.collapse(false);
+					selection.removeAllRanges();
+					selection.addRange(range);
+				}
+			}
+		}, 100);
 	}
 </script>
 
@@ -282,7 +189,7 @@
 			<div class="flex items-center gap-2">
 				<button
 					class="flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
-					onclick={openFeatureDialog}
+					onclick={() => (showFeatureDialog = true)}
 				>
 					<PropertyIcon key="description" value="location" size={16} />
 					Insert Feature
@@ -299,16 +206,17 @@
 	<!-- Main Editor -->
 	<div
 		bind:this={editorElement}
-		class={clsx('min-h-[200px] p-4 focus:outline-none', {
+		class={clsx('p-4 focus:outline-none', {
 			'bg-gray-50': readonly,
 			'bg-white': !readonly
 		})}
 		contenteditable={!readonly}
 		oninput={handleInput}
-		onclick={handleFeatureSpanClick}
+		onclick={handleFeatureClick}
 		onkeydown={(e) => {
 			if (readonly && (e.key === 'Enter' || e.key === ' ')) {
-				handleFeatureSpanClick(e as any);
+				e.preventDefault();
+				handleFeatureClick(e as any);
 			}
 		}}
 		data-placeholder={placeholder}
@@ -316,6 +224,8 @@
 		role={readonly ? 'article' : 'textbox'}
 		aria-label={readonly ? 'Story content' : 'Story editor'}
 		aria-multiline="true"
+		style:line-height="1.7"
+		style:font-size="1rem"
 	>
 		<!-- Content will be populated by the effect above -->
 	</div>
@@ -338,16 +248,21 @@
 		content: attr(data-placeholder);
 		color: #9ca3af;
 		pointer-events: none;
+		font-style: italic;
 	}
 
 	:global(.story-feature) {
 		border-radius: 4px;
-		padding: 2px 6px;
-		margin: 0 4px;
+		padding: 4px 8px;
+		margin: 0 2px;
 		font-weight: 500;
 		cursor: pointer;
-		display: inline-block;
+		display: inline-flex;
+		vertical-align: baseline;
+		align-items: center;
+		gap: 2px;
 		transition: all 0.2s;
+		font-size: 0.875rem;
 		/* Make chips non-editable to prevent cursor getting stuck */
 		user-select: none;
 		-webkit-user-select: none;

@@ -1,6 +1,35 @@
 import { browser } from '$app/environment';
 import { authState } from '$lib/stores/auth.svelte';
+import { _CLASS, _SUBCLASS, _CATEGORY } from '$lib/assets/class_subclass_category';
 import type { User } from 'firebase/auth';
+
+const DEFAULT_FILTER_SETTINGS: AppFilterSettings = {
+	map: {
+		classes: new Set(_CLASS),
+		subclasses: new Set(_SUBCLASS),
+		categories: new Set(_CATEGORY)
+	},
+	heat: {
+		classes: new Set<string>(), // Empty by default
+		subclasses: new Set<string>(), // Empty by default
+		categories: new Set<string>() // Empty by default
+	},
+	bookmark: {
+		classes: new Set(_CLASS),
+		subclasses: new Set(_SUBCLASS),
+		categories: new Set(_CATEGORY)
+	},
+	todo: {
+		classes: new Set(_CLASS),
+		subclasses: new Set(_SUBCLASS),
+		categories: new Set(_CATEGORY)
+	},
+	visited: {
+		classes: new Set(_CLASS),
+		subclasses: new Set(_SUBCLASS),
+		categories: new Set(_CATEGORY)
+	}
+};
 
 const DEFAULT_COLOR_MAPPINGS: ColorMappings = {
 	// Map feature categories
@@ -33,7 +62,8 @@ const DEFAULT_CONFIG: AppConfig = {
 		pitch: 0
 	},
 	colorMappings: DEFAULT_COLOR_MAPPINGS,
-	language: 'name' // Default to local names
+	language: 'name', // Default to local names
+	filterSettings: DEFAULT_FILTER_SETTINGS
 };
 
 /**
@@ -46,6 +76,7 @@ class AppState {
 	private _mapView = $state<MapViewState>(DEFAULT_CONFIG.mapView);
 	private _colorMappings = $state<ColorMappings>(DEFAULT_CONFIG.colorMappings);
 	private _language = $state<LanguageCode>(DEFAULT_CONFIG.language);
+	private _filterSettings = $state<AppFilterSettings>(DEFAULT_CONFIG.filterSettings);
 
 	// Storage configuration - user-based local storage
 	private readonly DB_NAME = 'AppStateDB';
@@ -112,7 +143,8 @@ class AppState {
 		return {
 			mapView: this._mapView,
 			colorMappings: this._colorMappings,
-			language: this._language
+			language: this._language,
+			filterSettings: this._filterSettings
 		};
 	}
 
@@ -124,6 +156,16 @@ class AppState {
 	// Getter for language setting
 	get language(): LanguageCode {
 		return this._language;
+	}
+
+	// Getter for filter settings
+	get filterSettings(): AppFilterSettings {
+		return this._filterSettings;
+	}
+
+	// Getter for map filter settings
+	get mapFilterSettings(): CategoryFilterSettings {
+		return this._filterSettings.map;
 	}
 
 	// Getter for color mappings
@@ -255,9 +297,58 @@ class AppState {
 				};
 				this._language = result.value.language || DEFAULT_CONFIG.language;
 
+				// IMPORTANT: Always ensure filterSettings exist, even for old configs
+				if (result.value.filterSettings) {
+					// Existing config has filterSettings, load them with conversion from arrays to Sets
+					console.log('📂 Loading existing filterSettings from storage');
+					this._filterSettings = {
+						map: {
+							classes: new Set(result.value.filterSettings.map?.classes || _CLASS),
+							subclasses: new Set(result.value.filterSettings.map?.subclasses || _SUBCLASS),
+							categories: new Set(result.value.filterSettings.map?.categories || _CATEGORY)
+						},
+						heat: {
+							classes: new Set(result.value.filterSettings.heat?.classes || _CLASS),
+							subclasses: new Set(result.value.filterSettings.heat?.subclasses || _SUBCLASS),
+							categories: new Set(result.value.filterSettings.heat?.categories || _CATEGORY)
+						},
+						bookmark: {
+							classes: new Set(result.value.filterSettings.bookmark?.classes || _CLASS),
+							subclasses: new Set(result.value.filterSettings.bookmark?.subclasses || _SUBCLASS),
+							categories: new Set(result.value.filterSettings.bookmark?.categories || _CATEGORY)
+						},
+						todo: {
+							classes: new Set(result.value.filterSettings.todo?.classes || _CLASS),
+							subclasses: new Set(result.value.filterSettings.todo?.subclasses || _SUBCLASS),
+							categories: new Set(result.value.filterSettings.todo?.categories || _CATEGORY)
+						},
+						visited: {
+							classes: new Set(result.value.filterSettings.visited?.classes || _CLASS),
+							subclasses: new Set(result.value.filterSettings.visited?.subclasses || _SUBCLASS),
+							categories: new Set(result.value.filterSettings.visited?.categories || _CATEGORY)
+						}
+					};
+				} else {
+					// Old config without filterSettings - initialize with defaults (all selected)
+					console.log(
+						'🆕 Adding missing filterSettings to existing config - initializing with ALL categories selected'
+					);
+					this._filterSettings = { ...DEFAULT_FILTER_SETTINGS };
+
+					// Save the updated config immediately to persist the new filterSettings
+					this.saveConfig();
+				}
+
 				console.log(
 					`🗺️ Loaded map view: [${this._mapView.center.join(', ')}] @ z${this._mapView.zoom}`
 				);
+				console.log('🔍 Loaded filter settings:', {
+					map: {
+						classes: this._filterSettings.map.classes.size,
+						subclasses: this._filterSettings.map.subclasses.size,
+						categories: this._filterSettings.map.categories.size
+					}
+				});
 			} else {
 				console.log('⚠️ No saved config found, using defaults');
 				// Only set defaults if switching from completely uninitialized state
@@ -281,6 +372,9 @@ class AppState {
 					if (!this._language) {
 						this._language = DEFAULT_CONFIG.language;
 					}
+					if (!this._filterSettings) {
+						this._filterSettings = { ...DEFAULT_FILTER_SETTINGS };
+					}
 				}
 			}
 		} catch (error) {
@@ -293,10 +387,24 @@ class AppState {
 	 * Only saves in browser environment
 	 */
 	private async saveConfig(): Promise<void> {
-		if (!browser || !this.db || !this.isInitialized) return;
+		console.log(
+			'🔄 saveConfig() called - browser:',
+			browser,
+			'db:',
+			!!this.db,
+			'initialized:',
+			this.isInitialized
+		);
+
+		if (!browser || !this.db || !this.isInitialized) {
+			console.warn('❌ saveConfig() aborted - missing requirements');
+			return;
+		}
 
 		try {
 			const storageKey = this.getCurrentUserStorageKey();
+			console.log('💾 Saving config with key:', storageKey);
+
 			const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
 			const store = transaction.objectStore(this.STORE_NAME);
 
@@ -309,8 +417,37 @@ class AppState {
 					pitch: this._mapView.pitch
 				},
 				colorMappings: { ...this._colorMappings },
-				language: this._language
+				language: this._language,
+				filterSettings: {
+					map: {
+						classes: Array.from(this._filterSettings.map.classes),
+						subclasses: Array.from(this._filterSettings.map.subclasses),
+						categories: Array.from(this._filterSettings.map.categories)
+					},
+					heat: {
+						classes: Array.from(this._filterSettings.heat.classes),
+						subclasses: Array.from(this._filterSettings.heat.subclasses),
+						categories: Array.from(this._filterSettings.heat.categories)
+					},
+					bookmark: {
+						classes: Array.from(this._filterSettings.bookmark.classes),
+						subclasses: Array.from(this._filterSettings.bookmark.subclasses),
+						categories: Array.from(this._filterSettings.bookmark.categories)
+					},
+					todo: {
+						classes: Array.from(this._filterSettings.todo.classes),
+						subclasses: Array.from(this._filterSettings.todo.subclasses),
+						categories: Array.from(this._filterSettings.todo.categories)
+					},
+					visited: {
+						classes: Array.from(this._filterSettings.visited.classes),
+						subclasses: Array.from(this._filterSettings.visited.subclasses),
+						categories: Array.from(this._filterSettings.visited.categories)
+					}
+				}
 			};
+
+			console.log('📝 Saving config data:', plainConfig);
 
 			await new Promise<void>((resolve, reject) => {
 				const request = store.put({
@@ -320,11 +457,17 @@ class AppState {
 					timestamp: Date.now()
 				});
 
-				request.onsuccess = () => resolve();
-				request.onerror = () => reject(request.error);
+				request.onsuccess = () => {
+					console.log('✅ Config saved successfully to IndexedDB');
+					resolve();
+				};
+				request.onerror = () => {
+					console.error('❌ Failed to save config to IndexedDB:', request.error);
+					reject(request.error);
+				};
 			});
 		} catch (error) {
-			console.error('Failed to save config:', error);
+			console.error('❌ Failed to save config:', error);
 		}
 	}
 
@@ -366,6 +509,37 @@ class AppState {
 	 */
 	updatePitch(pitch: number): void {
 		this.updateMapView({ pitch });
+	}
+
+	/**
+	 * Update map filter settings
+	 */
+	updateMapFilterSettings(filterSettings: Partial<CategoryFilterSettings>): void {
+		this._filterSettings = {
+			...this._filterSettings,
+			map: {
+				...this._filterSettings.map,
+				...filterSettings
+			}
+		};
+		this.saveConfig(); // Auto-save changes
+	}
+
+	/**
+	 * Update filter settings for a specific tab
+	 */
+	updateFilterSettings(
+		tab: keyof AppFilterSettings,
+		filterSettings: Partial<CategoryFilterSettings>
+	): void {
+		this._filterSettings = {
+			...this._filterSettings,
+			[tab]: {
+				...this._filterSettings[tab],
+				...filterSettings
+			}
+		};
+		this.saveConfig(); // Auto-save changes
 	}
 
 	/**
@@ -426,6 +600,7 @@ class AppState {
 		this._mapView = { ...DEFAULT_CONFIG.mapView };
 		this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
 		this._language = DEFAULT_CONFIG.language;
+		this._filterSettings = { ...DEFAULT_FILTER_SETTINGS };
 		await this.saveConfig();
 	}
 
@@ -450,6 +625,40 @@ class AppState {
 			...config.colorMappings
 		};
 		this._language = config.language || DEFAULT_CONFIG.language;
+
+		// Handle filter settings import with Set conversion
+		if (config.filterSettings) {
+			this._filterSettings = {
+				map: {
+					classes: new Set(config.filterSettings.map?.classes || _CLASS),
+					subclasses: new Set(config.filterSettings.map?.subclasses || _SUBCLASS),
+					categories: new Set(config.filterSettings.map?.categories || _CATEGORY)
+				},
+				heat: {
+					classes: new Set(config.filterSettings.heat?.classes || _CLASS),
+					subclasses: new Set(config.filterSettings.heat?.subclasses || _SUBCLASS),
+					categories: new Set(config.filterSettings.heat?.categories || _CATEGORY)
+				},
+				bookmark: {
+					classes: new Set(config.filterSettings.bookmark?.classes || _CLASS),
+					subclasses: new Set(config.filterSettings.bookmark?.subclasses || _SUBCLASS),
+					categories: new Set(config.filterSettings.bookmark?.categories || _CATEGORY)
+				},
+				todo: {
+					classes: new Set(config.filterSettings.todo?.classes || _CLASS),
+					subclasses: new Set(config.filterSettings.todo?.subclasses || _SUBCLASS),
+					categories: new Set(config.filterSettings.todo?.categories || _CATEGORY)
+				},
+				visited: {
+					classes: new Set(config.filterSettings.visited?.classes || _CLASS),
+					subclasses: new Set(config.filterSettings.visited?.subclasses || _SUBCLASS),
+					categories: new Set(config.filterSettings.visited?.categories || _CATEGORY)
+				}
+			};
+		} else {
+			this._filterSettings = { ...DEFAULT_FILTER_SETTINGS };
+		}
+
 		await this.saveConfig();
 	}
 

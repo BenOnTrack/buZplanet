@@ -20,6 +20,44 @@
 		isInitialized = true;
 	});
 
+	// Derived filter based on AppState todo filter settings
+	let featuresTodooFilter = $derived.by(() => {
+		if (!isInitialized) {
+			// Return permissive filter during initialization
+			return ['all'];
+		}
+
+		const todoFilterSettings = appState.filterSettings.todo;
+
+		// Extract class names (already clean)
+		const selectedClasses = Array.from(todoFilterSettings.classes);
+
+		// Extract subclass names (remove class prefix)
+		const selectedSubclasses = Array.from(todoFilterSettings.subclasses).map((subclass) => {
+			const parts = subclass.split('-');
+			return parts.slice(1).join('-'); // Remove first part (class)
+		});
+
+		// Extract category names (remove class and subclass prefix)
+		const selectedCategories = Array.from(todoFilterSettings.categories).map((category) => {
+			const parts = category.split('-');
+			return parts.slice(2).join('-'); // Remove first two parts (class-subclass)
+		});
+
+		console.log('Todo filter applied:', {
+			classes: selectedClasses.length,
+			subclasses: selectedSubclasses.length,
+			categories: selectedCategories.length
+		});
+
+		return [
+			'all',
+			['in', ['get', 'class'], ['literal', selectedClasses]],
+			['in', ['get', 'subclass'], ['literal', selectedSubclasses]],
+			['in', ['get', 'category'], ['literal', selectedCategories]]
+		];
+	});
+
 	const iconImage = $derived(() => {
 		if (!isInitialized) {
 			// Return default values during initialization
@@ -448,7 +486,7 @@
 	/>
 	<SymbolLayer
 		id="todo"
-		filter={['==', ['get', 'todo'], true]}
+		filter={['all', featuresTodooFilter, ['==', ['get', 'todo'], true]]}
 		layout={{
 			'icon-image': iconImage().todo as any,
 			'icon-allow-overlap': true,

@@ -177,10 +177,32 @@ declare global {
 		label: string;
 	}
 
+	interface CategoryFilterSettings {
+		classes: Set<string>;
+		subclasses: Set<string>;
+		categories: Set<string>;
+	}
+
+	// For storage - arrays are used in IndexedDB
+	interface CategoryFilterSettingsStored {
+		classes: string[];
+		subclasses: string[];
+		categories: string[];
+	}
+
+	interface AppFilterSettings {
+		map: CategoryFilterSettings;
+		heat: CategoryFilterSettings;
+		bookmark: CategoryFilterSettings;
+		todo: CategoryFilterSettings;
+		visited: CategoryFilterSettings;
+	}
+
 	interface AppConfig {
 		mapView: MapViewState;
 		colorMappings: ColorMappings;
 		language: LanguageCode;
+		filterSettings: AppFilterSettings;
 		// Future config properties can be added here
 		// theme?: string;
 		// selectedLayers?: string[];

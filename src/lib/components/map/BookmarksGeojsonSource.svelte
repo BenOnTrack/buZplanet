@@ -20,6 +20,44 @@
 		isInitialized = true;
 	});
 
+	// Derived filter based on AppState bookmark filter settings
+	let featuresBookmarkFilter = $derived.by(() => {
+		if (!isInitialized) {
+			// Return permissive filter during initialization
+			return ['all'];
+		}
+
+		const bookmarkFilterSettings = appState.filterSettings.bookmark;
+
+		// Extract class names (already clean)
+		const selectedClasses = Array.from(bookmarkFilterSettings.classes);
+
+		// Extract subclass names (remove class prefix)
+		const selectedSubclasses = Array.from(bookmarkFilterSettings.subclasses).map((subclass) => {
+			const parts = subclass.split('-');
+			return parts.slice(1).join('-'); // Remove first part (class)
+		});
+
+		// Extract category names (remove class and subclass prefix)
+		const selectedCategories = Array.from(bookmarkFilterSettings.categories).map((category) => {
+			const parts = category.split('-');
+			return parts.slice(2).join('-'); // Remove first two parts (class-subclass)
+		});
+
+		console.log('Bookmark filter applied:', {
+			classes: selectedClasses.length,
+			subclasses: selectedSubclasses.length,
+			categories: selectedCategories.length
+		});
+
+		return [
+			'all',
+			['in', ['get', 'class'], ['literal', selectedClasses]],
+			['in', ['get', 'subclass'], ['literal', selectedSubclasses]],
+			['in', ['get', 'category'], ['literal', selectedCategories]]
+		];
+	});
+
 	const iconImage = $derived(() => {
 		if (!isInitialized) {
 			// Return default values during initialization
@@ -448,6 +486,7 @@
 	/>
 	<SymbolLayer
 		id="bookmarks"
+		filter={featuresBookmarkFilter}
 		layout={{
 			'icon-image': iconImage().bookmarks as any,
 			'icon-allow-overlap': true,

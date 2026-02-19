@@ -16,6 +16,160 @@
 		isInitialized = true;
 	});
 
+	// Derived filter based on AppState map filter settings
+	let featuresMapFilter = $derived.by(() => {
+		if (!isInitialized) {
+			// Return permissive filter during initialization
+			return ['all'];
+		}
+
+		const mapFilterSettings = appState.mapFilterSettings;
+
+		// Extract class names (already clean)
+		const selectedClasses = Array.from(mapFilterSettings.classes);
+
+		// Extract subclass names (remove class prefix)
+		const selectedSubclasses = Array.from(mapFilterSettings.subclasses).map((subclass) => {
+			const parts = subclass.split('-');
+			return parts.slice(1).join('-'); // Remove first part (class)
+		});
+
+		// Extract category names (remove class and subclass prefix)
+		const selectedCategories = Array.from(mapFilterSettings.categories).map((category) => {
+			const parts = category.split('-');
+			return parts.slice(2).join('-'); // Remove first two parts (class-subclass)
+		});
+
+		console.log('Map filter applied:', {
+			classes: selectedClasses.length,
+			subclasses: selectedSubclasses.length,
+			categories: selectedCategories.length
+		});
+
+		return [
+			'all',
+			['in', ['get', 'class'], ['literal', selectedClasses]],
+			['in', ['get', 'subclass'], ['literal', selectedSubclasses]],
+			['in', ['get', 'category'], ['literal', selectedCategories]]
+		];
+	});
+
+	// Derived filter based on AppState heat filter settings
+	let featuresHeatFilter = $derived.by(() => {
+		if (!isInitialized) {
+			// Return permissive filter during initialization
+			return ['all'];
+		}
+
+		const heatFilterSettings = appState.filterSettings.heat;
+
+		// Extract class names (already clean)
+		const selectedClasses = Array.from(heatFilterSettings.classes);
+
+		// Extract subclass names (remove class prefix)
+		const selectedSubclasses = Array.from(heatFilterSettings.subclasses).map((subclass) => {
+			const parts = subclass.split('-');
+			return parts.slice(1).join('-'); // Remove first part (class)
+		});
+
+		// Extract category names (remove class and subclass prefix)
+		const selectedCategories = Array.from(heatFilterSettings.categories).map((category) => {
+			const parts = category.split('-');
+			return parts.slice(2).join('-'); // Remove first two parts (class-subclass)
+		});
+
+		console.log('Heat filter applied:', {
+			classes: selectedClasses.length,
+			subclasses: selectedSubclasses.length,
+			categories: selectedCategories.length
+		});
+
+		return [
+			'all',
+			['in', ['get', 'class'], ['literal', selectedClasses]],
+			['in', ['get', 'subclass'], ['literal', selectedSubclasses]],
+			['in', ['get', 'category'], ['literal', selectedCategories]]
+		];
+	});
+
+	// Derived filter for place layers that combines map filter with existing category filter
+	let placeMinorFilter = $derived.by(() => {
+		if (!isInitialized) {
+			return ['all'];
+		}
+
+		return [
+			'all',
+			featuresMapFilter,
+			[
+				'!',
+				[
+					'in',
+					['get', 'category'],
+					[
+						'literal',
+						[
+							'continent',
+							'country',
+							'county',
+							'district',
+							'island',
+							'islet',
+							'locality',
+							'municipality',
+							'ocean',
+							'province',
+							'region',
+							'sea',
+							'state',
+							'subdistrict',
+							'city',
+							'town',
+							'capital'
+						]
+					]
+				]
+			]
+		];
+	});
+
+	let placeMajorFilter = $derived.by(() => {
+		if (!isInitialized) {
+			return ['all'];
+		}
+
+		return [
+			'all',
+			featuresMapFilter,
+			[
+				'in',
+				['get', 'category'],
+				[
+					'literal',
+					[
+						'continent',
+						'country',
+						'county',
+						'district',
+						'island',
+						'islet',
+						'locality',
+						'municipality',
+						'ocean',
+						'province',
+						'region',
+						'sea',
+						'state',
+						'subdistrict',
+						'city',
+						'town',
+						'capital'
+					]
+				]
+			]
+		];
+	});
+
 	// Reactive icon image expressions that use colors from AppState
 	const iconImage = $derived(() => {
 		if (!isInitialized) {
@@ -433,7 +587,7 @@
 	<HeatmapLayer
 		id="heat_attraction"
 		sourceLayer={'poi_attraction'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -445,7 +599,7 @@
 	<HeatmapLayer
 		id="heat_education"
 		sourceLayer={'poi_education'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -457,7 +611,7 @@
 	<HeatmapLayer
 		id="heat_entertainment"
 		sourceLayer={'poi_entertainment'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -469,7 +623,7 @@
 	<HeatmapLayer
 		id="heat_facility"
 		sourceLayer={'poi_facility'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -481,7 +635,7 @@
 	<HeatmapLayer
 		id="heat_food_and_drink"
 		sourceLayer={'poi_food_and_drink'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -493,7 +647,7 @@
 	<HeatmapLayer
 		id="heat_healthcare"
 		sourceLayer={'poi_healthcare'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -505,7 +659,7 @@
 	<HeatmapLayer
 		id="heat_leisure"
 		sourceLayer={'poi_leisure'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -517,7 +671,7 @@
 	<HeatmapLayer
 		id="heat_lodging"
 		sourceLayer={'poi_lodging'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -530,7 +684,7 @@
 		id="heat_natural"
 		sourceLayer={'poi_natural'}
 		minzoom={8}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': [
 				'interpolate',
@@ -570,7 +724,7 @@
 	<HeatmapLayer
 		id="heat_place"
 		sourceLayer={'poi_place'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -582,7 +736,7 @@
 	<HeatmapLayer
 		id="heat_shop"
 		sourceLayer={'poi_shop'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -594,7 +748,7 @@
 	<HeatmapLayer
 		id="heat_transportation"
 		sourceLayer={'poi_transportation'}
-		layout={{ visibility: 'none' }}
+		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
 
@@ -607,6 +761,7 @@
 		id="poi_attraction"
 		sourceLayer={'poi_attraction'}
 		minzoom={13.5}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().attraction,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -631,6 +786,7 @@
 		id="poi_education"
 		sourceLayer={'poi_education'}
 		minzoom={17}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().education,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -655,6 +811,7 @@
 		id="poi_entertainment"
 		sourceLayer={'poi_entertainment'}
 		minzoom={16}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().entertainment,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -679,6 +836,7 @@
 		id="poi_facility"
 		sourceLayer={'poi_facility'}
 		minzoom={18}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().facility,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -703,6 +861,7 @@
 		id="poi_food_and_drink"
 		sourceLayer={'poi_food_and_drink'}
 		minzoom={14}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().food_and_drink,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -727,6 +886,7 @@
 		id="poi_healthcare"
 		sourceLayer={'poi_healthcare'}
 		minzoom={15}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().healthcare,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -751,6 +911,7 @@
 		id="poi_leisure"
 		sourceLayer={'poi_leisure'}
 		minzoom={10}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().leisure,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -775,6 +936,7 @@
 		id="poi_lodging"
 		sourceLayer={'poi_lodging'}
 		minzoom={14}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().lodging,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -799,6 +961,7 @@
 		id="poi_natural"
 		sourceLayer={'poi_natural'}
 		minzoom={8}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().natural,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -823,6 +986,7 @@
 		id="poi_shop"
 		sourceLayer={'poi_shop'}
 		minzoom={17}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().shop,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -847,6 +1011,7 @@
 		id="poi_transportation"
 		sourceLayer={'poi_transportation'}
 		minzoom={15.5}
+		filter={featuresMapFilter}
 		layout={{
 			'icon-image': iconImage().transportation,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -871,35 +1036,7 @@
 	<SymbolLayer
 		id="poi_place_minor"
 		sourceLayer={'poi_place'}
-		filter={[
-			'!',
-			[
-				'in',
-				['get', 'category'],
-				[
-					'literal',
-					[
-						'continent',
-						'country',
-						'county',
-						'district',
-						'island',
-						'islet',
-						'locality',
-						'municipality',
-						'ocean',
-						'province',
-						'region',
-						'sea',
-						'state',
-						'subdistrict',
-						'city',
-						'town',
-						'capital'
-					]
-				]
-			]
-		]}
+		filter={placeMinorFilter}
 		layout={{
 			'icon-image': iconImage().place,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
@@ -944,32 +1081,7 @@
 	<SymbolLayer
 		id="poi_place_major"
 		sourceLayer={'poi_place'}
-		filter={[
-			'in',
-			['get', 'category'],
-			[
-				'literal',
-				[
-					'continent',
-					'country',
-					'county',
-					'district',
-					'island',
-					'islet',
-					'locality',
-					'municipality',
-					'ocean',
-					'province',
-					'region',
-					'sea',
-					'state',
-					'subdistrict',
-					'city',
-					'town',
-					'capital'
-				]
-			]
-		]}
+		filter={placeMajorFilter}
 		layout={{
 			'icon-image': iconImage().place,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
