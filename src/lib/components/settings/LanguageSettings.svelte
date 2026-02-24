@@ -17,10 +17,7 @@
 		{ code: 'name:ru', label: 'Russian' }
 	];
 
-	// Ensure appState is initialized
-	$effect(() => {
-		appState.ensureInitialized();
-	});
+	// AppState is initialized by default in constructor, no need for manual initialization
 
 	// Get current language setting
 	let currentLanguage = $derived(appState.language);

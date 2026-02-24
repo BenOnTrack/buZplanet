@@ -16,7 +16,6 @@
 	import { authState } from '$lib/stores/auth.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
-
 	import { Z_INDEX } from '$lib/styles/z-index.js';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -141,6 +140,8 @@
 	});
 
 	onMount(() => {
+		console.log('🚀 Main app mounting');
+
 		// Subscribe to initialization state
 		unsubscribe = appInitializer.subscribe((state) => {
 			initState = state;
@@ -152,7 +153,24 @@
 			console.log('App cleanup triggered');
 		};
 
+		// Handle app visibility changes for better lifecycle management
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'hidden') {
+				console.log('📱 Main app going to background');
+				// Trigger cleanup event for components to save state
+				const event = new CustomEvent('app-cleanup');
+				window.dispatchEvent(event);
+			} else if (document.visibilityState === 'visible') {
+				console.log('📱 Main app returning from background');
+				// Check if worker is still responsive
+				if (initState.status === 'complete') {
+					checkWorkerHealth();
+				}
+			}
+		};
+
 		window.addEventListener('app-cleanup', handleAppCleanup);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
 
 		// Start initialization with proper auth sequence
 		try {
@@ -166,12 +184,38 @@
 		}
 
 		return () => {
+			console.log('🧹 Main app unmounting - cleaning up');
 			window.removeEventListener('app-cleanup', handleAppCleanup);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
 		};
 	});
 
+	// Worker health check after returning from background
+	async function checkWorkerHealth() {
+		try {
+			const { getWorker } = await import('$lib/utils/worker');
+			const worker = getWorker();
+
+			// Try a quick ping with short timeout
+			const startTime = Date.now();
+			await Promise.race([
+				worker.ping(),
+				new Promise((_, reject) => setTimeout(() => reject(new Error('Ping timeout')), 2000))
+			]);
+			const responseTime = Date.now() - startTime;
+
+			console.log(`✅ Worker health check passed (${responseTime}ms)`);
+		} catch (error) {
+			console.warn('⚠️ Worker health check failed, may need restart:', error);
+			// Optionally restart worker or show notification to user
+			// For now just log - you might want to implement worker restart logic
+		}
+	}
+
 	// Clean up worker when component is destroyed
 	onDestroy(async () => {
+		console.log('🧹 Main app destroying - cleaning up');
+
 		// Save any pending app state before cleanup
 		if (typeof window !== 'undefined') {
 			// Trigger a final save of any pending state
@@ -187,6 +231,7 @@
 		try {
 			const { terminateWorker } = await import('$lib/utils/worker');
 			terminateWorker();
+			console.log('✅ Worker terminated successfully');
 		} catch (error) {
 			console.warn('Failed to terminate worker:', error);
 		}

@@ -396,6 +396,16 @@ class FeaturesDB {
 		const willBeBookmarked =
 			existingFeature?.bookmarked || action === 'bookmark' || action === 'visited';
 
+		// When marking as visited, set todo to false; otherwise preserve existing todo status
+		let todoStatus: boolean;
+		if (action === 'visited') {
+			todoStatus = false; // Automatically set todo to false when visited
+		} else if (action === 'todo' && willBeBookmarked) {
+			todoStatus = true; // Set todo when explicitly requested and bookmarked
+		} else {
+			todoStatus = existingFeature?.todo || false; // Preserve existing todo status
+		}
+
 		const storedFeature: StoredFeature = {
 			userId, // Add userId to stored feature
 			id: featureId,
@@ -415,7 +425,7 @@ class FeaturesDB {
 				action === 'visited'
 					? [...(existingFeature?.visitedDates || []), now]
 					: existingFeature?.visitedDates || [],
-			todo: existingFeature?.todo || (action === 'todo' && willBeBookmarked), // todo requires bookmarking
+			todo: todoStatus,
 
 			dateCreated: existingFeature?.dateCreated || now,
 			dateModified: now,
@@ -497,6 +507,10 @@ class FeaturesDB {
 			existingFeature.visitedDates.push(visitTimestamp);
 			// Sort visits chronologically
 			existingFeature.visitedDates.sort((a, b) => a - b);
+
+			// When marking as visited, automatically set todo to false
+			existingFeature.todo = false;
+
 			return await this.updateFeature(existingFeature);
 		} else {
 			// Create new bookmarked feature with visit (must be bookmarked to have visits)

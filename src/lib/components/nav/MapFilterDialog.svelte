@@ -1,118 +1,68 @@
 <script lang="ts">
 	import { Dialog, Tabs } from 'bits-ui';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
-	import CategoryFilter from './CategoryFilter.svelte';
+	import CategoryManager from '$lib/components/categories/CategoryManager.svelte';
 	import { appState } from '$lib/stores/AppState.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
+	import { _CATEGORY } from '$lib/assets/class_subclass_category';
 
 	let activeTab = $state('map');
 
-	// Get filter settings from AppState and ensure initialization
-	$effect(() => {
-		appState.ensureInitialized();
-		console.log('AppState initialized:', appState.initialized);
-		console.log('AppState config:', appState.config);
-		console.log('AppState filterSettings:', appState.filterSettings);
+	// AppState is initialized by default in constructor, no need for manual initialization
+
+	// Reactive getters for all filter settings as arrays for binding
+	let mapCategoriesArray = $derived(() => {
+		if (!appState.initialized) return [];
+		return Array.from(appState.filterSettings.map.categories);
 	});
 
-	// Reactive getters for all filter settings
-	const mapFilterSettings = $derived(() => {
-		if (!appState.initialized)
-			return {
-				classes: new Set<string>(),
-				subclasses: new Set<string>(),
-				categories: new Set<string>()
-			};
-		return appState.filterSettings.map;
+	let heatCategoriesArray = $derived(() => {
+		if (!appState.initialized) return [];
+		return Array.from(appState.filterSettings.heat.categories);
 	});
 
-	const heatFilterSettings = $derived(() => {
-		if (!appState.initialized)
-			return {
-				classes: new Set<string>(),
-				subclasses: new Set<string>(),
-				categories: new Set<string>()
-			};
-		return appState.filterSettings.heat;
+	let bookmarkCategoriesArray = $derived(() => {
+		if (!appState.initialized) return [];
+		return Array.from(appState.filterSettings.bookmark.categories);
 	});
 
-	const bookmarkFilterSettings = $derived(() => {
-		if (!appState.initialized)
-			return {
-				classes: new Set<string>(),
-				subclasses: new Set<string>(),
-				categories: new Set<string>()
-			};
-		return appState.filterSettings.bookmark;
+	let todoCategoriesArray = $derived(() => {
+		if (!appState.initialized) return [];
+		return Array.from(appState.filterSettings.todo.categories);
 	});
 
-	const todoFilterSettings = $derived(() => {
-		if (!appState.initialized)
-			return {
-				classes: new Set<string>(),
-				subclasses: new Set<string>(),
-				categories: new Set<string>()
-			};
-		return appState.filterSettings.todo;
-	});
-
-	const visitedFilterSettings = $derived(() => {
-		if (!appState.initialized)
-			return {
-				classes: new Set<string>(),
-				subclasses: new Set<string>(),
-				categories: new Set<string>()
-			};
-		return appState.filterSettings.visited;
+	let visitedCategoriesArray = $derived(() => {
+		if (!appState.initialized) return [];
+		return Array.from(appState.filterSettings.visited.categories);
 	});
 
 	// Filter change handlers for each tab
-	function handleMapCategoryChange(selection: {
-		classes: Set<string>;
-		subclasses: Set<string>;
-		categories: Set<string>;
-	}) {
-		console.log('Map filter selection changed:', selection);
+	function handleMapCategoryChange(categories: string[]) {
+		console.log('Map filter selection changed:', categories);
 		console.log('Before update - AppState mapFilterSettings:', appState.mapFilterSettings);
-		appState.updateMapFilterSettings(selection);
+		appState.updateMapFilterSettings({ categories: new Set(categories) });
 		console.log('After update - AppState mapFilterSettings:', appState.mapFilterSettings);
 		console.log('After update - AppState config:', appState.config);
 	}
 
-	function handleHeatCategoryChange(selection: {
-		classes: Set<string>;
-		subclasses: Set<string>;
-		categories: Set<string>;
-	}) {
-		console.log('Heat filter selection changed:', selection);
-		appState.updateFilterSettings('heat', selection);
+	function handleHeatCategoryChange(categories: string[]) {
+		console.log('Heat filter selection changed:', categories);
+		appState.updateFilterSettings('heat', { categories: new Set(categories) });
 	}
 
-	function handleBookmarkCategoryChange(selection: {
-		classes: Set<string>;
-		subclasses: Set<string>;
-		categories: Set<string>;
-	}) {
-		console.log('Bookmark filter selection changed:', selection);
-		appState.updateFilterSettings('bookmark', selection);
+	function handleBookmarkCategoryChange(categories: string[]) {
+		console.log('Bookmark filter selection changed:', categories);
+		appState.updateFilterSettings('bookmark', { categories: new Set(categories) });
 	}
 
-	function handleTodoCategoryChange(selection: {
-		classes: Set<string>;
-		subclasses: Set<string>;
-		categories: Set<string>;
-	}) {
-		console.log('Todo filter selection changed:', selection);
-		appState.updateFilterSettings('todo', selection);
+	function handleTodoCategoryChange(categories: string[]) {
+		console.log('Todo filter selection changed:', categories);
+		appState.updateFilterSettings('todo', { categories: new Set(categories) });
 	}
 
-	function handleVisitedCategoryChange(selection: {
-		classes: Set<string>;
-		subclasses: Set<string>;
-		categories: Set<string>;
-	}) {
-		console.log('Visited filter selection changed:', selection);
-		appState.updateFilterSettings('visited', selection);
+	function handleVisitedCategoryChange(categories: string[]) {
+		console.log('Visited filter selection changed:', categories);
+		appState.updateFilterSettings('visited', { categories: new Set(categories) });
 	}
 </script>
 
@@ -191,51 +141,176 @@
 					<div class="mt-4">
 						<Tabs.Content value="map" class="space-y-4">
 							<div class="space-y-2">
-								<h3 class="text-sm font-medium">Category Filters</h3>
-								<CategoryFilter
-									selectedItems={mapFilterSettings()}
-									onSelectionChange={handleMapCategoryChange}
-								/>
+								<h3 class="text-sm font-medium">Map Category Filters</h3>
+								<p class="text-sm text-gray-600">
+									{mapCategoriesArray().length} of {_CATEGORY.length} categories selected
+								</p>
+								<!-- Fixed Select All/None buttons -->
+								<div class="mb-4 flex gap-2">
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleMapCategoryChange([..._CATEGORY])}
+									>
+										Select All
+									</button>
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleMapCategoryChange([])}
+									>
+										Select None
+									</button>
+								</div>
+								<!-- Scrollable categories -->
+								<div class="max-h-80 overflow-y-auto">
+									<CategoryManager
+										selectedCategories={mapCategoriesArray()}
+										onChange={handleMapCategoryChange}
+										title=""
+										showGroups={true}
+									/>
+								</div>
 							</div>
 						</Tabs.Content>
 
 						<Tabs.Content value="heat" class="space-y-4">
 							<div class="space-y-2">
-								<h3 class="text-sm font-medium">Heat Map Filters</h3>
-								<CategoryFilter
-									selectedItems={heatFilterSettings()}
-									onSelectionChange={handleHeatCategoryChange}
-								/>
+								<h3 class="text-sm font-medium">Heat Map Category Filters</h3>
+								<p class="text-sm text-gray-600">
+									{heatCategoriesArray().length} of {_CATEGORY.length} categories selected
+								</p>
+								<!-- Fixed Select All/None buttons -->
+								<div class="mb-4 flex gap-2">
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleHeatCategoryChange([..._CATEGORY])}
+									>
+										Select All
+									</button>
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleHeatCategoryChange([])}
+									>
+										Select None
+									</button>
+								</div>
+								<!-- Scrollable categories -->
+								<div class="max-h-80 overflow-y-auto">
+									<CategoryManager
+										selectedCategories={heatCategoriesArray()}
+										onChange={handleHeatCategoryChange}
+										title=""
+										showGroups={true}
+									/>
+								</div>
 							</div>
 						</Tabs.Content>
 
 						<Tabs.Content value="bookmark" class="space-y-4">
 							<div class="space-y-2">
-								<h3 class="text-sm font-medium">Bookmark Filters</h3>
-								<CategoryFilter
-									selectedItems={bookmarkFilterSettings()}
-									onSelectionChange={handleBookmarkCategoryChange}
-								/>
+								<h3 class="text-sm font-medium">Bookmark Category Filters</h3>
+								<p class="text-sm text-gray-600">
+									{bookmarkCategoriesArray().length} of {_CATEGORY.length} categories selected
+								</p>
+								<!-- Fixed Select All/None buttons -->
+								<div class="mb-4 flex gap-2">
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleBookmarkCategoryChange([..._CATEGORY])}
+									>
+										Select All
+									</button>
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleBookmarkCategoryChange([])}
+									>
+										Select None
+									</button>
+								</div>
+								<!-- Scrollable categories -->
+								<div class="max-h-80 overflow-y-auto">
+									<CategoryManager
+										selectedCategories={bookmarkCategoriesArray()}
+										onChange={handleBookmarkCategoryChange}
+										title=""
+										showGroups={true}
+									/>
+								</div>
 							</div>
 						</Tabs.Content>
 
 						<Tabs.Content value="todo" class="space-y-4">
 							<div class="space-y-2">
-								<h3 class="text-sm font-medium">Todo Filters</h3>
-								<CategoryFilter
-									selectedItems={todoFilterSettings()}
-									onSelectionChange={handleTodoCategoryChange}
-								/>
+								<h3 class="text-sm font-medium">Todo Category Filters</h3>
+								<p class="text-sm text-gray-600">
+									{todoCategoriesArray().length} of {_CATEGORY.length} categories selected
+								</p>
+								<!-- Fixed Select All/None buttons -->
+								<div class="mb-4 flex gap-2">
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleTodoCategoryChange([..._CATEGORY])}
+									>
+										Select All
+									</button>
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleTodoCategoryChange([])}
+									>
+										Select None
+									</button>
+								</div>
+								<!-- Scrollable categories -->
+								<div class="max-h-80 overflow-y-auto">
+									<CategoryManager
+										selectedCategories={todoCategoriesArray()}
+										onChange={handleTodoCategoryChange}
+										title=""
+										showGroups={true}
+									/>
+								</div>
 							</div>
 						</Tabs.Content>
 
 						<Tabs.Content value="visited" class="space-y-4">
 							<div class="space-y-2">
-								<h3 class="text-sm font-medium">Visited Location Filters</h3>
-								<CategoryFilter
-									selectedItems={visitedFilterSettings()}
-									onSelectionChange={handleVisitedCategoryChange}
-								/>
+								<h3 class="text-sm font-medium">Visited Location Category Filters</h3>
+								<p class="text-sm text-gray-600">
+									{visitedCategoriesArray().length} of {_CATEGORY.length} categories selected
+								</p>
+								<!-- Fixed Select All/None buttons -->
+								<div class="mb-4 flex gap-2">
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleVisitedCategoryChange([..._CATEGORY])}
+									>
+										Select All
+									</button>
+									<button
+										type="button"
+										class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => handleVisitedCategoryChange([])}
+									>
+										Select None
+									</button>
+								</div>
+								<!-- Scrollable categories -->
+								<div class="max-h-80 overflow-y-auto">
+									<CategoryManager
+										selectedCategories={visitedCategoriesArray()}
+										onChange={handleVisitedCategoryChange}
+										title=""
+										showGroups={true}
+									/>
+								</div>
 							</div>
 						</Tabs.Content>
 					</div>

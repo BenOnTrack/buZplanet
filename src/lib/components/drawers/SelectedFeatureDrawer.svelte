@@ -30,9 +30,8 @@
 			activeTab,
 			featureProperties: feature?.properties
 		});
-		// Update the bindable open prop directly
-		open = newOpen;
-		// Call parent callback if provided
+		// Only call parent callback - let parent handle the state update
+		// Do NOT directly modify the open prop to avoid conflicts with Vaul's internal state
 		if (onOpenChange) {
 			onOpenChange(newOpen);
 		}
@@ -443,8 +442,14 @@
 			const storedFeature = await featuresDB.addVisit(feature);
 			featureStatus.visitedDates = storedFeature.visitedDates || [];
 
+			// Update todo status - it should be false after visiting
+			featureStatus.todo = storedFeature.todo; // Should be false now
+
 			const visitCount = storedFeature.visitedDates.length;
-			console.log(`Feature visited! Total visits: ${visitCount}`, storedFeature);
+			console.log(
+				`Feature visited! Total visits: ${visitCount}, Todo status: ${storedFeature.todo}`,
+				storedFeature
+			);
 		} catch (error) {
 			console.error('Failed to add visit:', error);
 		} finally {

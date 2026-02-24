@@ -7,7 +7,7 @@
 	import { userStore } from '$lib/stores/UserStore.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import StoryEditor from '../stories/StoryEditor.svelte';
-	import CategoryManager from '$lib/components/categories/CategoryManager.svelte';
+	import StoryCategoryManager from '$lib/components/stories/StoryCategoryManager.svelte';
 	import ConfirmDialog from '$lib/components/dialogs/ConfirmDialog.svelte';
 
 	let {
@@ -31,7 +31,7 @@
 	let saving = $state(false);
 	let error = $state<string | null>(null);
 
-	// Available categories state for CategoryManager
+	// Available categories state for StoryCategoryManager
 	let availableCategories = $state<StoryCategory[]>([]);
 	let categoryManagerError = $state<string | null>(null);
 
@@ -104,7 +104,7 @@
 		}
 	}
 
-	// Handle category changes from CategoryManager
+	// Handle category changes from StoryCategoryManager
 	function handleCategoriesChange(categories: StoryCategory[]) {
 		availableCategories = categories;
 	}
@@ -466,7 +466,7 @@
 								<!-- Categories -->
 								<fieldset>
 									<legend class="mb-3 block text-sm font-medium text-gray-700">Categories</legend>
-									<CategoryManager
+									<StoryCategoryManager
 										bind:availableCategories
 										bind:selectedCategories={categories}
 										bind:error={categoryManagerError}

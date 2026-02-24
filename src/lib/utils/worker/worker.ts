@@ -1403,7 +1403,7 @@ function createLanguageAwareSearchOrder(
 	].filter((key) => availableKeys.includes(key)); // Only include keys that actually exist
 }
 
-// Fast and optimized search matching
+// Fast and optimized search matching with "starts with" logic for composed queries
 function fastMatchesQuery(target: string, normalizedQuery: string): boolean {
 	if (!target || !normalizedQuery) return false;
 
@@ -1411,10 +1411,54 @@ function fastMatchesQuery(target: string, normalizedQuery: string): boolean {
 	const targetLower = target.toLowerCase();
 	const queryLower = normalizedQuery.toLowerCase();
 
-	// Fast path: direct substring match (most common case)
-	if (targetLower.includes(queryLower)) return true;
+	// Helper function to split text by common separators
+	function splitIntoWords(text: string): string[] {
+		// Split by space, dash, underscore, dot, comma
+		return text.split(/[\s\-_.,]+/).filter((word) => word.length > 0);
+	}
 
-	// Slower path: full normalization only when needed
+	// Helper function to check if any target word starts with query
+	function targetWordsStartWithQuery(query: string, targetWords: string[]): boolean {
+		return targetWords.some((targetWord) => targetWord.startsWith(query));
+	}
+
+	// Helper function to check if concatenated target words start with the query
+	function concatenatedTargetStartsWithQuery(query: string, targetWords: string[]): boolean {
+		// Try concatenating consecutive words to see if they start with the query
+		for (let i = 0; i < targetWords.length; i++) {
+			let concatenated = '';
+			for (let j = i; j < targetWords.length; j++) {
+				concatenated += targetWords[j];
+				// Check if the concatenated string starts with the query
+				if (concatenated.startsWith(query)) {
+					return true;
+				}
+				// Continue building longer concatenated strings
+				// (no early break since longer concatenations might still match)
+			}
+		}
+		return false;
+	}
+
+	// Split target into words
+	const targetWords = splitIntoWords(targetLower);
+
+	// Fast path: check both directions
+	// 1. Any target word starts with query (e.g., "omi" matches "omicho")
+	// 2. Concatenated target words start with query (e.g., "omicho" matches "om-ichonlok")
+	if (
+		targetWordsStartWithQuery(queryLower, targetWords) ||
+		concatenatedTargetStartsWithQuery(queryLower, targetWords)
+	) {
+		return true;
+	}
+
+	// Slower path: full normalization and bidirectional check
 	const normalizedTarget = normalizeForName(target);
-	return normalizedTarget.includes(normalizedQuery);
+	const normalizedTargetWords = splitIntoWords(normalizedTarget);
+
+	return (
+		targetWordsStartWithQuery(normalizedQuery, normalizedTargetWords) ||
+		concatenatedTargetStartsWithQuery(normalizedQuery, normalizedTargetWords)
+	);
 }

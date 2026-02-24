@@ -1,449 +1,379 @@
 <script lang="ts">
 	import { clsx } from 'clsx';
-	import { onMount } from 'svelte';
-	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
+	import { _CATEGORY } from '$lib/assets/class_subclass_category';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
-	import ConfirmDialog from '$lib/components/dialogs/ConfirmDialog.svelte';
+	import { appState } from '$lib/stores/AppState.svelte';
+	import { COLORS } from '$lib/constants';
 
 	let {
-		availableCategories = $bindable([]),
 		selectedCategories = $bindable([]),
-		error = $bindable(null),
-		onCategoriesChange = undefined,
-		showSelection = true,
-		allowDelete = false,
+		onChange = undefined,
+		title = 'Select Categories',
+		showGroups = true,
 		class: className = ''
 	}: {
-		availableCategories?: StoryCategory[];
 		selectedCategories?: string[];
-		error?: string | null;
-		onCategoriesChange?: (categories: StoryCategory[]) => void;
-		showSelection?: boolean;
-		allowDelete?: boolean;
+		onChange?: (categories: string[]) => void;
+		title?: string;
+		showGroups?: boolean;
 		class?: string;
 	} = $props();
 
-	// Category creation state
-	let showCreateCategory = $state(false);
-	let newCategoryName = $state('');
-	let newCategoryColor = $state('#3B82F6');
-	let newCategoryIcon = $state('');
-	let creating = $state(false);
-	let deletingCategory = $state<string | null>(null);
+	// Group categories by class and subclass for hierarchical organization
+	let categoryHierarchy = $derived.by(() => {
+		const hierarchy: Record<string, Record<string, string[]>> = {};
 
-	// Confirmation dialog state
-	let confirmDialogOpen = $state(false);
-	let confirmDialogTitle = $state('');
-	let confirmDialogMessage = $state('');
-	let confirmDialogVariant = $state<'destructive' | 'primary' | 'secondary'>('destructive');
-	let confirmDialogConfirmText = $state('Confirm');
-	let confirmDialogAction = $state<(() => Promise<void>) | null>(null);
-	let categoryToDelete = $state<StoryCategory | null>(null);
+		_CATEGORY.forEach((category) => {
+			const parts = category.split('-');
+			const className = parts[0];
+			const subClassName = parts[1];
+			const categoryName = parts[2];
 
-	// Load categories and their usage information when component mounts
-	onMount(() => {
-		loadCategoriesWithUsage();
+			if (!hierarchy[className]) {
+				hierarchy[className] = {};
+			}
+			if (!hierarchy[className][subClassName]) {
+				hierarchy[className][subClassName] = [];
+			}
+			hierarchy[className][subClassName].push(category);
+		});
+
+		return hierarchy;
 	});
 
-	// Track category usage information
-	let categoryUsage = $state<
-		Map<string, { inUse: boolean; storyCount: number; storyTitles: string[] }>
-	>(new Map());
-
-	// Load available categories with usage information
-	async function loadCategoriesWithUsage() {
-		try {
-			availableCategories = await storiesDB.getAllCategories();
-
-			// Load usage information for each category (only if deletion is allowed)
-			if (allowDelete) {
-				const usagePromises = availableCategories.map(async (category) => {
-					try {
-						const usage = await storiesDB.isCategoryInUse(category.id);
-						return [category.id, usage] as [
-							string,
-							{ inUse: boolean; storyCount: number; storyTitles: string[] }
-						];
-					} catch (err) {
-						console.warn(`Failed to check usage for category ${category.id}:`, err);
-						return [category.id, { inUse: false, storyCount: 0, storyTitles: [] }] as [
-							string,
-							{ inUse: boolean; storyCount: number; storyTitles: string[] }
-						];
-					}
-				});
-
-				const usageResults = await Promise.all(usagePromises);
-				categoryUsage = new Map(usageResults);
-			}
-		} catch (err) {
-			console.error('Failed to load categories:', err);
-			error = 'Failed to load categories. Please try again.';
-		}
+	// Get category display name (just the final part)
+	function getCategoryDisplayName(category: string): string {
+		const parts = category.split('-');
+		return parts[parts.length - 1].replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 	}
 
-	// Toggle category selection
-	function toggleCategory(categoryId: string) {
-		if (!showSelection) return;
+	// Get subclass display name
+	function getSubclassDisplayName(subclass: string): string {
+		return subclass.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+	}
 
-		if (selectedCategories.includes(categoryId)) {
-			selectedCategories = selectedCategories.filter((cat) => cat !== categoryId);
+	// Get class display name
+	function getClassDisplayName(className: string): string {
+		return className.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+	}
+
+	// Get category class for color coding
+	function getCategoryClass(category: string): string {
+		return category.split('-')[0];
+	}
+
+	// Get the actual category name (3rd part) for PropertyIcon
+	function getCategoryName(category: string): string {
+		const parts = category.split('-');
+		return parts[2] || parts[parts.length - 1]; // fallback to last part
+	}
+
+	// Get the class name (1st part) for PropertyIcon
+	function getClassName(category: string): string {
+		return category.split('-')[0];
+	}
+
+	// Get the subclass name (2nd part) for PropertyIcon
+	function getSubclassName(category: string): string {
+		return category.split('-')[1];
+	}
+
+	// Toggle individual category
+	function toggleCategory(category: string) {
+		if (selectedCategories.includes(category)) {
+			selectedCategories = selectedCategories.filter((c) => c !== category);
 		} else {
-			selectedCategories = [...selectedCategories, categoryId];
+			selectedCategories = [...selectedCategories, category];
+		}
+
+		if (onChange) {
+			onChange(selectedCategories);
 		}
 	}
 
-	// Create new category
-	async function createCategory() {
-		if (!newCategoryName.trim()) return;
+	// Toggle all categories in a class
+	function toggleClass(className: string) {
+		const classCategories = Object.values(categoryHierarchy[className]).flat();
+		const allSelected = classCategories.every((cat) => selectedCategories.includes(cat));
 
-		try {
-			creating = true;
-			error = null;
-
-			// Generate a unique ID for the category
-			const categoryId = newCategoryName
-				.trim()
-				.toLowerCase()
-				.replace(/\s+/g, '-')
-				.replace(/[^a-z0-9-]/g, '');
-
-			// Check if category already exists
-			const existingCategory = availableCategories.find((cat) => cat.id === categoryId);
-			if (existingCategory) {
-				error = `Category "${newCategoryName}" already exists`;
-				return;
-			}
-
-			// Create the category
-			const newCategory = await storiesDB.createCategory({
-				id: categoryId,
-				name: newCategoryName.trim(),
-				color: newCategoryColor,
-				icon: newCategoryIcon.trim() || undefined,
-				description: `Custom category: ${newCategoryName.trim()}`
+		if (allSelected) {
+			// Remove all categories in this class
+			selectedCategories = selectedCategories.filter((cat) => !classCategories.includes(cat));
+		} else {
+			// Add all categories in this class
+			const newCategories = [...selectedCategories];
+			classCategories.forEach((cat) => {
+				if (!newCategories.includes(cat)) {
+					newCategories.push(cat);
+				}
 			});
+			selectedCategories = newCategories;
+		}
 
-			// Add to available categories
-			availableCategories = [...availableCategories, newCategory].sort((a, b) =>
-				a.name.localeCompare(b.name)
-			);
-
-			// Auto-select the new category if selection is enabled
-			if (showSelection) {
-				selectedCategories = [...selectedCategories, categoryId];
-			}
-
-			// Reset form
-			cancelCreateCategory();
-
-			// Notify parent of changes
-			if (onCategoriesChange) {
-				onCategoriesChange(availableCategories);
-			}
-
-			// Reload usage information after creation
-			if (allowDelete) {
-				loadCategoriesWithUsage();
-			}
-
-			console.log('✅ Created new category:', newCategory);
-		} catch (err) {
-			console.error('❌ Failed to create category:', err);
-			error = 'Failed to create category. Please try again.';
-		} finally {
-			creating = false;
+		if (onChange) {
+			onChange(selectedCategories);
 		}
 	}
 
-	// Delete category
-	async function deleteCategory(category: StoryCategory) {
-		try {
-			error = null;
+	// Toggle all categories in a subclass
+	function toggleSubclass(className: string, subClassName: string) {
+		const subclassCategories = categoryHierarchy[className][subClassName];
+		const allSelected = subclassCategories.every((cat) => selectedCategories.includes(cat));
 
-			// First check if category is in use
-			const usageCheck = await storiesDB.isCategoryInUse(category.id);
+		if (allSelected) {
+			// Remove all categories in this subclass
+			selectedCategories = selectedCategories.filter((cat) => !subclassCategories.includes(cat));
+		} else {
+			// Add all categories in this subclass
+			const newCategories = [...selectedCategories];
+			subclassCategories.forEach((cat) => {
+				if (!newCategories.includes(cat)) {
+					newCategories.push(cat);
+				}
+			});
+			selectedCategories = newCategories;
+		}
 
-			if (usageCheck.inUse) {
-				const storyList =
-					usageCheck.storyTitles.length <= 5
-						? usageCheck.storyTitles.map((title) => `"${title}"`).join(', ')
-						: `${usageCheck.storyTitles
-								.slice(0, 5)
-								.map((title) => `"${title}"`)
-								.join(', ')} and ${usageCheck.storyCount - 5} more`;
-
-				const message = `Cannot delete category "${category.name}" because it is used by ${usageCheck.storyCount} ${usageCheck.storyCount === 1 ? 'story' : 'stories'}:\n\n${storyList}\n\nPlease remove this category from all stories before deleting it.`;
-
-				// Show info dialog (non-destructive)
-				confirmDialogTitle = 'Cannot Delete Category';
-				confirmDialogMessage = message;
-				confirmDialogVariant = 'secondary';
-				confirmDialogConfirmText = 'OK';
-				confirmDialogAction = null; // No action, just info
-				categoryToDelete = null;
-				confirmDialogOpen = true;
-				return;
-			}
-
-			// If not in use, show confirmation dialog
-			categoryToDelete = category;
-			confirmDialogTitle = 'Delete Category';
-			confirmDialogMessage = `Are you sure you want to delete the category "${category.name}"?\n\nThis action cannot be undone.`;
-			confirmDialogVariant = 'destructive';
-			confirmDialogConfirmText = 'Delete';
-			confirmDialogAction = performCategoryDeletion;
-			confirmDialogOpen = true;
-		} catch (err) {
-			console.error('❌ Failed to check category usage:', err);
-			error =
-				err instanceof Error ? err.message : 'Failed to check category usage. Please try again.';
+		if (onChange) {
+			onChange(selectedCategories);
 		}
 	}
 
-	// Perform the actual category deletion
-	async function performCategoryDeletion() {
-		if (!categoryToDelete) return;
+	// Check if all categories in a class are selected
+	function isClassSelected(className: string): boolean {
+		const classCategories = Object.values(categoryHierarchy[className]).flat();
+		return classCategories.every((cat) => selectedCategories.includes(cat));
+	}
 
-		try {
-			deletingCategory = categoryToDelete.id;
-			error = null;
+	// Check if some categories in a class are selected
+	function isClassPartiallySelected(className: string): boolean {
+		const classCategories = Object.values(categoryHierarchy[className]).flat();
+		const selectedInClass = classCategories.filter((cat) => selectedCategories.includes(cat));
+		return selectedInClass.length > 0 && selectedInClass.length < classCategories.length;
+	}
 
-			await storiesDB.deleteCategory(categoryToDelete.id);
+	// Check if all categories in a subclass are selected
+	function isSubclassSelected(className: string, subClassName: string): boolean {
+		const subclassCategories = categoryHierarchy[className][subClassName];
+		return subclassCategories.every((cat) => selectedCategories.includes(cat));
+	}
 
-			// Remove from available categories
-			availableCategories = availableCategories.filter((cat) => cat.id !== categoryToDelete!.id);
+	// Check if some categories in a subclass are selected
+	function isSubclassPartiallySelected(className: string, subClassName: string): boolean {
+		const subclassCategories = categoryHierarchy[className][subClassName];
+		const selectedInSubclass = subclassCategories.filter((cat) => selectedCategories.includes(cat));
+		return selectedInSubclass.length > 0 && selectedInSubclass.length < subclassCategories.length;
+	}
 
-			// Remove from selected categories if it was selected
-			if (selectedCategories.includes(categoryToDelete.id)) {
-				selectedCategories = selectedCategories.filter((id) => id !== categoryToDelete!.id);
-			}
+	// Get dynamic colors based on user settings from AppState
+	function getClassStyles(className: string, isSelected: boolean = false): string {
+		if (!appState.initialized) {
+			return isSelected
+				? 'background-color: #374151; color: white; border-color: #6b7280;'
+				: 'background-color: white; color: #374151; border-color: #d1d5db;';
+		}
 
-			// Notify parent of changes
-			if (onCategoriesChange) {
-				onCategoriesChange(availableCategories);
-			}
+		const colorName =
+			appState.colorMappings[className as keyof typeof appState.colorMappings] || 'gray';
+		const colorShades = COLORS[colorName as keyof typeof COLORS];
 
-			// Reload usage information after deletion
-			if (allowDelete) {
-				loadCategoriesWithUsage();
-			}
+		if (!colorShades) {
+			return isSelected
+				? 'background-color: #374151; color: white; border-color: #6b7280;'
+				: 'background-color: white; color: #374151; border-color: #d1d5db;';
+		}
 
-			console.log('✅ Deleted category:', categoryToDelete.name);
-		} catch (err) {
-			console.error('❌ Failed to delete category:', err);
-			error = err instanceof Error ? err.message : 'Failed to delete category. Please try again.';
-			throw err; // Re-throw to prevent dialog from closing
-		} finally {
-			deletingCategory = null;
-			categoryToDelete = null;
+		// Class uses 800 level (darkest) when selected, white when unselected
+		if (isSelected) {
+			return `background-color: ${colorShades[800]}; color: white; border-color: ${colorShades[600]};`;
+		} else {
+			return `background-color: white; color: ${colorShades[800]}; border-color: ${colorShades[400]};`;
 		}
 	}
 
-	// Cancel category creation
-	function cancelCreateCategory() {
-		showCreateCategory = false;
-		newCategoryName = '';
-		newCategoryColor = '#3B82F6';
-		newCategoryIcon = '';
-		error = null;
+	function getSubclassStyles(className: string, isSelected: boolean = false): string {
+		if (!appState.initialized) {
+			return isSelected
+				? 'background-color: #6b7280; color: white; border-color: #9ca3af;'
+				: 'background-color: white; color: #374151; border-color: #d1d5db;';
+		}
+
+		const colorName =
+			appState.colorMappings[className as keyof typeof appState.colorMappings] || 'gray';
+		const colorShades = COLORS[colorName as keyof typeof COLORS];
+
+		if (!colorShades) {
+			return isSelected
+				? 'background-color: #6b7280; color: white; border-color: #9ca3af;'
+				: 'background-color: white; color: #374151; border-color: #d1d5db;';
+		}
+
+		// Subclass uses 600 level (medium) when selected, white when unselected
+		if (isSelected) {
+			return `background-color: ${colorShades[600]}; color: white; border-color: ${colorShades[400]};`;
+		} else {
+			return `background-color: white; color: ${colorShades[600]}; border-color: ${colorShades[400]};`;
+		}
+	}
+
+	function getCategoryStyles(className: string, isSelected: boolean = false): string {
+		if (!appState.initialized) {
+			return isSelected
+				? 'background-color: #93c5fd; color: #1e3a8a; border-color: #3b82f6;'
+				: 'background-color: white; color: #374151; border-color: #d1d5db;';
+		}
+
+		const colorName =
+			appState.colorMappings[className as keyof typeof appState.colorMappings] || 'gray';
+		const colorShades = COLORS[colorName as keyof typeof COLORS];
+
+		if (!colorShades) {
+			return isSelected
+				? 'background-color: #93c5fd; color: #1e3a8a; border-color: #3b82f6;'
+				: 'background-color: white; color: #374151; border-color: #d1d5db;';
+		}
+
+		// Category uses 400 level when selected, white when unselected
+		if (isSelected) {
+			return `background-color: ${colorShades[400]}; color: ${colorShades[800]}; border-color: ${colorShades[600]};`;
+		} else {
+			return `background-color: white; color: ${colorShades[600]}; border-color: ${colorShades[400]};`;
+		}
 	}
 </script>
 
-<div class={clsx('category-manager', className)}>
-	<!-- Error message -->
-	{#if error}
-		<div class="mb-4 rounded-md border border-red-200 bg-red-50 p-3">
-			<div class="flex items-center gap-2 text-red-700">
-				<PropertyIcon key="description" value="error" size={16} />
-				{error}
-			</div>
-		</div>
-	{/if}
-
-	<!-- Categories Selection/Display -->
-	{#if availableCategories.length > 0}
-		<fieldset class="mb-6">
-			<legend class="mb-3 block text-sm font-medium text-gray-700">
-				{showSelection ? 'Select Categories' : 'Available Categories'}
-			</legend>
-			<div class="flex flex-wrap gap-2">
-				{#each availableCategories as category}
-					<div class="flex items-center gap-1">
-						<button
-							type="button"
-							class={clsx(
-								'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none',
-								{
-									'cursor-pointer text-white':
-										showSelection && selectedCategories.includes(category.id),
-									'cursor-pointer border border-gray-300 text-gray-700 hover:bg-gray-50':
-										showSelection && !selectedCategories.includes(category.id),
-									'cursor-default text-white': !showSelection
-								}
-							)}
-							style={selectedCategories.includes(category.id) || !showSelection
-								? `background-color: ${category.color}`
-								: ''}
-							onclick={() => toggleCategory(category.id)}
-							disabled={!showSelection}
-							aria-pressed={showSelection ? selectedCategories.includes(category.id) : undefined}
-							aria-label="{showSelection
-								? (selectedCategories.includes(category.id) ? 'Remove' : 'Add') + ' category '
-								: ''}{category.name}"
-							title={allowDelete && categoryUsage.has(category.id)
-								? `Used by ${categoryUsage.get(category.id)?.storyCount || 0} ${(categoryUsage.get(category.id)?.storyCount || 0) === 1 ? 'story' : 'stories'}`
-								: category.name}
-						>
-							{category.icon || '📂'}
-							{category.name}
-							{#if allowDelete && categoryUsage.has(category.id) && categoryUsage.get(category.id)?.inUse}
-								<span class="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-xs">
-									{categoryUsage.get(category.id)?.storyCount}
-								</span>
-							{/if}
-						</button>
-
-						{#if allowDelete}
+<div class={clsx('simple-category-manager', className)}>
+	<!-- Categories - Scrollable content -->
+	<div class="overflow-y-auto">
+		{#if showGroups}
+			<!-- Hierarchical view: Class > Subclass > Categories -->
+			<div class="space-y-6">
+				{#each Object.entries(categoryHierarchy) as [className, subclasses]}
+					<fieldset class="rounded-lg border border-gray-200 p-4">
+						<legend class="px-2">
 							<button
 								type="button"
-								class={clsx(
-									'ml-1 flex h-5 w-5 items-center justify-center rounded-full border text-xs focus:ring-2 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed',
-									{
-										'border-red-300 bg-red-50 text-red-600 hover:bg-red-100 focus:ring-red-500':
-											!categoryUsage.get(category.id)?.inUse,
-										'cursor-not-allowed border-gray-300 bg-gray-100 text-gray-400':
-											categoryUsage.get(category.id)?.inUse
-									}
-								)}
-								onclick={() => deleteCategory(category)}
-								disabled={deletingCategory === category.id || categoryUsage.get(category.id)?.inUse}
-								title={categoryUsage.get(category.id)?.inUse
-									? `Cannot delete - used by ${categoryUsage.get(category.id)?.storyCount} ${(categoryUsage.get(category.id)?.storyCount || 0) === 1 ? 'story' : 'stories'}`
-									: 'Delete category'}
-								aria-label={categoryUsage.get(category.id)?.inUse
-									? `Cannot delete category ${category.name} - in use`
-									: `Delete category ${category.name}`}
+								class="inline-flex items-center gap-2 rounded-md border px-3 py-1 text-sm font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+								style={getClassStyles(className, isClassSelected(className))}
+								onclick={() => toggleClass(className)}
+								aria-pressed={isClassSelected(className)}
+								title="Toggle all {getClassDisplayName(className)} categories"
 							>
-								{#if deletingCategory === category.id}
-									<PropertyIcon key="description" value="loading" size={12} class="animate-spin" />
+								{#if isClassSelected(className)}
+									<PropertyIcon key="description" value="check" size={14} />
+								{:else if isClassPartiallySelected(className)}
+									<PropertyIcon key="description" value="minus" size={14} />
 								{:else}
-									<PropertyIcon key="description" value="x" size={12} />
+									<PropertyIcon key="description" value="plus" size={14} />
 								{/if}
+								<PropertyIcon key="class" value={className} size={14} />
+								{getClassDisplayName(className)}
+								<span class="text-xs opacity-75">
+									({Object.values(subclasses)
+										.flat()
+										.filter((cat) => selectedCategories.includes(cat)).length}/{Object.values(
+										subclasses
+									).flat().length})
+								</span>
 							</button>
-						{/if}
-					</div>
+						</legend>
+
+						<div class="mt-3 space-y-4">
+							{#each Object.entries(subclasses) as [subClassName, categories]}
+								<div class="border-l-2 border-gray-200 pl-4">
+									<!-- Subclass header -->
+									<div class="mb-2">
+										<button
+											type="button"
+											class="inline-flex items-center gap-2 rounded border px-2 py-1 text-xs font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+											style={getSubclassStyles(
+												className,
+												isSubclassSelected(className, subClassName)
+											)}
+											onclick={() => toggleSubclass(className, subClassName)}
+											aria-pressed={isSubclassSelected(className, subClassName)}
+											title="Toggle all {getSubclassDisplayName(subClassName)} categories"
+										>
+											{#if isSubclassSelected(className, subClassName)}
+												<PropertyIcon key="description" value="check" size={12} />
+											{:else if isSubclassPartiallySelected(className, subClassName)}
+												<PropertyIcon key="description" value="minus" size={12} />
+											{:else}
+												<PropertyIcon key="description" value="plus" size={12} />
+											{/if}
+											<PropertyIcon key="subclass" value={subClassName} size={12} />
+											{getSubclassDisplayName(subClassName)}
+											<span class="text-xs opacity-75">
+												({categories.filter((cat) => selectedCategories.includes(cat))
+													.length}/{categories.length})
+											</span>
+										</button>
+									</div>
+
+									<!-- Categories in this subclass -->
+									<div class="flex flex-wrap gap-1">
+										{#each categories as category}
+											<label class="inline-flex cursor-pointer items-center">
+												<input
+													type="checkbox"
+													class="sr-only"
+													checked={selectedCategories.includes(category)}
+													onchange={() => toggleCategory(category)}
+												/>
+												<span
+													class="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium transition-colors focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2"
+													style={getCategoryStyles(
+														className,
+														selectedCategories.includes(category)
+													)}
+													title="{category}: {getCategoryDisplayName(category)}"
+												>
+													<PropertyIcon
+														key="category"
+														value={getCategoryName(category)}
+														size={12}
+													/>
+													{getCategoryDisplayName(category)}
+												</span>
+											</label>
+										{/each}
+									</div>
+								</div>
+							{/each}
+						</div>
+					</fieldset>
 				{/each}
 			</div>
-		</fieldset>
-	{/if}
-
-	<!-- Create New Category -->
-	<fieldset>
-		<legend class="mb-3 block text-sm font-medium text-gray-700">Create New Category</legend>
-
-		{#if !showCreateCategory}
-			<button
-				type="button"
-				class="inline-flex items-center gap-2 rounded-md border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-				onclick={() => (showCreateCategory = true)}
-			>
-				<PropertyIcon key="description" value="plus" size={16} />
-				Add Custom Category
-			</button>
 		{:else}
-			<div class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-				<!-- Category Name -->
-				<div>
-					<label for="category-name" class="mb-1 block text-sm font-medium text-gray-700">
-						Category Name *
-					</label>
-					<input
-						id="category-name"
-						type="text"
-						bind:value={newCategoryName}
-						placeholder="e.g., Photography, Work, Family"
-						class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-						required
-					/>
-				</div>
-
-				<!-- Category Color and Icon -->
-				<div class="grid grid-cols-2 gap-4">
-					<div>
-						<label for="category-color" class="mb-1 block text-sm font-medium text-gray-700">
-							Color
-						</label>
+			<!-- Flat list -->
+			<div class="flex flex-wrap gap-2">
+				{#each _CATEGORY as category}
+					<label class="inline-flex cursor-pointer items-center">
 						<input
-							id="category-color"
-							type="color"
-							bind:value={newCategoryColor}
-							class="block h-10 w-full rounded-md border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+							type="checkbox"
+							class="sr-only"
+							checked={selectedCategories.includes(category)}
+							onchange={() => toggleCategory(category)}
 						/>
-					</div>
-					<div>
-						<label for="category-icon" class="mb-1 block text-sm font-medium text-gray-700">
-							Icon (optional)
-						</label>
-						<input
-							id="category-icon"
-							type="text"
-							bind:value={newCategoryIcon}
-							placeholder="📸 💼 👨‍👩‍👧‍👦"
-							maxlength="2"
-							class="block w-full rounded-md border border-gray-300 px-3 py-2 text-center text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-						/>
-					</div>
-				</div>
-
-				<!-- Preview -->
-				{#if newCategoryName}
-					<div>
-						<p class="mb-2 text-sm text-gray-700">Preview:</p>
 						<span
-							class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-white"
-							style="background-color: {newCategoryColor}"
+							class="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium transition-colors focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2"
+							style={getCategoryStyles(
+								category.split('-')[0],
+								selectedCategories.includes(category)
+							)}
+							title={category}
 						>
-							{newCategoryIcon || '📂'}
-							{newCategoryName}
+							<PropertyIcon key="category" value={getCategoryName(category)} size={12} />
+							<span class="mr-1 text-xs opacity-60">
+								{getClassDisplayName(category.split('-')[0])} › {getSubclassDisplayName(
+									category.split('-')[1]
+								)} ›
+							</span>
+							{getCategoryDisplayName(category)}
 						</span>
-					</div>
-				{/if}
-
-				<!-- Actions -->
-				<div class="flex gap-2">
-					<button
-						type="button"
-						class="flex-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-400"
-						onclick={createCategory}
-						disabled={!newCategoryName.trim() || creating}
-					>
-						{#if creating}
-							Creating...
-						{:else}
-							Create Category
-						{/if}
-					</button>
-					<button
-						type="button"
-						class="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-						onclick={cancelCreateCategory}
-						disabled={creating}
-					>
-						Cancel
-					</button>
-				</div>
+					</label>
+				{/each}
 			</div>
 		{/if}
-	</fieldset>
+	</div>
 </div>
-
-<!-- Confirmation Dialog -->
-<ConfirmDialog
-	bind:open={confirmDialogOpen}
-	title={confirmDialogTitle}
-	message={confirmDialogMessage}
-	variant={confirmDialogVariant}
-	confirmText={confirmDialogConfirmText}
-	onConfirm={confirmDialogAction || undefined}
-/>

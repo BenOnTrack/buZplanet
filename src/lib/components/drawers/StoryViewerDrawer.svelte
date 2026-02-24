@@ -10,7 +10,7 @@
 	import StoryViewer from '$lib/components/stories/StoryViewer.svelte';
 	import StoryEditorDrawer from '$lib/components/drawers/StoryEditorDrawer.svelte';
 	import FollowedStoryCategoryEditDialog from '$lib/components/dialogs/FollowedStoryCategoryEditDialog.svelte';
-	import CategoryManager from '$lib/components/categories/CategoryManager.svelte';
+	import StoryCategoryManager from '$lib/components/stories/StoryCategoryManager.svelte';
 	import ConfirmDialog from '$lib/components/dialogs/ConfirmDialog.svelte';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
@@ -206,7 +206,7 @@
 		selectedCategories = [];
 	}
 
-	// Handle category changes from CategoryManager
+	// Handle category changes from StoryCategoryManager
 	function handleCategoriesChange(categories: StoryCategory[]) {
 		availableCategories = categories;
 		// Trigger reload of categories in stories list if needed
@@ -471,7 +471,7 @@
 							>
 								<!-- Categories Management Content -->
 								<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">
-									<CategoryManager
+									<StoryCategoryManager
 										bind:availableCategories
 										bind:error={categoryManagerError}
 										onCategoriesChange={handleCategoriesChange}

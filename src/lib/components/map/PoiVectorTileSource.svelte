@@ -3,101 +3,53 @@
 	// @ts-nocheck
 	import { VectorTileSource, HeatmapLayer, SymbolLayer, FillLayer } from 'svelte-maplibre';
 	import { appState } from '$lib/stores/AppState.svelte.js';
-	import { onMount } from 'svelte';
+	import { buildMapFilter } from '$lib/utils/categories';
 
 	let { nameExpression }: { nameExpression: any } = $props();
 
-	// Track initialization
-	let isInitialized = $state(false);
-
-	// Initialize on mount
-	onMount(async () => {
-		await appState.ensureInitialized();
-		isInitialized = true;
-	});
+	// AppState is initialized by default in constructor
 
 	// Derived filter based on AppState map filter settings
 	let featuresMapFilter = $derived.by(() => {
-		if (!isInitialized) {
-			// Return permissive filter during initialization
-			return ['all'];
+		try {
+			const mapFilterSettings = appState.mapFilterSettings;
+			const selectedCategories = Array.from(mapFilterSettings.categories);
+
+			console.log('Map filter applied:', {
+				categories: selectedCategories.length
+			});
+
+			return buildMapFilter(selectedCategories);
+		} catch (error) {
+			console.error('Error building map filter:', error);
+			return ['all']; // Fallback to show all
 		}
-
-		const mapFilterSettings = appState.mapFilterSettings;
-
-		// Extract class names (already clean)
-		const selectedClasses = Array.from(mapFilterSettings.classes);
-
-		// Extract subclass names (remove class prefix)
-		const selectedSubclasses = Array.from(mapFilterSettings.subclasses).map((subclass) => {
-			const parts = subclass.split('-');
-			return parts.slice(1).join('-'); // Remove first part (class)
-		});
-
-		// Extract category names (remove class and subclass prefix)
-		const selectedCategories = Array.from(mapFilterSettings.categories).map((category) => {
-			const parts = category.split('-');
-			return parts.slice(2).join('-'); // Remove first two parts (class-subclass)
-		});
-
-		console.log('Map filter applied:', {
-			classes: selectedClasses.length,
-			subclasses: selectedSubclasses.length,
-			categories: selectedCategories.length
-		});
-
-		return [
-			'all',
-			['in', ['get', 'class'], ['literal', selectedClasses]],
-			['in', ['get', 'subclass'], ['literal', selectedSubclasses]],
-			['in', ['get', 'category'], ['literal', selectedCategories]]
-		];
 	});
 
 	// Derived filter based on AppState heat filter settings
 	let featuresHeatFilter = $derived.by(() => {
-		if (!isInitialized) {
-			// Return permissive filter during initialization
-			return ['all'];
+		try {
+			const heatFilterSettings = appState.filterSettings.heat;
+			const selectedCategories = Array.from(heatFilterSettings.categories);
+
+			console.log('Heat filter applied:', {
+				categories: selectedCategories.length
+			});
+
+			// If no heat categories are selected, return a filter that shows nothing
+			if (selectedCategories.length === 0) {
+				return ['==', ['literal', true], ['literal', false]]; // Always false - show nothing
+			}
+
+			return buildMapFilter(selectedCategories);
+		} catch (error) {
+			console.error('Error building heat filter:', error);
+			return ['==', ['literal', true], ['literal', false]]; // Fallback to show nothing for heat
 		}
-
-		const heatFilterSettings = appState.filterSettings.heat;
-
-		// Extract class names (already clean)
-		const selectedClasses = Array.from(heatFilterSettings.classes);
-
-		// Extract subclass names (remove class prefix)
-		const selectedSubclasses = Array.from(heatFilterSettings.subclasses).map((subclass) => {
-			const parts = subclass.split('-');
-			return parts.slice(1).join('-'); // Remove first part (class)
-		});
-
-		// Extract category names (remove class and subclass prefix)
-		const selectedCategories = Array.from(heatFilterSettings.categories).map((category) => {
-			const parts = category.split('-');
-			return parts.slice(2).join('-'); // Remove first two parts (class-subclass)
-		});
-
-		console.log('Heat filter applied:', {
-			classes: selectedClasses.length,
-			subclasses: selectedSubclasses.length,
-			categories: selectedCategories.length
-		});
-
-		return [
-			'all',
-			['in', ['get', 'class'], ['literal', selectedClasses]],
-			['in', ['get', 'subclass'], ['literal', selectedSubclasses]],
-			['in', ['get', 'category'], ['literal', selectedCategories]]
-		];
 	});
 
 	// Derived filter for place layers that combines map filter with existing category filter
 	let placeMinorFilter = $derived.by(() => {
-		if (!isInitialized) {
-			return ['all'];
-		}
-
 		return [
 			'all',
 			featuresMapFilter,
@@ -134,10 +86,6 @@
 	});
 
 	let placeMajorFilter = $derived.by(() => {
-		if (!isInitialized) {
-			return ['all'];
-		}
-
 		return [
 			'all',
 			featuresMapFilter,
@@ -172,207 +120,6 @@
 
 	// Reactive icon image expressions that use colors from AppState
 	const iconImage = $derived(() => {
-		if (!isInitialized) {
-			// Return default values during initialization
-			return {
-				attraction: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'teal'
-				],
-				education: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'stone'
-				],
-				entertainment: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'fuchsia'
-				],
-				facility: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'zinc'
-				],
-				food_and_drink: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'amber'
-				],
-				healthcare: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'red'
-				],
-				leisure: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'blue'
-				],
-				lodging: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'slate'
-				],
-				natural: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'green'
-				],
-				place: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'neutral'
-				],
-				route: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'indigo'
-				],
-				shop: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'rose'
-				],
-				transportation: [
-					'case',
-					['has', 'relationChildId'],
-					[
-						'concat',
-						'super-',
-						['to-string', ['get', 'class']],
-						'-',
-						['to-string', ['get', 'subclass']],
-						'-',
-						['to-string', ['get', 'category']],
-						'-bright-',
-						'sky'
-					],
-					[
-						'concat',
-						['to-string', ['get', 'class']],
-						'-',
-						['to-string', ['get', 'subclass']],
-						'-',
-						['to-string', ['get', 'category']],
-						'-bright-',
-						'sky'
-					]
-				],
-				bookmarks: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'blue'
-				],
-				visited: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'green'
-				],
-				todo: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'red'
-				],
-				followed: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'purple'
-				],
-				search: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'yellow'
-				]
-			};
-		}
-
 		// Get current color mappings from AppState
 		const colorMappings = appState.colorMappings;
 

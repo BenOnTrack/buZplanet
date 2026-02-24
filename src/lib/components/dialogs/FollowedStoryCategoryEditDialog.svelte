@@ -4,7 +4,7 @@
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
-	import CategoryManager from '$lib/components/categories/CategoryManager.svelte';
+	import StoryCategoryManager from '$lib/components/stories/StoryCategoryManager.svelte';
 
 	let {
 		open = $bindable(false),
@@ -22,7 +22,7 @@
 	let saving = $state(false);
 	let error = $state<string | null>(null);
 
-	// CategoryManager error state
+	// StoryCategoryManager error state
 	let categoryManagerError = $state<string | null>(null);
 
 	// Load data when dialog opens
@@ -51,7 +51,7 @@
 		}
 	}
 
-	// Toggle category selection (kept for backward compatibility with CategoryManager)
+	// Toggle category selection (kept for backward compatibility with StoryCategoryManager)
 	function toggleCategory(categoryId: string) {
 		if (selectedCategories.includes(categoryId)) {
 			selectedCategories = selectedCategories.filter((cat) => cat !== categoryId);
@@ -60,7 +60,7 @@
 		}
 	}
 
-	// Handle category changes from CategoryManager
+	// Handle category changes from StoryCategoryManager
 	function handleCategoriesChange(categories: StoryCategory[]) {
 		availableCategories = categories;
 	}
@@ -175,8 +175,8 @@
 					</div>
 				{/if}
 
-				<!-- CategoryManager Component -->
-				<CategoryManager
+				<!-- StoryCategoryManager Component -->
+				<StoryCategoryManager
 					bind:availableCategories
 					bind:selectedCategories
 					bind:error={categoryManagerError}

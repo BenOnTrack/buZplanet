@@ -84,16 +84,6 @@
 		features: []
 	});
 
-	// Load bookmarked features effect
-	$effect(() => {
-		if (!featuresDB.initialized) return;
-
-		// Access reactive dependencies
-		featuresDB.bookmarksVersion;
-
-		loadBookmarkedFeatures();
-	});
-
 	async function loadBookmarkedFeatures() {
 		try {
 			await featuresDB.ensureInitialized();
@@ -135,16 +125,6 @@
 		}
 	}
 
-	// Load visited features effect
-	$effect(() => {
-		if (!featuresDB.initialized) return;
-
-		// Access reactive dependencies
-		featuresDB.bookmarksVersion;
-
-		loadVisitedFeatures();
-	});
-
 	async function loadVisitedFeatures() {
 		try {
 			await featuresDB.ensureInitialized();
@@ -185,16 +165,6 @@
 			};
 		}
 	}
-
-	// Load todo features effect
-	$effect(() => {
-		if (!featuresDB.initialized) return;
-
-		// Access reactive dependencies
-		featuresDB.bookmarksVersion;
-
-		loadTodoFeatures();
-	});
 
 	async function loadTodoFeatures() {
 		try {
@@ -302,14 +272,26 @@
 		}
 	}
 
-	// Initialize FeaturesDB and map style
+	// Main initialization and features loading effect
 	$effect(() => {
+		// Initialize map style when page URL is available
 		if (page.url?.origin) {
 			mapStyle = createMapStyle(page.url.origin);
 		}
 
 		// Ensure FeaturesDB is initialized
 		featuresDB.ensureInitialized();
+
+		// Load features data when FeaturesDB is ready
+		if (featuresDB.initialized) {
+			// Access reactive dependencies
+			featuresDB.bookmarksVersion;
+
+			// Load all feature types
+			loadBookmarkedFeatures();
+			loadVisitedFeatures();
+			loadTodoFeatures();
+		}
 	});
 
 	// Handle viewport height changes for mobile browsers

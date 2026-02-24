@@ -178,15 +178,11 @@ declare global {
 	}
 
 	interface CategoryFilterSettings {
-		classes: Set<string>;
-		subclasses: Set<string>;
 		categories: Set<string>;
 	}
 
 	// For storage - arrays are used in IndexedDB
 	interface CategoryFilterSettingsStored {
-		classes: string[];
-		subclasses: string[];
 		categories: string[];
 	}
 

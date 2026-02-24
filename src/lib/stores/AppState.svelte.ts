@@ -1,32 +1,22 @@
 import { browser } from '$app/environment';
 import { authState } from '$lib/stores/auth.svelte';
-import { _CLASS, _SUBCLASS, _CATEGORY } from '$lib/assets/class_subclass_category';
+import { _CATEGORY } from '$lib/assets/class_subclass_category';
 import type { User } from 'firebase/auth';
 
 const DEFAULT_FILTER_SETTINGS: AppFilterSettings = {
 	map: {
-		classes: new Set(_CLASS),
-		subclasses: new Set(_SUBCLASS),
 		categories: new Set(_CATEGORY)
 	},
 	heat: {
-		classes: new Set<string>(), // Empty by default
-		subclasses: new Set<string>(), // Empty by default
 		categories: new Set<string>() // Empty by default
 	},
 	bookmark: {
-		classes: new Set(_CLASS),
-		subclasses: new Set(_SUBCLASS),
 		categories: new Set(_CATEGORY)
 	},
 	todo: {
-		classes: new Set(_CLASS),
-		subclasses: new Set(_SUBCLASS),
 		categories: new Set(_CATEGORY)
 	},
 	visited: {
-		classes: new Set(_CLASS),
-		subclasses: new Set(_SUBCLASS),
 		categories: new Set(_CATEGORY)
 	}
 };
@@ -301,33 +291,53 @@ class AppState {
 				if (result.value.filterSettings) {
 					// Existing config has filterSettings, load them with conversion from arrays to Sets
 					console.log('📂 Loading existing filterSettings from storage');
-					this._filterSettings = {
-						map: {
-							classes: new Set(result.value.filterSettings.map?.classes || _CLASS),
-							subclasses: new Set(result.value.filterSettings.map?.subclasses || _SUBCLASS),
-							categories: new Set(result.value.filterSettings.map?.categories || _CATEGORY)
-						},
-						heat: {
-							classes: new Set(result.value.filterSettings.heat?.classes || _CLASS),
-							subclasses: new Set(result.value.filterSettings.heat?.subclasses || _SUBCLASS),
-							categories: new Set(result.value.filterSettings.heat?.categories || _CATEGORY)
-						},
-						bookmark: {
-							classes: new Set(result.value.filterSettings.bookmark?.classes || _CLASS),
-							subclasses: new Set(result.value.filterSettings.bookmark?.subclasses || _SUBCLASS),
-							categories: new Set(result.value.filterSettings.bookmark?.categories || _CATEGORY)
-						},
-						todo: {
-							classes: new Set(result.value.filterSettings.todo?.classes || _CLASS),
-							subclasses: new Set(result.value.filterSettings.todo?.subclasses || _SUBCLASS),
-							categories: new Set(result.value.filterSettings.todo?.categories || _CATEGORY)
-						},
-						visited: {
-							classes: new Set(result.value.filterSettings.visited?.classes || _CLASS),
-							subclasses: new Set(result.value.filterSettings.visited?.subclasses || _SUBCLASS),
-							categories: new Set(result.value.filterSettings.visited?.categories || _CATEGORY)
-						}
-					};
+
+					// Check if this is an old format with classes/subclasses or new format with just categories
+					if (
+						result.value.filterSettings.map?.classes ||
+						result.value.filterSettings.map?.subclasses
+					) {
+						// Old format - migrate to new format (categories only)
+						console.log('🔄 Migrating old filter format to new categories-only format');
+						this._filterSettings = {
+							map: {
+								categories: new Set(result.value.filterSettings.map?.categories || _CATEGORY)
+							},
+							heat: {
+								categories: new Set(result.value.filterSettings.heat?.categories || [])
+							},
+							bookmark: {
+								categories: new Set(result.value.filterSettings.bookmark?.categories || _CATEGORY)
+							},
+							todo: {
+								categories: new Set(result.value.filterSettings.todo?.categories || _CATEGORY)
+							},
+							visited: {
+								categories: new Set(result.value.filterSettings.visited?.categories || _CATEGORY)
+							}
+						};
+						// Save the migrated config
+						this.saveConfig();
+					} else {
+						// New format - load categories directly
+						this._filterSettings = {
+							map: {
+								categories: new Set(result.value.filterSettings.map?.categories || _CATEGORY)
+							},
+							heat: {
+								categories: new Set(result.value.filterSettings.heat?.categories || [])
+							},
+							bookmark: {
+								categories: new Set(result.value.filterSettings.bookmark?.categories || _CATEGORY)
+							},
+							todo: {
+								categories: new Set(result.value.filterSettings.todo?.categories || _CATEGORY)
+							},
+							visited: {
+								categories: new Set(result.value.filterSettings.visited?.categories || _CATEGORY)
+							}
+						};
+					}
 				} else {
 					// Old config without filterSettings - initialize with defaults (all selected)
 					console.log(
@@ -344,8 +354,6 @@ class AppState {
 				);
 				console.log('🔍 Loaded filter settings:', {
 					map: {
-						classes: this._filterSettings.map.classes.size,
-						subclasses: this._filterSettings.map.subclasses.size,
 						categories: this._filterSettings.map.categories.size
 					}
 				});
@@ -420,28 +428,18 @@ class AppState {
 				language: this._language,
 				filterSettings: {
 					map: {
-						classes: Array.from(this._filterSettings.map.classes),
-						subclasses: Array.from(this._filterSettings.map.subclasses),
 						categories: Array.from(this._filterSettings.map.categories)
 					},
 					heat: {
-						classes: Array.from(this._filterSettings.heat.classes),
-						subclasses: Array.from(this._filterSettings.heat.subclasses),
 						categories: Array.from(this._filterSettings.heat.categories)
 					},
 					bookmark: {
-						classes: Array.from(this._filterSettings.bookmark.classes),
-						subclasses: Array.from(this._filterSettings.bookmark.subclasses),
 						categories: Array.from(this._filterSettings.bookmark.categories)
 					},
 					todo: {
-						classes: Array.from(this._filterSettings.todo.classes),
-						subclasses: Array.from(this._filterSettings.todo.subclasses),
 						categories: Array.from(this._filterSettings.todo.categories)
 					},
 					visited: {
-						classes: Array.from(this._filterSettings.visited.classes),
-						subclasses: Array.from(this._filterSettings.visited.subclasses),
 						categories: Array.from(this._filterSettings.visited.categories)
 					}
 				}
@@ -630,28 +628,18 @@ class AppState {
 		if (config.filterSettings) {
 			this._filterSettings = {
 				map: {
-					classes: new Set(config.filterSettings.map?.classes || _CLASS),
-					subclasses: new Set(config.filterSettings.map?.subclasses || _SUBCLASS),
 					categories: new Set(config.filterSettings.map?.categories || _CATEGORY)
 				},
 				heat: {
-					classes: new Set(config.filterSettings.heat?.classes || _CLASS),
-					subclasses: new Set(config.filterSettings.heat?.subclasses || _SUBCLASS),
-					categories: new Set(config.filterSettings.heat?.categories || _CATEGORY)
+					categories: new Set(config.filterSettings.heat?.categories || [])
 				},
 				bookmark: {
-					classes: new Set(config.filterSettings.bookmark?.classes || _CLASS),
-					subclasses: new Set(config.filterSettings.bookmark?.subclasses || _SUBCLASS),
 					categories: new Set(config.filterSettings.bookmark?.categories || _CATEGORY)
 				},
 				todo: {
-					classes: new Set(config.filterSettings.todo?.classes || _CLASS),
-					subclasses: new Set(config.filterSettings.todo?.subclasses || _SUBCLASS),
 					categories: new Set(config.filterSettings.todo?.categories || _CATEGORY)
 				},
 				visited: {
-					classes: new Set(config.filterSettings.visited?.classes || _CLASS),
-					subclasses: new Set(config.filterSettings.visited?.subclasses || _SUBCLASS),
 					categories: new Set(config.filterSettings.visited?.categories || _CATEGORY)
 				}
 			};

@@ -3,7 +3,7 @@
 	// @ts-nocheck
 	import { GeoJSON, CircleLayer, SymbolLayer } from 'svelte-maplibre';
 	import { appState } from '$lib/stores/AppState.svelte.js';
-	import { onMount } from 'svelte';
+	import { buildMapFilter } from '$lib/utils/categories';
 
 	interface Props {
 		nameExpression: any;
@@ -11,255 +11,28 @@
 	}
 	let { nameExpression, todoFeaturesGeoJSON }: Props = $props();
 
-	// Track initialization
-	let isInitialized = $state(false);
-
-	// Initialize on mount
-	onMount(async () => {
-		await appState.ensureInitialized();
-		isInitialized = true;
-	});
+	// AppState is initialized by default in constructor
 
 	// Derived filter based on AppState todo filter settings
-	let featuresTodooFilter = $derived.by(() => {
-		if (!isInitialized) {
-			// Return permissive filter during initialization
-			return ['all'];
-		}
-
+	let featuresTodoFilter = $derived.by(() => {
 		const todoFilterSettings = appState.filterSettings.todo;
-
-		// Extract class names (already clean)
-		const selectedClasses = Array.from(todoFilterSettings.classes);
-
-		// Extract subclass names (remove class prefix)
-		const selectedSubclasses = Array.from(todoFilterSettings.subclasses).map((subclass) => {
-			const parts = subclass.split('-');
-			return parts.slice(1).join('-'); // Remove first part (class)
-		});
-
-		// Extract category names (remove class and subclass prefix)
-		const selectedCategories = Array.from(todoFilterSettings.categories).map((category) => {
-			const parts = category.split('-');
-			return parts.slice(2).join('-'); // Remove first two parts (class-subclass)
-		});
+		const selectedCategories = Array.from(todoFilterSettings.categories);
 
 		console.log('Todo filter applied:', {
-			classes: selectedClasses.length,
-			subclasses: selectedSubclasses.length,
 			categories: selectedCategories.length
 		});
 
-		return [
-			'all',
-			['in', ['get', 'class'], ['literal', selectedClasses]],
-			['in', ['get', 'subclass'], ['literal', selectedSubclasses]],
-			['in', ['get', 'category'], ['literal', selectedCategories]]
-		];
+		// If no categories selected, hide all features
+		if (selectedCategories.length === 0) {
+			return ['==', ['literal', true], ['literal', false]]; // Always false - show nothing
+		}
+
+		// Combine category filter with todo condition
+		const categoryFilter = buildMapFilter(selectedCategories);
+		return ['all', categoryFilter, ['==', ['get', 'todo'], true]];
 	});
 
 	const iconImage = $derived(() => {
-		if (!isInitialized) {
-			// Return default values during initialization
-			return {
-				attraction: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'teal'
-				],
-				education: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'stone'
-				],
-				entertainment: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'fuchsia'
-				],
-				facility: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'zinc'
-				],
-				food_and_drink: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'amber'
-				],
-				healthcare: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'red'
-				],
-				leisure: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'blue'
-				],
-				lodging: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'slate'
-				],
-				natural: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'green'
-				],
-				place: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'neutral'
-				],
-				route: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'indigo'
-				],
-				shop: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-bright-',
-					'rose'
-				],
-				transportation: [
-					'case',
-					['has', 'relationChildId'],
-					[
-						'concat',
-						'super-',
-						['to-string', ['get', 'class']],
-						'-',
-						['to-string', ['get', 'subclass']],
-						'-',
-						['to-string', ['get', 'category']],
-						'-bright-',
-						'sky'
-					],
-					[
-						'concat',
-						['to-string', ['get', 'class']],
-						'-',
-						['to-string', ['get', 'subclass']],
-						'-',
-						['to-string', ['get', 'category']],
-						'-bright-',
-						'sky'
-					]
-				],
-				bookmarks: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'blue'
-				],
-				visited: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'green'
-				],
-				todo: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'red'
-				],
-				followed: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'purple'
-				],
-				search: [
-					'concat',
-					['to-string', ['get', 'class']],
-					'-',
-					['to-string', ['get', 'subclass']],
-					'-',
-					['to-string', ['get', 'category']],
-					'-dark-',
-					'yellow'
-				]
-			};
-		}
-
 		// Get current color mappings from AppState
 		const colorMappings = appState.colorMappings;
 
@@ -486,7 +259,7 @@
 	/>
 	<SymbolLayer
 		id="todo"
-		filter={['all', featuresTodooFilter, ['==', ['get', 'todo'], true]]}
+		filter={featuresTodoFilter}
 		layout={{
 			'icon-image': iconImage().todo as any,
 			'icon-allow-overlap': true,

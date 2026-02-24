@@ -39,10 +39,9 @@ class MapControl {
 		// Only update if state is actually changing
 		if (this._selectedFeatureDrawerOpen !== open) {
 			this._selectedFeatureDrawerOpen = open;
-			// If drawer is being closed, also clear the selected feature
-			if (!open) {
-				this._selectedFeature = null;
-			}
+			// Don't automatically clear selected feature when closing drawer
+			// The feature can remain selected even if drawer is closed
+			// This allows the drawer to be reopened with the same feature
 		}
 	}
 
@@ -55,8 +54,19 @@ class MapControl {
 	}
 
 	// Register map instance
-	setMapInstance(map: MapStore) {
+	setMapInstance(map: MapStore | undefined) {
+		// Clean up previous instance if exists
+		if (this.mapInstance && this.mapInstance !== map) {
+			console.log('🧹 Cleaning up previous map instance');
+			// Map cleanup will be handled by the MapView component
+		}
+
 		this.mapInstance = map;
+		if (map) {
+			console.log('✅ Map instance registered with MapControl');
+		} else {
+			console.log('🧹 Map instance cleared from MapControl');
+		}
 	}
 
 	// Get map instance
