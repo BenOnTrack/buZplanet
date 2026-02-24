@@ -18,7 +18,6 @@ import {
 	type QuerySnapshot,
 	type Unsubscribe
 } from 'firebase/firestore';
-import { offlineSyncManager } from '$lib/utils/offline-sync';
 
 /**
  * Features Database management class using Svelte 5 runes
@@ -76,8 +75,7 @@ class FeaturesDB {
 				console.log('🌐 FeaturesDB: Connection restored - starting sync');
 				if (this.currentUser) {
 					this.startFirestoreSync();
-					// Process any pending offline changes immediately
-					await offlineSyncManager.processSyncQueue();
+					// Firestore handles sync automatically
 				}
 			});
 
@@ -118,14 +116,11 @@ class FeaturesDB {
 
 			await this.initializeDatabase();
 
-			// Initialize offline sync manager for new user
-			await offlineSyncManager.initialize(newUser?.uid || null);
+			// Firestore handles offline sync automatically
 
 			// Start sync for new authenticated user
 			if (newUser && this.isOnline) {
 				this.startFirestoreSync();
-				// Process any pending offline changes first
-				setTimeout(() => offlineSyncManager.processSyncQueue(), 1000);
 			}
 		}
 	}
@@ -458,14 +453,9 @@ class FeaturesDB {
 		await this.updateStats();
 		this.triggerBookmarkChange(); // Trigger reactivity
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager
-				.queueChange('feature', 'create', storedFeature.id, storedFeature)
-				.catch((error) => {
-					console.error('Failed to queue feature for sync:', error);
-					// Sync queuing failure doesn't affect local save
-				});
+			this.syncFeatureToFirestore(storedFeature);
 		}
 
 		return storedFeature;
@@ -612,12 +602,9 @@ class FeaturesDB {
 		await this.updateStats();
 		this.triggerBookmarkChange(); // Trigger reactivity
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager.queueChange('feature', 'update', feature.id, feature).catch((error) => {
-				console.error('Failed to queue feature update for sync:', error);
-				// Sync queuing failure doesn't affect local save
-			});
+			this.syncFeatureToFirestore(feature);
 		}
 
 		return feature;
@@ -1093,12 +1080,9 @@ class FeaturesDB {
 		await this.updateStats();
 		this.triggerBookmarkChange(); // Trigger reactivity
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager.queueChange('feature', 'delete', id).catch((error) => {
-				console.error('Failed to queue feature deletion for sync:', error);
-				// Sync queuing failure doesn't affect local deletion
-			});
+			this.deleteFeatureFromFirestore(id);
 		}
 	}
 
@@ -1285,14 +1269,9 @@ class FeaturesDB {
 		await this.updateStats();
 		console.log('Updated stats after creating list');
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager
-				.queueChange('list', 'create', bookmarkList.id, bookmarkList)
-				.catch((error) => {
-					console.error('Failed to queue bookmark list for sync:', error);
-					// Sync queuing failure doesn't affect local save
-				});
+			this.syncBookmarkListToFirestore(bookmarkList);
 		}
 
 		return bookmarkList;
@@ -1370,12 +1349,9 @@ class FeaturesDB {
 
 		await this.updateStats();
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager.queueChange('list', 'update', list.id, list).catch((error) => {
-				console.error('Failed to queue bookmark list update for sync:', error);
-				// Sync queuing failure doesn't affect local save
-			});
+			this.syncBookmarkListToFirestore(list);
 		}
 
 		return list;
@@ -1414,12 +1390,9 @@ class FeaturesDB {
 			request.onerror = () => reject(request.error);
 		});
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager.queueChange('list', 'delete', listId).catch((error) => {
-				console.error('Failed to queue bookmark list deletion for sync:', error);
-				// Sync queuing failure doesn't affect local deletion
-			});
+			this.deleteBookmarkListFromFirestore(listId);
 		}
 
 		await this.updateStats();

@@ -1,6 +1,14 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, type Auth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, type Firestore, connectFirestoreEmulator } from 'firebase/firestore';
+import {
+	initializeFirestore,
+	type Firestore,
+	connectFirestoreEmulator,
+	enableNetwork,
+	disableNetwork,
+	persistentLocalCache,
+	persistentMultipleTabManager
+} from 'firebase/firestore';
 import { browser } from '$app/environment';
 
 // Firebase configuration
@@ -20,8 +28,14 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Authentication and get a reference to the service
 export const auth: Auth = getAuth(app);
 
-// Initialize Firestore and get a reference to the service
-export const db: Firestore = getFirestore(app);
+// Initialize Firestore with persistent cache enabled
+export const db: Firestore = initializeFirestore(app, {
+	// Enable persistent cache for offline support
+	localCache: persistentLocalCache({
+		// Enable multi-tab support
+		tabManager: persistentMultipleTabManager()
+	})
+});
 
 // Track emulator connection state to prevent multiple connections
 let emulatorsConnected = false;
@@ -38,7 +52,7 @@ if (
 	try {
 		// Connect to Firestore emulator
 		connectFirestoreEmulator(db, 'localhost', 8080);
-		console.log('📄 Connected to Firestore emulator on localhost:8080');
+		console.log('🔥 Connected to Firestore emulator on localhost:8080 with persistent cache');
 
 		// Connect to Auth emulator
 		connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
@@ -51,7 +65,7 @@ if (
 		emulatorsConnected = true;
 	}
 } else if (browser && import.meta.env.DEV) {
-	console.log('🌐 Using production Firebase services');
+	console.log('🌐 Using production Firebase services with persistent cache');
 }
 
 export default app;

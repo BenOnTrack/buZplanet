@@ -26,7 +26,6 @@ import {
 	generateSearchText,
 	isDefaultCategory
 } from '$lib/utils/stories';
-import { offlineSyncManager } from '$lib/utils/offline-sync';
 
 /**
  * Stories Database management class using Svelte 5 runes
@@ -81,8 +80,7 @@ class StoriesDB {
 				console.log('🌐 StoriesDB: Connection restored - starting sync');
 				if (this.currentUser) {
 					this.startFirestoreSync();
-					// Process any pending offline changes immediately
-					await offlineSyncManager.processSyncQueue();
+					// Firestore handles sync automatically
 				}
 			});
 
@@ -173,8 +171,7 @@ class StoriesDB {
 
 			await this.initializeDatabase();
 
-			// Initialize offline sync manager for new user
-			await offlineSyncManager.initialize(newUser?.uid || null);
+			// Firestore handles offline sync automatically
 
 			// Note: No need to clear followed stories cache - it's now user-isolated by compound key
 			// Each user can only access their own followed stories cache
@@ -182,8 +179,6 @@ class StoriesDB {
 			// Start sync for new authenticated user
 			if (newUser && this.isOnline) {
 				this.startFirestoreSync();
-				// Process any pending offline changes first
-				setTimeout(() => offlineSyncManager.processSyncQueue(), 1000);
 				// Start followed stories sync after a brief delay to let user data load
 				setTimeout(() => this.startFollowedStoriesSync(), 2000);
 			}
@@ -942,6 +937,22 @@ class StoriesDB {
 	}
 
 	/**
+	 * Delete category from Firestore
+	 */
+	private async deleteCategoryFromFirestore(categoryId: string): Promise<void> {
+		if (!this.currentUser) return;
+
+		try {
+			const userId = this.currentUser.uid;
+			const docRef = doc(db, 'users', userId, 'storyCategories', categoryId);
+			await deleteDoc(docRef);
+			console.log(`Successfully deleted category ${categoryId} from Firestore`);
+		} catch (error) {
+			console.error('Failed to delete category from Firestore:', error);
+		}
+	}
+
+	/**
 	 * Delete story from Firestore (placeholder)
 	 */
 	private async deleteStoryFromFirestore(storyId: string): Promise<void> {
@@ -1144,12 +1155,9 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager.queueChange('story', 'create', story.id, story).catch((error) => {
-				console.error('Failed to queue story for sync:', error);
-				// Sync queuing failure doesn't affect local save
-			});
+			this.syncStoryToFirestore(story);
 		}
 
 		return story;
@@ -1187,12 +1195,9 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager.queueChange('category', 'create', category.id, category).catch((error) => {
-				console.error('Failed to queue category for sync:', error);
-				// Sync queuing failure doesn't affect local save
-			});
+			this.syncCategoryToFirestore(category);
 		}
 
 		return category;
@@ -1310,12 +1315,9 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Queue deletion for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager.queueChange('category', 'delete', categoryId).catch((error) => {
-				console.error('Failed to queue category deletion for sync:', error);
-				// Sync queuing failure doesn't affect local deletion
-			});
+			this.deleteCategoryFromFirestore(categoryId);
 		}
 	}
 
@@ -1586,14 +1588,9 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager
-				.queueChange('story', 'update', updatedStory.id, updatedStory)
-				.catch((error) => {
-					console.error('Failed to queue story update for sync:', error);
-					// Sync queuing failure doesn't affect local save
-				});
+			this.syncStoryToFirestore(updatedStory);
 		}
 
 		return updatedStory;
@@ -1618,12 +1615,9 @@ class StoriesDB {
 		await this.updateStats();
 		this.triggerChange();
 
-		// Queue deletion for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager.queueChange('story', 'delete', id).catch((error) => {
-				console.error('Failed to queue story deletion for sync:', error);
-				// Sync queuing failure doesn't affect local deletion
-			});
+			this.deleteStoryFromFirestore(id);
 		}
 	}
 
@@ -1760,12 +1754,9 @@ class StoriesDB {
 
 		await this.updateStats();
 
-		// Queue for sync (handles both online and offline scenarios) - non-blocking
+		// Firestore handles sync automatically
 		if (this.currentUser) {
-			offlineSyncManager.queueChange('story', 'update', story.id, story).catch((error) => {
-				console.error('Failed to queue story view count update for sync:', error);
-				// Sync queuing failure doesn't affect local update
-			});
+			this.syncStoryToFirestore(story);
 		}
 	}
 

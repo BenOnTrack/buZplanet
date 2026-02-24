@@ -16,7 +16,7 @@
 	import { authState } from '$lib/stores/auth.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
-	import { offlineSyncManager } from '$lib/utils/offline-sync';
+
 	import { Z_INDEX } from '$lib/styles/z-index.js';
 	import { onMount, onDestroy } from 'svelte';
 
@@ -237,22 +237,27 @@
 	}
 
 	// Development testing functions
-	// Sync status tracking
-	let queueStatus = $state<any>(null);
-	let featuresStatus = $derived(featuresDB.getSyncStatus());
-	let storiesStatus = $derived(storiesDB.getSyncStatus());
+	// Simple offline status tracking
+	let isOnline = $state(navigator?.onLine ?? true);
 
-	async function refreshSyncStatus() {
-		queueStatus = await offlineSyncManager.getQueueStatus();
-	}
-
-	// Refresh sync status every 5 seconds when debug panel is open
+	// Listen to browser online/offline events
 	$effect(() => {
-		if (showDebugPanel && import.meta.env.DEV) {
-			const interval = setInterval(refreshSyncStatus, 5000);
-			refreshSyncStatus(); // Initial load
-			return () => clearInterval(interval);
-		}
+		if (typeof window === 'undefined') return;
+
+		const handleOnline = () => {
+			isOnline = true;
+		};
+		const handleOffline = () => {
+			isOnline = false;
+		};
+
+		window.addEventListener('online', handleOnline);
+		window.addEventListener('offline', handleOffline);
+
+		return () => {
+			window.removeEventListener('online', handleOnline);
+			window.removeEventListener('offline', handleOffline);
+		};
 	});
 
 	// Development testing functions
@@ -354,50 +359,13 @@
 
 						<div class="status-row">
 							<strong>Connection:</strong>
-							{featuresStatus.online ? '🌐 Online' : '📴 Offline'}
+							{isOnline ? '🌐 Online' : '📴 Offline'}
 						</div>
 
 						<div class="status-row">
-							<strong>Features:</strong>
-							{featuresStatus.syncing ? '🔄 Syncing' : '✅ Ready'}
-							(Last: {featuresStatus.lastSync
-								? new Date(featuresStatus.lastSync).toLocaleTimeString()
-								: 'Never'})
+							<strong>Firestore:</strong>
+							✅ Native Offline Support Enabled
 						</div>
-
-						<div class="status-row">
-							<strong>Stories:</strong>
-							{storiesStatus.syncing ? '🔄 Syncing' : '✅ Ready'}
-							(Last: {storiesStatus.lastSync
-								? new Date(storiesStatus.lastSync).toLocaleTimeString()
-								: 'Never'})
-						</div>
-
-						{#if queueStatus}
-							<div class="status-row">
-								<strong>Queue:</strong>
-								{queueStatus.totalItems} items pending
-								{#if queueStatus.isProcessing}
-									<span class="processing">🔄 Processing...</span>
-								{/if}
-							</div>
-
-							{#if queueStatus.totalItems > 0}
-								<div class="queue-details">
-									{#each Object.entries(queueStatus.itemsByType) as [type, count]}
-										<div class="queue-item">{type}: {count}</div>
-									{/each}
-								</div>
-							{/if}
-						{/if}
-
-						<button
-							onclick={() => offlineSyncManager.processSyncQueue()}
-							class="sync-button"
-							disabled={!featuresStatus.online}
-						>
-							Force Sync
-						</button>
 					</div>
 
 					<div class="debug-logs">
@@ -508,43 +476,6 @@
 		margin: 4px 0;
 		line-height: 1.3;
 		font-size: 10px;
-	}
-
-	.queue-details {
-		margin-left: 10px;
-		font-size: 9px;
-		opacity: 0.8;
-	}
-
-	.queue-item {
-		margin: 2px 0;
-	}
-
-	.processing {
-		color: #ffa500;
-		margin-left: 5px;
-	}
-
-	.sync-button {
-		margin-top: 8px;
-		background: #007acc;
-		color: white;
-		border: none;
-		padding: 4px 8px;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 9px;
-		font-family: monospace;
-		transition: background-color 0.2s;
-	}
-
-	.sync-button:disabled {
-		background: #666;
-		cursor: not-allowed;
-	}
-
-	.sync-button:hover:not(:disabled) {
-		background: #005a9e;
 	}
 
 	.log-entry {
