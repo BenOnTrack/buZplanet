@@ -16,6 +16,56 @@ declare global {
 		r2File: R2File;
 	}
 
+	// File hierarchy for categorized display
+	interface FileHierarchyNode {
+		name: string;
+		files: FileComparisonResult[];
+		children: Record<string, FileHierarchyNode>;
+		path: string[];
+		totalFiles: number;
+		missingFiles: number;
+		allFilesDownloaded: boolean;
+		partiallySelected: boolean;
+		fullySelected: boolean;
+	}
+
+	interface FileHierarchy {
+		[continent: string]: {
+			name: string;
+			children: {
+				[country: string]: {
+					name: string;
+					children: {
+						[region: string]: {
+							name: string;
+							children: {
+								[type: string]: FileHierarchyNode;
+							};
+							path: string[];
+							totalFiles: number;
+							missingFiles: number;
+							allFilesDownloaded: boolean;
+							partiallySelected: boolean;
+							fullySelected: boolean;
+						};
+					};
+					path: string[];
+					totalFiles: number;
+					missingFiles: number;
+					allFilesDownloaded: boolean;
+					partiallySelected: boolean;
+					fullySelected: boolean;
+				};
+			};
+			path: string[];
+			totalFiles: number;
+			missingFiles: number;
+			allFilesDownloaded: boolean;
+			partiallySelected: boolean;
+			fullySelected: boolean;
+		};
+	}
+
 	interface FilterOption {
 		value: string;
 		count: number;

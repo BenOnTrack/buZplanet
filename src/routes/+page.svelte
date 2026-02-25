@@ -3,7 +3,7 @@
 	import BottomNavigation from '$lib/components/nav/BottomNavigation.svelte';
 	import AuthDialog from '$lib/components/dialogs/AuthDialog.svelte';
 	import UserStoreManager from '$lib/components/stores/UserStoreManager.svelte';
-	import FileManagerDialog from '$lib/components/nav/FileManagerDialog.svelte';
+	import FileManagerDialog from '$lib/components/dialogs/FileManagerDialog.svelte';
 	import SettingsDialog from '$lib/components/nav/SettingsDialog.svelte';
 	import MapFilterDialog from '$lib/components/nav/MapFilterDialog.svelte';
 	import LoadingScreen from '$lib/components/LoadingScreen.svelte';

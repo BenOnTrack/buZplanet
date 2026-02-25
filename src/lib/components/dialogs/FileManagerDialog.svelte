@@ -3,7 +3,13 @@
 	import CloudArrowUp from 'phosphor-svelte/lib/CloudArrowUp';
 	import CloudArrowDown from 'phosphor-svelte/lib/CloudArrowDown';
 	import FileArchive from 'phosphor-svelte/lib/FileArchive';
+	import CaretDown from 'phosphor-svelte/lib/CaretDown';
+	import CaretRight from 'phosphor-svelte/lib/CaretRight';
+	import CheckSquare from 'phosphor-svelte/lib/CheckSquare';
+	import Square from 'phosphor-svelte/lib/Square';
+	import MinusSquare from 'phosphor-svelte/lib/MinusSquare';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+	import FileHierarchyNode from './FileHierarchyNode.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 
 	// Dynamic import to avoid code splitting issues
@@ -30,6 +36,11 @@
 	let downloadProgress = $state(0);
 	let currentDownloadFile = $state('');
 	let allDownloadProgress = $state(0);
+
+	// State for hierarchical file structure
+	let fileHierarchy: FileHierarchy = $state({});
+	let selectedFilesForDownload = $state(new Set<string>());
+	let expandedNodes = $state(new Set<string>());
 
 	// Handle file selection
 	const handleFileChange = (event: Event) => {
@@ -222,12 +233,298 @@
 					r2File
 				};
 			});
+
+			// Build hierarchical structure
+			buildFileHierarchy();
 		} catch (error) {
 			console.error('Error in compareFiles:', error);
 			downloadError = error instanceof Error ? error.message : 'Failed to load files';
 		} finally {
 			isLoadingFiles = false;
 		}
+	};
+
+	// Parse filename into components (type_continent_country_region)
+	const parseFilename = (filename: string) => {
+		// Remove .mbtiles extension and split by underscore
+		const name = filename.replace(/\.mbtiles$/, '');
+		const parts = name.split('_');
+
+		if (parts.length >= 4) {
+			return {
+				type: parts[0],
+				continent: parts[1],
+				country: parts[2],
+				region: parts.slice(3).join('_') // Join remaining parts in case region has underscores
+			};
+		}
+
+		// Fallback for files that don't match expected format
+		return {
+			type: 'unknown',
+			continent: 'other',
+			country: 'other',
+			region: name
+		};
+	};
+
+	// Build hierarchical file structure
+	const buildFileHierarchy = () => {
+		const hierarchy: FileHierarchy = {};
+
+		for (const file of fileComparison) {
+			const parsed = parseFilename(file.filename);
+			const { type, continent, country, region } = parsed;
+
+			// Initialize continent
+			if (!hierarchy[continent]) {
+				hierarchy[continent] = {
+					name: continent,
+					children: {},
+					path: [continent],
+					totalFiles: 0,
+					missingFiles: 0,
+					allFilesDownloaded: false,
+					partiallySelected: false,
+					fullySelected: false
+				};
+			}
+
+			// Initialize country
+			if (!hierarchy[continent].children[country]) {
+				hierarchy[continent].children[country] = {
+					name: country,
+					children: {},
+					path: [continent, country],
+					totalFiles: 0,
+					missingFiles: 0,
+					allFilesDownloaded: false,
+					partiallySelected: false,
+					fullySelected: false
+				};
+			}
+
+			// Initialize region
+			if (!hierarchy[continent].children[country].children[region]) {
+				hierarchy[continent].children[country].children[region] = {
+					name: region,
+					children: {},
+					path: [continent, country, region],
+					totalFiles: 0,
+					missingFiles: 0,
+					allFilesDownloaded: false,
+					partiallySelected: false,
+					fullySelected: false
+				};
+			}
+
+			// Initialize type
+			if (!hierarchy[continent].children[country].children[region].children[type]) {
+				hierarchy[continent].children[country].children[region].children[type] = {
+					name: type,
+					files: [],
+					children: {},
+					path: [continent, country, region, type],
+					totalFiles: 0,
+					missingFiles: 0,
+					allFilesDownloaded: false,
+					partiallySelected: false,
+					fullySelected: false
+				};
+			}
+
+			// Add file to type
+			hierarchy[continent].children[country].children[region].children[type].files.push(file);
+		}
+
+		// Calculate totals and status for all nodes
+		for (const [continentName, continent] of Object.entries(hierarchy)) {
+			for (const [countryName, country] of Object.entries(continent.children)) {
+				for (const [regionName, region] of Object.entries(country.children)) {
+					for (const [typeName, typeNode] of Object.entries(region.children)) {
+						// Calculate type totals
+						typeNode.totalFiles = typeNode.files.length;
+						typeNode.missingFiles = typeNode.files.filter((f) => !f.isInOPFS).length;
+						typeNode.allFilesDownloaded = typeNode.missingFiles === 0;
+					}
+
+					// Calculate region totals
+					region.totalFiles = Object.values(region.children).reduce(
+						(sum, type) => sum + type.totalFiles,
+						0
+					);
+					region.missingFiles = Object.values(region.children).reduce(
+						(sum, type) => sum + type.missingFiles,
+						0
+					);
+					region.allFilesDownloaded = region.missingFiles === 0;
+				}
+
+				// Calculate country totals
+				country.totalFiles = Object.values(country.children).reduce(
+					(sum, region) => sum + region.totalFiles,
+					0
+				);
+				country.missingFiles = Object.values(country.children).reduce(
+					(sum, region) => sum + region.missingFiles,
+					0
+				);
+				country.allFilesDownloaded = country.missingFiles === 0;
+			}
+
+			// Calculate continent totals
+			continent.totalFiles = Object.values(continent.children).reduce(
+				(sum, country) => sum + country.totalFiles,
+				0
+			);
+			continent.missingFiles = Object.values(continent.children).reduce(
+				(sum, country) => sum + country.missingFiles,
+				0
+			);
+			continent.allFilesDownloaded = continent.missingFiles === 0;
+		}
+
+		fileHierarchy = hierarchy;
+		updateSelectionStates();
+	};
+
+	// Update selection states based on current selections
+	const updateSelectionStates = () => {
+		// Update type nodes
+		for (const continent of Object.values(fileHierarchy)) {
+			for (const country of Object.values(continent.children)) {
+				for (const region of Object.values(country.children)) {
+					for (const typeNode of Object.values(region.children)) {
+						const selectedCount = typeNode.files.filter(
+							(f) => selectedFilesForDownload.has(f.filename) || f.isInOPFS
+						).length;
+						typeNode.fullySelected =
+							selectedCount === typeNode.files.length && typeNode.files.length > 0;
+						typeNode.partiallySelected = selectedCount > 0 && selectedCount < typeNode.files.length;
+					}
+
+					// Update region selection state
+					const regionTypes = Object.values(region.children);
+					const fullySelectedTypes = regionTypes.filter((t) => t.fullySelected).length;
+					const partiallySelectedTypes = regionTypes.filter((t) => t.partiallySelected).length;
+
+					region.fullySelected =
+						fullySelectedTypes === regionTypes.length && regionTypes.length > 0;
+					region.partiallySelected =
+						(fullySelectedTypes > 0 || partiallySelectedTypes > 0) && !region.fullySelected;
+				}
+
+				// Update country selection state
+				const countryRegions = Object.values(country.children);
+				const fullySelectedRegions = countryRegions.filter((r) => r.fullySelected).length;
+				const partiallySelectedRegions = countryRegions.filter((r) => r.partiallySelected).length;
+
+				country.fullySelected =
+					fullySelectedRegions === countryRegions.length && countryRegions.length > 0;
+				country.partiallySelected =
+					(fullySelectedRegions > 0 || partiallySelectedRegions > 0) && !country.fullySelected;
+			}
+
+			// Update continent selection state
+			const continentCountries = Object.values(continent.children);
+			const fullySelectedCountries = continentCountries.filter((c) => c.fullySelected).length;
+			const partiallySelectedCountries = continentCountries.filter(
+				(c) => c.partiallySelected
+			).length;
+
+			continent.fullySelected =
+				fullySelectedCountries === continentCountries.length && continentCountries.length > 0;
+			continent.partiallySelected =
+				(fullySelectedCountries > 0 || partiallySelectedCountries > 0) && !continent.fullySelected;
+		}
+	};
+
+	// Handle node selection (checkbox clicks)
+	const toggleNodeSelection = (path: string[], selectAll: boolean) => {
+		const [continent, country, region, type] = path;
+
+		if (path.length === 4) {
+			// Type level - select/deselect all files in this type
+			const typeNode =
+				fileHierarchy[continent]?.children[country]?.children[region]?.children[type];
+			if (typeNode) {
+				for (const file of typeNode.files) {
+					if (selectAll && !file.isInOPFS) {
+						// Only add to selection if not already downloaded
+						selectedFilesForDownload.add(file.filename);
+					} else {
+						// Remove from selection (downloaded files stay visually checked)
+						selectedFilesForDownload.delete(file.filename);
+					}
+				}
+			}
+		} else if (path.length === 3) {
+			// Region level - select/deselect all types in this region
+			const regionNode = fileHierarchy[continent]?.children[country]?.children[region];
+			if (regionNode) {
+				for (const typeNode of Object.values(regionNode.children)) {
+					for (const file of typeNode.files) {
+						if (selectAll && !file.isInOPFS) {
+							selectedFilesForDownload.add(file.filename);
+						} else {
+							selectedFilesForDownload.delete(file.filename);
+						}
+					}
+				}
+			}
+		} else if (path.length === 2) {
+			// Country level - select/deselect all regions in this country
+			const countryNode = fileHierarchy[continent]?.children[country];
+			if (countryNode) {
+				for (const regionNode of Object.values(countryNode.children)) {
+					for (const typeNode of Object.values(regionNode.children)) {
+						for (const file of typeNode.files) {
+							if (selectAll && !file.isInOPFS) {
+								selectedFilesForDownload.add(file.filename);
+							} else {
+								selectedFilesForDownload.delete(file.filename);
+							}
+						}
+					}
+				}
+			}
+		} else if (path.length === 1) {
+			// Continent level - select/deselect all countries in this continent
+			const continentNode = fileHierarchy[continent];
+			if (continentNode) {
+				for (const countryNode of Object.values(continentNode.children)) {
+					for (const regionNode of Object.values(countryNode.children)) {
+						for (const typeNode of Object.values(regionNode.children)) {
+							for (const file of typeNode.files) {
+								if (selectAll && !file.isInOPFS) {
+									selectedFilesForDownload.add(file.filename);
+								} else {
+									selectedFilesForDownload.delete(file.filename);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Trigger reactivity by reassigning the Set
+		selectedFilesForDownload = new Set(selectedFilesForDownload);
+
+		// Update selection states
+		updateSelectionStates();
+	};
+
+	// Toggle node expansion
+	const toggleExpansion = (path: string[]) => {
+		const pathKey = path.join('/');
+		if (expandedNodes.has(pathKey)) {
+			expandedNodes.delete(pathKey);
+		} else {
+			expandedNodes.add(pathKey);
+		}
+		// Trigger reactivity by reassigning the Set
+		expandedNodes = new Set(expandedNodes);
 	};
 
 	// Download a file from R2 to OPFS with progress tracking
@@ -409,6 +706,98 @@
 		}, 3000);
 	};
 
+	// Download selected files
+	const downloadSelectedFiles = async () => {
+		const selectedFilesList = Array.from(selectedFilesForDownload)
+			.map((filename) => fileComparison.find((f) => f.filename === filename))
+			.filter((f) => f && !f.isInOPFS) as FileComparisonResult[];
+
+		if (selectedFilesList.length === 0) {
+			downloadError = 'No files selected for download';
+			return;
+		}
+
+		downloadError = '';
+		downloadSuccess = '';
+		allDownloadProgress = 0;
+
+		let successful = 0;
+		let failed = 0;
+		const totalFiles = selectedFilesList.length;
+
+		for (let i = 0; i < selectedFilesList.length; i++) {
+			const file = selectedFilesList[i];
+			currentDownloadFile = file.filename;
+			allDownloadProgress = Math.round((i / totalFiles) * 100);
+
+			downloadingFiles.add(file.filename);
+			downloadError = '';
+			downloadSuccess = '';
+			downloadProgress = 0;
+
+			try {
+				// Download from R2
+				const response = await fetch(`/api/download?file=${encodeURIComponent(file.r2File.key)}`);
+				if (!response.ok) {
+					throw new Error(`Failed to download file: ${response.status}`);
+				}
+
+				// Convert response to blob
+				const blob = await response.blob();
+
+				// Save to OPFS via worker
+				const worker = await getWorker();
+				const arrayBuffer = await blob.arrayBuffer();
+				await worker.saveFileToOPFS(file.filename, arrayBuffer);
+
+				// Update comparison state
+				fileComparison = fileComparison.map((f) =>
+					f.filename === file.filename ? { ...f, isInOPFS: true } : f
+				);
+
+				// Remove from selected files
+				selectedFilesForDownload.delete(file.filename);
+
+				successful++;
+			} catch (error) {
+				console.error(`Failed to download ${file.filename}:`, error);
+				failed++;
+			} finally {
+				downloadingFiles.delete(file.filename);
+			}
+		}
+
+		// Complete progress
+		allDownloadProgress = 100;
+		currentDownloadFile = '';
+
+		// Refresh file hierarchy
+		buildFileHierarchy();
+
+		// Refresh worker databases if any files downloaded successfully
+		if (successful > 0) {
+			await refreshWorkerDatabases();
+			// Refresh app to ensure tiles reload properly
+			setTimeout(() => {
+				refreshApp();
+			}, 1000);
+		}
+
+		if (successful > 0 && failed === 0) {
+			downloadSuccess = `Successfully downloaded ${successful} file${successful > 1 ? 's' : ''}`;
+		} else if (successful > 0 && failed > 0) {
+			downloadSuccess = `Downloaded ${successful} file${successful > 1 ? 's' : ''}`;
+			downloadError = `Failed to download ${failed} file${failed > 1 ? 's' : ''}`;
+		} else {
+			downloadError = `Failed to download all ${failed} file${failed > 1 ? 's' : ''}`;
+		}
+
+		// Reset progress after delay
+		setTimeout(() => {
+			allDownloadProgress = 0;
+		}, 3000);
+	};
+
 	// Handle tab change
 	const handleTabChange = (value: string) => {
 		selectedTab = value;
@@ -439,6 +828,10 @@
 			currentDownloadFile = '';
 			allDownloadProgress = 0;
 			downloadingFiles.clear();
+
+			// Reset hierarchical state
+			selectedFilesForDownload.clear();
+			expandedNodes.clear();
 		}
 	};
 
@@ -625,76 +1018,81 @@
 
 							<!-- File List -->
 							{#if !isLoadingFiles && fileComparison.length > 0}
-								<div class="mb-6 space-y-2">
-									{#each fileComparison as file}
-										<div
-											class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3"
-										>
-											<div class="flex min-w-0 flex-1 items-center gap-3">
-												<FileArchive
-													class={`size-5 flex-shrink-0 ${file.isInOPFS ? 'text-green-600' : 'text-gray-400'}`}
-												/>
-												<div class="min-w-0 flex-1">
-													<div class="flex items-center gap-2">
-														<p class="truncate text-sm font-medium text-gray-900">
-															{file.filename}
-														</p>
-														{#if file.isInOPFS}
-															<span
-																class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800"
-															>
-																✓ Local
-															</span>
-														{/if}
-													</div>
-													<div class="flex items-center gap-4 text-xs text-gray-500">
-														<span>{formatFileSize(file.r2File.size)}</span>
-														<span>{formatDate(file.r2File.lastModified)}</span>
-													</div>
-												</div>
-											</div>
-											{#if !file.isInOPFS}
-												<div class="flex flex-col gap-2">
-													<button
-														type="button"
-														class="bg-dark hover:bg-dark/95 focus-visible:outline-dark inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-														disabled={downloadingFiles.has(file.filename)}
-														onclick={() => downloadFile(file)}
-														onkeydown={(e) => {
-															if (e.key === 'Enter' || e.key === ' ') {
-																e.preventDefault();
-																downloadFile(file);
-															}
-														}}
-														aria-label={`Download ${file.filename} to local storage`}
-													>
-														{#if downloadingFiles.has(file.filename)}
-															<div
-																class="h-4 w-4 animate-spin rounded-full border-b-2 border-white"
-															></div>
-															Downloading...
-														{:else}
-															<CloudArrowDown class="size-4" />
-															Download
-														{/if}
-													</button>
-
-													<!-- Individual Download Progress Bar -->
-													{#if downloadingFiles.has(file.filename) && currentDownloadFile === file.filename && downloadProgress > 0}
-														<div class="h-1.5 w-full rounded-full bg-gray-200">
-															<div
-																class="h-1.5 rounded-full bg-blue-600 transition-all duration-300 ease-out"
-																style="width: {downloadProgress}%"
-															></div>
-														</div>
-													{/if}
-												</div>
-											{:else}
-												<span class="text-sm font-medium text-green-600">Downloaded</span>
-											{/if}
-										</div>
+								<!-- Hierarchical File Structure -->
+								<div class="mb-6 space-y-1">
+									{#each Object.values(fileHierarchy) as continentNode}
+										<FileHierarchyNode
+											node={continentNode}
+											{expandedNodes}
+											selectedFiles={selectedFilesForDownload}
+											{downloadingFiles}
+											level={0}
+											onToggleExpansion={toggleExpansion}
+											onToggleSelection={toggleNodeSelection}
+											onDownloadFile={downloadFile}
+											onFileSelectionChange={() => {
+												// Ensure reactivity by reassigning
+												selectedFilesForDownload = new Set(selectedFilesForDownload);
+												updateSelectionStates();
+											}}
+											{downloadProgress}
+											{currentDownloadFile}
+										/>
 									{/each}
 								</div>
+
+								<!-- Download Selected Files Button -->
+								{@const selectedCount = selectedFilesForDownload.size}
+								{#if selectedCount > 0}
+									<div class="mb-4">
+										<div
+											class="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3"
+										>
+											<div>
+												<p class="text-sm font-medium text-blue-900">
+													{selectedCount} file{selectedCount > 1 ? 's' : ''} selected
+												</p>
+												<p class="text-xs text-blue-700">
+													Download selected files to local storage
+												</p>
+											</div>
+											<button
+												type="button"
+												class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+												disabled={downloadingFiles.size > 0 || allDownloadProgress > 0}
+												onclick={downloadSelectedFiles}
+												onkeydown={(e) => {
+													if (e.key === 'Enter' || e.key === ' ') {
+														e.preventDefault();
+														downloadSelectedFiles();
+													}
+												}}
+												aria-label="Download selected files to local storage"
+											>
+												<CloudArrowDown class="size-4" />
+												Download Selected ({selectedCount})
+											</button>
+										</div>
+									</div>
+								{/if}
+
+								<!-- Overall Download Progress Bar for Selected Files -->
+								{#if allDownloadProgress > 0}
+									<div class="mb-4 space-y-2">
+										<div class="flex items-center justify-between text-sm text-gray-600">
+											<span>
+												{currentDownloadFile || 'Processing selected files...'}
+											</span>
+											<span>{allDownloadProgress}%</span>
+										</div>
+										<div class="h-2 w-full rounded-full bg-gray-200">
+											<div
+												class="h-2 rounded-full bg-blue-600 transition-all duration-300 ease-out"
+												style="width: {allDownloadProgress}%"
+											></div>
+										</div>
+									</div>
+								{/if}
 
 								<!-- Download All Missing Button -->
 								{@const missingFiles = fileComparison.filter((f) => !f.isInOPFS)}
