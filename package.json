@@ -1,7 +1,7 @@
 {
 	"name": "buzplanet",
 	"private": true,
-	"version": "0.0.74",
+	"version": "0.0.75",
 	"type": "module",
 	"scripts": {
 		"dev": "VITE_USE_FIREBASE_EMULATOR=true vite dev",
