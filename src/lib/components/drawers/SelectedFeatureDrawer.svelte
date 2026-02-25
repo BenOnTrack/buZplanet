@@ -122,13 +122,6 @@
 		}
 	});
 
-	// Update active snap point when feature changes
-	$effect(() => {
-		if (feature && open) {
-			// Reset to compact view when feature changes
-			activeSnapPoint = snapPoints[0];
-		}
-	});
 	// Derived values for display
 	let hasFeature = $derived.by(() => feature !== null && feature !== undefined);
 
