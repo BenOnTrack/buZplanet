@@ -353,16 +353,18 @@ async function searchFeatures(
 		const preferredLanguage = options.language || 'name';
 		console.log(`🌍 Using language preference: ${preferredLanguage}`);
 
-		// Prioritize databases based on user location if available
+		// Prioritize ALL databases (both within and outside viewport bounds)
 		let prioritizedDbs: Array<[string, any, number]> = [];
 		if (options.userLocation) {
 			prioritizedDbs = prioritizeDatabasesByLocation(relevantDbs, options.userLocation);
-			console.log(`📍 Prioritized ${prioritizedDbs.length} databases by location`);
+			console.log(
+				`📍 Prioritized ${prioritizedDbs.length} databases by viewport location and tile availability`
+			);
 		} else {
-			prioritizedDbs = relevantDbs.map(([filename, db]) => [filename, db, 0]);
+			prioritizedDbs = relevantDbs.map(([filename, db]) => [filename, db, 9999]);
 		}
 
-		// Process databases
+		// Process ALL databases in prioritized order until we reach the result limit
 		for (const [filename, db, distance] of prioritizedDbs) {
 			// Check if search was cancelled
 			if (searchController.signal.aborted) {
@@ -376,8 +378,15 @@ async function searchFeatures(
 			}
 
 			try {
-				const distanceInfo = distance > 0 ? ` (${Math.round(distance)}km away)` : '';
-				console.log(`🗃️ Searching database: ${filename}${distanceInfo}`);
+				const priorityInfo =
+					distance === 0
+						? ' (PRIORITY: viewport + tile data)'
+						: distance === 1
+							? ' (viewport bbox but no tile data)'
+							: distance < 100
+								? ` (${Math.round(distance - 2)}km from viewport)`
+								: ' (fallback)';
+				console.log(`🗃️ Searching database: ${filename}${priorityInfo}`);
 
 				await processDatabaseForSearch(
 					db,
@@ -395,13 +404,15 @@ async function searchFeatures(
 				);
 
 				const newResultsCount = results.filter((r) => r.database === filename).length;
-				console.log(`✅ Completed ${filename}: ${newResultsCount} results`);
+				console.log(
+					`✅ Completed ${filename}: ${newResultsCount} results (total: ${results.length}/${MAX_RESULTS})`
+				);
 			} catch (error) {
 				if (error instanceof Error && error.message === 'Search cancelled') {
 					throw error;
 				}
 				console.error(`❌ Error searching ${filename}:`, error);
-				continue;
+				continue; // Continue with next database even if one fails
 			}
 		}
 	} catch (error) {
@@ -431,8 +442,9 @@ function normalizeForName(s: string): string {
 function prioritizeDatabasesByLocation(
 	databases: Array<[string, any]>,
 	userLocation: { lng: number; lat: number }
-): Array<[string, any, number]> {
-	const prioritized: Array<[string, any, number]> = [];
+): Array<[string, any, number, number]> {
+	const prioritized: Array<[string, any, number, number]> = [];
+	const ZOOM_LEVEL = 14; // Same zoom level used for search
 
 	for (const [filename, db] of databases) {
 		try {
@@ -448,34 +460,95 @@ function prioritizeDatabasesByLocation(
 
 			if (bounds) {
 				const [west, south, east, north] = bounds;
-				const centerLng = (west + east) / 2;
-				const centerLat = (south + north) / 2;
-				const distance = calculateDistance(
-					userLocation.lat,
-					userLocation.lng,
-					centerLat,
-					centerLng
-				);
 
+				// Calculate bounding box area (for tie-breaking)
+				const bboxArea = (east - west) * (north - south);
+
+				// Check if viewport center is within database bounds
 				const isWithinBounds =
 					userLocation.lng >= west &&
 					userLocation.lng <= east &&
 					userLocation.lat >= south &&
 					userLocation.lat <= north;
 
-				const finalDistance = isWithinBounds ? 0 : distance;
-				prioritized.push([filename, db, finalDistance]);
+				if (isWithinBounds) {
+					// Check if the viewport center tile actually exists in the database
+					const centerTile = lngLatToTile(userLocation.lng, userLocation.lat, ZOOM_LEVEL);
+					// Convert standard Y to TMS Y coordinate
+					const n = 1 << ZOOM_LEVEL;
+					const tmsY = n - 1 - centerTile.y;
+
+					const tileExistsStmt = db.prepare(`
+						SELECT COUNT(*) FROM tiles 
+						WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?
+					`);
+
+					try {
+						tileExistsStmt.bind([ZOOM_LEVEL, centerTile.x, tmsY]);
+						tileExistsStmt.step();
+						const tileExists = tileExistsStmt.get(0) > 0;
+
+						if (tileExists) {
+							// Viewport center is within bounds AND tile exists - highest priority
+							prioritized.push([filename, db, 0, bboxArea]);
+							console.log(
+								`✅ Database ${filename} contains viewport center WITH tile data - prioritized! BBox: [${west.toFixed(4)}, ${south.toFixed(4)}, ${east.toFixed(4)}, ${north.toFixed(4)}] | Area: ${bboxArea.toFixed(2)} deg² | Tile: [${centerTile.x}, ${centerTile.y}] | Viewport: [${userLocation.lng.toFixed(4)}, ${userLocation.lat.toFixed(4)}]`
+							);
+						} else {
+							// Within bounds but no tile data - lower priority
+							prioritized.push([filename, db, 1, bboxArea]); // Distance 1 = within bounds but no tile
+							console.log(
+								`⚠️ Database ${filename} contains viewport center but NO tile data at [${centerTile.x}, ${centerTile.y}] - deprioritized! BBox: [${west.toFixed(4)}, ${south.toFixed(4)}, ${east.toFixed(4)}, ${north.toFixed(4)}] | Area: ${bboxArea.toFixed(2)} deg² | Viewport: [${userLocation.lng.toFixed(4)}, ${userLocation.lat.toFixed(4)}]`
+							);
+						}
+					} finally {
+						tileExistsStmt.finalize();
+					}
+				} else {
+					// Calculate distance from viewport center to database center
+					const centerLng = (west + east) / 2;
+					const centerLat = (south + north) / 2;
+					const distance = calculateDistance(
+						userLocation.lat,
+						userLocation.lng,
+						centerLat,
+						centerLng
+					);
+					// Start distance at 2 to ensure databases with tile data get higher priority
+					prioritized.push([filename, db, 2 + distance, bboxArea]);
+					console.log(
+						`🗺️ Database ${filename} BBox: [${west.toFixed(4)}, ${south.toFixed(4)}, ${east.toFixed(4)}, ${north.toFixed(4)}] | Area: ${bboxArea.toFixed(2)} deg² | Distance: ${distance.toFixed(1)}km from viewport [${userLocation.lng.toFixed(4)}, ${userLocation.lat.toFixed(4)}]`
+					);
+				}
 			} else {
-				prioritized.push([filename, db, 9999]);
+				prioritized.push([filename, db, 9999, 999999]);
 			}
 		} catch (error) {
 			console.warn(`Failed to get bounds for ${filename}:`, error);
-			prioritized.push([filename, db, 9999]);
+			prioritized.push([filename, db, 9999, 999999]);
 		}
 	}
 
-	prioritized.sort((a, b) => a[2] - b[2]);
-	return prioritized;
+	// Sort: first by distance priority, then by bbox area (smaller = more focused)
+	prioritized.sort((a, b) => {
+		const distanceA = a[2];
+		const distanceB = b[2];
+		const areaA = a[3];
+		const areaB = b[3];
+
+		// Primary sort: by distance priority
+		// 0 = contains viewport + has tile data
+		// 1 = contains viewport but no tile data
+		// 2+ = outside viewport (2 + actual distance)
+		if (distanceA !== distanceB) {
+			return distanceA - distanceB;
+		}
+
+		// Secondary sort: by bbox area (smaller area = more focused = higher priority)
+		return areaA - areaB;
+	});
+
+	return prioritized.map(([filename, db, distance]) => [filename, db, distance]);
 }
 
 function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -506,81 +579,73 @@ async function processDatabaseForSearch(
 	onProgress?: (results: SearchResult[], isComplete: boolean, currentDatabase?: string) => void,
 	abortSignal?: AbortSignal
 ): Promise<void> {
-	let offset = 0;
-	let hasMore = true;
-	const batchSize = 100; // Larger batch size to reduce overhead
 	let lastProgressUpdate = Date.now();
-	let processedBatches = 0;
 
-	console.log(`[DB ${filename}] Starting search processing...`);
+	console.log(`[DB ${filename}] Starting viewport-centered search processing...`);
 
-	while (hasMore && results.length < maxResults) {
-		if (abortSignal?.aborted) {
-			throw new Error('Search cancelled');
+	// Get all tiles at zoom level first
+	const allTilesStmt = db.prepare(`
+		SELECT tile_data, tile_column, tile_row
+		FROM tiles
+		WHERE zoom_level = ?
+	`);
+
+	try {
+		allTilesStmt.bind([zoomLevel]);
+
+		const allTiles: Array<{
+			tileData: Uint8Array;
+			x: number;
+			tmsY: number;
+		}> = [];
+
+		// Collect all tiles
+		while (allTilesStmt.step()) {
+			allTiles.push({
+				tileData: allTilesStmt.get(0) as Uint8Array,
+				x: allTilesStmt.get(1) as number,
+				tmsY: allTilesStmt.get(2) as number
+			});
 		}
 
-		const stmt = db.prepare(`
-			SELECT tile_data, tile_column, tile_row
-			FROM tiles
-			WHERE zoom_level = ?
-			LIMIT ? OFFSET ?
-		`);
+		console.log(`[DB ${filename}] Found ${allTiles.length} tiles to search`);
 
-		try {
-			stmt.bind([zoomLevel, batchSize, offset]);
+		// Sort tiles by spiral distance from viewport center if userLocation provided
+		let prioritizedTiles: typeof allTiles;
+		if (userLocation) {
+			prioritizedTiles = prioritizeTilesBySpiral(allTiles, userLocation, zoomLevel);
+			console.log(`[DB ${filename}] Tiles prioritized in spiral pattern from viewport center`);
+		} else {
+			prioritizedTiles = allTiles;
+		}
 
-			const batchTiles: Array<{
-				tileData: Uint8Array;
-				x: number;
-				tmsY: number;
-			}> = [];
-
-			let batchCount = 0;
-			while (stmt.step() && results.length < maxResults) {
-				if (abortSignal?.aborted) {
-					throw new Error('Search cancelled');
-				}
-
-				batchCount++;
-				batchTiles.push({
-					tileData: stmt.get(0) as Uint8Array,
-					x: stmt.get(1) as number,
-					tmsY: stmt.get(2) as number
-				});
-
-				// Less frequent yielding
-				if (batchCount % 50 === 0) {
-					await optimizedYieldControl();
-				}
+		// Process tiles in prioritized order
+		for (let i = 0; i < prioritizedTiles.length && results.length < maxResults; i++) {
+			if (abortSignal?.aborted) {
+				throw new Error('Search cancelled');
 			}
 
-			hasMore = batchCount === batchSize;
-			offset += batchCount;
+			const tileInfo = prioritizedTiles[i];
+			await processSingleTile(
+				tileInfo.tileData,
+				tileInfo.x,
+				tileInfo.tmsY,
+				zoomLevel,
+				filename,
+				wantedLayers,
+				normalizedQuery,
+				results,
+				seenIds,
+				maxResults,
+				preferredLanguage
+			);
 
-			// Process batch
-			for (const tileInfo of batchTiles) {
-				if (abortSignal?.aborted) {
-					throw new Error('Search cancelled');
-				}
-				if (results.length >= maxResults) break;
-
-				await processSingleTile(
-					tileInfo.tileData,
-					tileInfo.x,
-					tileInfo.tmsY,
-					zoomLevel,
-					filename,
-					wantedLayers,
-					normalizedQuery,
-					results,
-					seenIds,
-					maxResults,
-					preferredLanguage
-				);
+			// Less frequent yielding - every 50 tiles
+			if (i % 50 === 0) {
+				await optimizedYieldControl();
 			}
 
-			// Throttled progress updates based on time instead of batch count
-			processedBatches++;
+			// Throttled progress updates
 			const now = Date.now();
 			if (onProgress && now - lastProgressUpdate >= PROGRESS_UPDATE_THROTTLE) {
 				lastProgressUpdate = now;
@@ -588,9 +653,9 @@ async function processDatabaseForSearch(
 				// Yield after progress update to let main thread process it
 				await optimizedYieldControl();
 			}
-		} finally {
-			stmt.finalize();
 		}
+	} finally {
+		allTilesStmt.finalize();
 	}
 
 	console.log(
@@ -811,6 +876,63 @@ function tileToLngLat(x: number, y: number, zoom: number): { lng: number; lat: n
 		lng: (x / Math.pow(2, zoom)) * 360 - 180,
 		lat: (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)))
 	};
+}
+
+// Convert lng/lat to tile coordinates
+function lngLatToTile(lng: number, lat: number, zoom: number): { x: number; y: number } {
+	const x = Math.floor(((lng + 180) / 360) * Math.pow(2, zoom));
+	const y = Math.floor(
+		((1 -
+			Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) /
+			2) *
+			Math.pow(2, zoom)
+	);
+	return { x, y };
+}
+
+// Prioritize tiles in spiral pattern from viewport center
+function prioritizeTilesBySpiral(
+	tiles: Array<{ tileData: Uint8Array; x: number; tmsY: number }>,
+	viewportCenter: { lng: number; lat: number },
+	zoomLevel: number
+): Array<{ tileData: Uint8Array; x: number; tmsY: number }> {
+	// Convert viewport center to tile coordinates
+	const centerTile = lngLatToTile(viewportCenter.lng, viewportCenter.lat, zoomLevel);
+
+	// Calculate distance from center tile for each tile and sort
+	const tilesWithDistance = tiles.map((tile) => {
+		// Convert TMS Y to standard Y coordinate for distance calculation
+		const n = 1 << zoomLevel;
+		const standardY = n - 1 - tile.tmsY;
+
+		// Calculate Manhattan distance (good approximation for tile grid)
+		const distance = Math.abs(tile.x - centerTile.x) + Math.abs(standardY - centerTile.y);
+
+		return {
+			...tile,
+			distance
+		};
+	});
+
+	// Sort by distance (spiral pattern)
+	tilesWithDistance.sort((a, b) => a.distance - b.distance);
+
+	// Log the center tile for debugging
+	const centerTileInfo = tilesWithDistance.find(
+		(t) =>
+			Math.abs(t.x - centerTile.x) <= 1 &&
+			Math.abs((1 << zoomLevel) - 1 - t.tmsY - centerTile.y) <= 1
+	);
+
+	if (centerTileInfo) {
+		console.log(
+			`🎯 Center tile found at [${centerTileInfo.x}, ${centerTileInfo.tmsY}] (distance: ${centerTileInfo.distance})`
+		);
+	} else {
+		console.log(`🎯 Searching around calculated center tile [${centerTile.x}, ${centerTile.y}]`);
+	}
+
+	return tilesWithDistance;
 }
 
 // Check if data is gzipped
