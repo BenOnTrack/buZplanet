@@ -7,27 +7,19 @@ import type { Map as MapStore, MapGeoJSONFeature, LngLatBoundsLike } from 'svelt
 class MapControl {
 	private mapInstance = $state<MapStore | undefined>();
 
-	// Selected feature state
-	private _selectedFeature = $state<MapGeoJSONFeature | null>(null);
-	private _selectedFeatureDrawerOpen = $state(false);
+	// Selected feature state - exposed directly for binding
+	selectedFeature = $state<MapGeoJSONFeature | null>(null);
+	selectedFeatureDrawerOpen = $state(false);
 	private _storyInsertionMode = $state(false); // Flag for story feature insertion mode
 
 	// Getters for reactive state
-	get selectedFeature(): MapGeoJSONFeature | null {
-		return this._selectedFeature;
-	}
-
-	get selectedFeatureDrawerOpen(): boolean {
-		return this._selectedFeatureDrawerOpen;
-	}
-
 	get storyInsertionMode(): boolean {
 		return this._storyInsertionMode;
 	}
 
 	// Setter methods
 	setSelectedFeature(feature: MapGeoJSONFeature | null) {
-		this._selectedFeature = feature;
+		this.selectedFeature = feature;
 	}
 
 	setSelectedFeatureDrawerOpen(open: boolean) {
@@ -37,8 +29,8 @@ class MapControl {
 		}
 
 		// Only update if state is actually changing
-		if (this._selectedFeatureDrawerOpen !== open) {
-			this._selectedFeatureDrawerOpen = open;
+		if (this.selectedFeatureDrawerOpen !== open) {
+			this.selectedFeatureDrawerOpen = open;
 			// Don't automatically clear selected feature when closing drawer
 			// The feature can remain selected even if drawer is closed
 			// This allows the drawer to be reopened with the same feature
@@ -48,8 +40,8 @@ class MapControl {
 	setStoryInsertionMode(active: boolean) {
 		this._storyInsertionMode = active;
 		// If activating story insertion mode, close the selected feature drawer
-		if (active && this._selectedFeatureDrawerOpen) {
-			this._selectedFeatureDrawerOpen = false;
+		if (active && this.selectedFeatureDrawerOpen) {
+			this.selectedFeatureDrawerOpen = false;
 		}
 	}
 
@@ -79,11 +71,11 @@ class MapControl {
 	 */
 	selectFeature(feature: MapGeoJSONFeature) {
 		// Only update if this is a different feature or drawer is closed
-		if (this._selectedFeature !== feature || !this._selectedFeatureDrawerOpen) {
-			this._selectedFeature = feature;
+		if (this.selectedFeature !== feature || !this.selectedFeatureDrawerOpen) {
+			this.selectedFeature = feature;
 			// Don't open drawer if in story insertion mode
 			if (!this._storyInsertionMode) {
-				this._selectedFeatureDrawerOpen = true;
+				this.selectedFeatureDrawerOpen = true;
 			}
 		}
 	}
@@ -93,9 +85,9 @@ class MapControl {
 	 */
 	clearSelection() {
 		// Only clear if there's actually something selected
-		if (this._selectedFeature !== null || this._selectedFeatureDrawerOpen !== false) {
-			this._selectedFeature = null;
-			this._selectedFeatureDrawerOpen = false;
+		if (this.selectedFeature !== null || this.selectedFeatureDrawerOpen !== false) {
+			this.selectedFeature = null;
+			this.selectedFeatureDrawerOpen = false;
 		}
 	}
 

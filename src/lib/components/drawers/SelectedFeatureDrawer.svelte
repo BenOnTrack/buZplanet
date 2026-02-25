@@ -13,29 +13,12 @@
 
 	let {
 		open = $bindable(false),
-		feature = null,
-		onOpenChange = undefined
+		feature = null
 	}: {
 		open?: boolean;
 		feature?: MapGeoJSONFeature | null;
-		onOpenChange?: (open: boolean) => void;
 	} = $props();
 
-	// Handle drawer open/close changes
-	function handleOpenChange(newOpen: boolean) {
-		console.log('🔍 SelectedFeatureDrawer: Open state changed:', {
-			newOpen,
-			feature,
-			hasFeature,
-			activeTab,
-			featureProperties: feature?.properties
-		});
-		// Only call parent callback - let parent handle the state update
-		// Do NOT directly modify the open prop to avoid conflicts with Vaul's internal state
-		if (onOpenChange) {
-			onOpenChange(newOpen);
-		}
-	}
 	let activeSnapPoint = $state<string | number>('200px');
 	let activeTab = $state('info');
 
@@ -612,7 +595,7 @@
 </script>
 
 <!-- Selected Feature Drawer -->
-<Drawer.Root {open} onOpenChange={handleOpenChange} {snapPoints} bind:activeSnapPoint modal={false}>
+<Drawer.Root bind:open {snapPoints} bind:activeSnapPoint modal={false}>
 	<Drawer.Overlay
 		class="fixed inset-0 bg-black/40"
 		style="pointer-events: none;z-index: {Z_INDEX.SELECTED_FEATURE_DRAWER_OVERLAY}"

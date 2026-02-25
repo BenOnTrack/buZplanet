@@ -369,9 +369,8 @@
 
 		<!-- Selected Feature Drawer - render after SearchResultsDrawer to ensure proper layering -->
 		<SelectedFeatureDrawer
-			open={mapControl.selectedFeatureDrawerOpen}
+			bind:open={mapControl.selectedFeatureDrawerOpen}
 			feature={mapControl.selectedFeature}
-			onOpenChange={(open) => mapControl.setSelectedFeatureDrawerOpen(open)}
 		/>
 	{/if}
 
