@@ -11,6 +11,7 @@
 	import SearchResultsDrawer from '$lib/components/drawers/SearchResultsDrawer.svelte';
 	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
+	import { searchControl } from '$lib/stores/SearchControl.svelte';
 	import { appInitializer } from '$lib/utils/app-initialization';
 	import { appState } from '$lib/stores/AppState.svelte';
 	import { authState } from '$lib/stores/auth.svelte';
@@ -45,71 +46,21 @@
 	let isMapReady = $derived(isAppReady && !authState.loading && appState.isReady);
 	let showDebugPanel = $state(false);
 
-	// Search functionality
-	let searchQuery = $state('');
-	let searchResults = $state<any[]>([]);
-	let isSearching = $state(false);
-	let searchDrawerOpen = $state(false);
-	let currentSearchingDatabase = $state<string | undefined>(undefined);
+	// Tile cache debugging state
+	let cacheStats = $state<any>({});
+	let cacheContents = $state<any[]>([]);
+	let recentTiles = $state<any[]>([]);
+	let popularTiles = $state<any[]>([]);
+	let debugUpdateInterval: ReturnType<typeof setInterval> | null = null;
+	let activeCacheTab = $state<'stats' | 'contents' | 'recent' | 'popular'>('stats');
 
+	// Simple handlers that delegate to search store
 	async function handleSearch(query: string) {
-		console.log('Searching for:', query);
-		isSearching = true;
-		searchDrawerOpen = true;
-		searchResults = []; // Clear previous results
-		currentSearchingDatabase = undefined;
-
-		try {
-			const { getWorker } = await import('$lib/utils/worker');
-			const worker = getWorker();
-
-			// Get current language preference from AppState
-			const currentLanguage = appState.language;
-			console.log(`🌐 Using language preference: ${currentLanguage}`);
-
-			// Search for features with progressive results and language preference
-			const finalResults = await worker.searchFeatures(
-				query,
-				5000, // 5000 results max
-				currentLanguage, // Pass language preference to worker
-				// Progress callback for streaming results
-				(progressData) => {
-					const { results, isComplete, currentDatabase, total } = progressData;
-
-					// Update search results progressively
-					searchResults = results;
-					currentSearchingDatabase = currentDatabase;
-
-					console.log(
-						`🔄 Progress: ${total} results from ${currentDatabase || 'unknown'} (complete: ${isComplete})`
-					);
-				}
-			);
-
-			// Final results (should be same as last progress update)
-			searchResults = finalResults;
-			currentSearchingDatabase = undefined;
-
-			if (finalResults.length === 0) {
-				console.log('No results found for:', query);
-			} else {
-				console.log(`✅ Search complete: ${finalResults.length} total results for "${query}"`);
-			}
-		} catch (error) {
-			console.error('Search error:', error);
-			searchResults = [];
-			currentSearchingDatabase = undefined;
-		} finally {
-			isSearching = false;
-		}
+		await searchControl.search(query);
 	}
 
 	function handleClearSearch() {
-		console.log('Search cleared');
-		searchResults = [];
-		isSearching = false;
-		searchDrawerOpen = false; // Close search results drawer
-		currentSearchingDatabase = undefined;
+		searchControl.clearSearch();
 	}
 
 	// Subscribe to initialization state changes
@@ -223,6 +174,11 @@
 			window.dispatchEvent(event);
 		}
 
+		if (debugUpdateInterval) {
+			clearInterval(debugUpdateInterval);
+			debugUpdateInterval = null;
+		}
+
 		if (unsubscribe) {
 			unsubscribe();
 		}
@@ -333,6 +289,96 @@
 			initState = { ...initState, logs: [] };
 		}
 	}
+
+	// Tile cache debugging functions
+	async function updateCacheData() {
+		if (!showDebugPanel || !isAppReady) return;
+
+		try {
+			const { getWorker } = await import('$lib/utils/worker');
+			const worker = getWorker();
+
+			if (activeCacheTab === 'stats') {
+				cacheStats = await worker.getTileCacheStats();
+			} else if (activeCacheTab === 'contents') {
+				cacheContents = await worker.getCacheContents();
+			} else if (activeCacheTab === 'recent') {
+				recentTiles = await worker.getRecentTiles(10);
+			} else if (activeCacheTab === 'popular') {
+				popularTiles = await worker.getPopularTiles(10);
+			}
+		} catch (error) {
+			console.debug('Failed to update cache data:', error);
+		}
+	}
+
+	async function clearTileCache() {
+		try {
+			const { getWorker } = await import('$lib/utils/worker');
+			const worker = getWorker();
+			await worker.clearTileCache();
+			await updateCacheData(); // Refresh after clearing
+			console.log('🧹 Tile cache cleared');
+		} catch (error) {
+			console.error('Failed to clear tile cache:', error);
+		}
+	}
+
+	function switchCacheTab(tab: typeof activeCacheTab) {
+		activeCacheTab = tab;
+		updateCacheData();
+	}
+
+	function formatBytes(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	function formatTileKey(key: string): { source: string; z: number; x: number; y: number } {
+		const [source, z, x, y] = key.split('-');
+		return { source, z: Number(z), x: Number(x), y: Number(y) };
+	}
+
+	// Watch showDebugPanel changes to start/stop cache updates
+	$effect(() => {
+		if (showDebugPanel && isAppReady) {
+			// Start cache data updates
+			updateCacheData();
+			debugUpdateInterval = setInterval(updateCacheData, 3000);
+
+			// Add global console function
+			if (typeof window !== 'undefined') {
+				(window as any).inspectTileCache = async () => {
+					try {
+						const { getWorker } = await import('$lib/utils/worker');
+						const worker = getWorker();
+						const stats = await worker.getTileCacheStats();
+						const contents = await worker.getCacheContents();
+						const recent = await worker.getRecentTiles(10);
+
+						console.group('🚀 Tile Cache Inspector');
+						console.log('📊 Stats:', stats);
+						console.log('📦 Contents:', contents);
+						console.log('🕐 Recent:', recent);
+						console.log('💡 Usage: window.inspectTileCache() to run this again');
+						console.groupEnd();
+
+						return { stats, contents, recent };
+					} catch (error) {
+						console.error('Failed to inspect cache:', error);
+					}
+				};
+				console.log('💡 Use window.inspectTileCache() to inspect the tile cache from console');
+			}
+		} else {
+			// Stop cache data updates
+			if (debugUpdateInterval) {
+				clearInterval(debugUpdateInterval);
+				debugUpdateInterval = null;
+			}
+		}
+	});
 </script>
 
 <main class="app-container">
@@ -348,7 +394,7 @@
 		<!-- Search Bar -->
 		<div class="search-bar-container" style="z-index: {Z_INDEX.SEARCH_BAR}">
 			<SearchBar
-				bind:value={searchQuery}
+				bind:value={searchControl.query}
 				onSearch={handleSearch}
 				onClear={handleClearSearch}
 				placeholder="Search places, addresses, points of interest..."
@@ -360,11 +406,12 @@
 
 		<!-- Search Results Drawer -->
 		<SearchResultsDrawer
-			bind:open={searchDrawerOpen}
-			results={searchResults}
-			{searchQuery}
-			{isSearching}
-			{currentSearchingDatabase}
+			bind:open={searchControl.drawerOpen}
+			results={searchControl.results}
+			searchQuery={searchControl.query}
+			isSearching={searchControl.isSearching}
+			currentSearchingDatabase={searchControl.currentSearchingDatabase}
+			showOnMap={true}
 		/>
 
 		<!-- Selected Feature Drawer - render after SearchResultsDrawer to ensure proper layering -->
@@ -395,6 +442,148 @@
 						<button onclick={clearLogs} onkeydown={(e) => e.key === 'Enter' && clearLogs()}
 							>Clear Logs</button
 						>
+						<button
+							onclick={clearTileCache}
+							onkeydown={(e) => e.key === 'Enter' && clearTileCache()}>Clear Cache</button
+						>
+					</div>
+
+					<!-- Tile Cache Section -->
+					<div class="cache-section">
+						<h4>🚀 Tile Cache</h4>
+
+						<!-- Cache Tabs -->
+						<div class="cache-tabs">
+							<button
+								class:active={activeCacheTab === 'stats'}
+								onclick={() => switchCacheTab('stats')}
+							>
+								📊 Stats
+							</button>
+							<button
+								class:active={activeCacheTab === 'contents'}
+								onclick={() => switchCacheTab('contents')}
+							>
+								📦 All ({cacheContents.length})
+							</button>
+							<button
+								class:active={activeCacheTab === 'recent'}
+								onclick={() => switchCacheTab('recent')}
+							>
+								🕐 Recent
+							</button>
+							<button
+								class:active={activeCacheTab === 'popular'}
+								onclick={() => switchCacheTab('popular')}
+							>
+								🔥 Popular
+							</button>
+						</div>
+
+						<!-- Cache Content -->
+						<div class="cache-content">
+							{#if activeCacheTab === 'stats'}
+								<div class="cache-stats">
+									<div class="stat-row">
+										<span>Memory Hits:</span>
+										<span class="stat-value hit"
+											>{cacheStats.memoryHits?.toLocaleString() || 0}</span
+										>
+									</div>
+									<div class="stat-row">
+										<span>OPFS Fetches:</span>
+										<span class="stat-value fetch"
+											>{cacheStats.opfsFetches?.toLocaleString() || 0}</span
+										>
+									</div>
+									<div class="stat-row">
+										<span>Hit Ratio:</span>
+										<span class="stat-value ratio">
+											{cacheStats.memoryHits && cacheStats.opfsFetches
+												? (
+														(cacheStats.memoryHits /
+															(cacheStats.memoryHits + cacheStats.opfsFetches)) *
+														100
+													).toFixed(1)
+												: 0}%
+										</span>
+									</div>
+									<div class="stat-row">
+										<span>Memory Size:</span>
+										<span class="stat-value">{cacheStats.memorySizeFormatted || '0 B'}</span>
+									</div>
+									<div class="stat-row">
+										<span>Tiles Cached:</span>
+										<span class="stat-value">{cacheStats.tilesInMemory?.toLocaleString() || 0}</span
+										>
+									</div>
+									<div class="stat-row">
+										<span>Prefetch Queue:</span>
+										<span class="stat-value">{cacheStats.prefetchQueueSize || 0}</span>
+									</div>
+									<div class="stat-row">
+										<span>Prefetching:</span>
+										<span class="stat-value" class:active={cacheStats.isPrefetching}>
+											{cacheStats.isPrefetching ? '🟢 Active' : '🔴 Idle'}
+										</span>
+									</div>
+								</div>
+							{:else if activeCacheTab === 'contents'}
+								<div class="tile-list">
+									{#each cacheContents.slice(0, 20) as { key, tile }}
+										{@const parsed = formatTileKey(key)}
+										<div class="tile-item">
+											<div class="tile-key">{parsed.source}-{parsed.z}/{parsed.x}/{parsed.y}</div>
+											<div class="tile-meta">
+												<span>{formatBytes(tile.size)}</span>
+												<span>×{tile.accessCount}</span>
+											</div>
+										</div>
+									{/each}
+									{#if cacheContents.length > 20}
+										<div class="tile-item more">...and {cacheContents.length - 20} more tiles</div>
+									{/if}
+									{#if cacheContents.length === 0}
+										<div class="tile-item empty">No tiles cached yet</div>
+									{/if}
+								</div>
+							{:else if activeCacheTab === 'recent'}
+								<div class="tile-list">
+									{#each recentTiles as { key, tile, accessedAgo }}
+										{@const parsed = formatTileKey(key)}
+										<div class="tile-item">
+											<div class="tile-key">{parsed.source}-{parsed.z}/{parsed.x}/{parsed.y}</div>
+											<div class="tile-meta">
+												<span class="recent-time">{accessedAgo}</span>
+												<span>×{tile.accessCount}</span>
+											</div>
+										</div>
+									{/each}
+									{#if recentTiles.length === 0}
+										<div class="tile-item empty">No recent tiles</div>
+									{/if}
+								</div>
+							{:else if activeCacheTab === 'popular'}
+								<div class="tile-list">
+									{#each popularTiles as { key, tile }, index}
+										{@const parsed = formatTileKey(key)}
+										<div class="tile-item">
+											<div class="tile-key">
+												#{index + 1}
+												{parsed.source}-{parsed.z}/{parsed.x}/{parsed.y}
+											</div>
+											<div class="tile-meta">
+												<span class="popular-count">×{tile.accessCount}</span>
+												<span>{formatBytes(tile.size)}</span>
+											</div>
+										</div>
+									{/each}
+									{#if popularTiles.length === 0}
+										<div class="tile-item empty">No popular tiles yet</div>
+									{/if}
+								</div>
+							{/if}
+						</div>
 					</div>
 
 					<!-- Sync Status Section -->
@@ -419,6 +608,12 @@
 						{#if initState.logs.length === 0}
 							<div class="log-entry empty">No logs yet...</div>
 						{/if}
+					</div>
+
+					<!-- Console Helper -->
+					<div class="console-helper">
+						<div class="helper-title">🔧 Console Commands</div>
+						<code>window.inspectTileCache()</code> - Full cache inspection
 					</div>
 				</div>
 			{/if}
@@ -465,8 +660,8 @@
 		border-radius: 4px;
 		padding: 12px;
 		margin-top: 8px;
-		width: 400px;
-		max-height: 500px;
+		width: 450px;
+		max-height: 600px;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 		overflow-y: auto;
 	}
@@ -475,6 +670,7 @@
 		display: flex;
 		gap: 8px;
 		margin-bottom: 12px;
+		flex-wrap: wrap;
 	}
 
 	.debug-controls button {
@@ -491,6 +687,171 @@
 
 	.debug-controls button:hover {
 		background: #005a9e;
+	}
+
+	/* Tile Cache Styles */
+	.cache-section {
+		margin: 12px 0;
+		padding: 8px 0;
+		border-top: 1px solid #333;
+		border-bottom: 1px solid #333;
+	}
+
+	.cache-section h4 {
+		margin: 0 0 8px 0;
+		font-size: 11px;
+		font-weight: bold;
+	}
+
+	.cache-tabs {
+		display: flex;
+		gap: 4px;
+		margin-bottom: 8px;
+		flex-wrap: wrap;
+	}
+
+	.cache-tabs button {
+		background: #333;
+		color: #ccc;
+		border: 1px solid #555;
+		padding: 4px 8px;
+		border-radius: 3px;
+		cursor: pointer;
+		font-size: 9px;
+		font-family: monospace;
+		transition: all 0.2s;
+	}
+
+	.cache-tabs button:hover {
+		background: #444;
+		color: white;
+	}
+
+	.cache-tabs button.active {
+		background: #007acc;
+		color: white;
+		border-color: #007acc;
+	}
+
+	.cache-content {
+		max-height: 200px;
+		overflow-y: auto;
+		background: rgba(0, 0, 0, 0.3);
+		border-radius: 3px;
+		padding: 8px;
+	}
+
+	.cache-stats {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.stat-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		font-size: 10px;
+		line-height: 1.3;
+	}
+
+	.stat-value {
+		font-weight: bold;
+		font-family: monospace;
+	}
+
+	.stat-value.hit {
+		color: #4ade80;
+	}
+
+	.stat-value.fetch {
+		color: #60a5fa;
+	}
+
+	.stat-value.ratio {
+		color: #f59e0b;
+	}
+
+	.stat-value.active {
+		color: #4ade80;
+	}
+
+	.tile-list {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.tile-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 4px 6px;
+		background: rgba(255, 255, 255, 0.05);
+		border-radius: 2px;
+		font-size: 9px;
+		font-family: monospace;
+		line-height: 1.2;
+	}
+
+	.tile-item.empty {
+		color: #666;
+		font-style: italic;
+		justify-content: center;
+	}
+
+	.tile-item.more {
+		color: #888;
+		justify-content: center;
+	}
+
+	.tile-key {
+		color: #e5e7eb;
+		flex: 1;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.tile-meta {
+		display: flex;
+		gap: 8px;
+		color: #9ca3af;
+		flex-shrink: 0;
+	}
+
+	.recent-time {
+		color: #4ade80;
+	}
+
+	.popular-count {
+		color: #f59e0b;
+		font-weight: bold;
+	}
+
+	/* Console Helper */
+	.console-helper {
+		margin-top: 12px;
+		padding: 8px;
+		background: rgba(0, 0, 0, 0.5);
+		border-radius: 3px;
+		border: 1px solid #333;
+	}
+
+	.helper-title {
+		font-size: 10px;
+		font-weight: bold;
+		margin-bottom: 4px;
+		color: #f59e0b;
+	}
+
+	.console-helper code {
+		font-size: 9px;
+		color: #4ade80;
+		background: rgba(0, 0, 0, 0.8);
+		padding: 2px 4px;
+		border-radius: 2px;
 	}
 
 	.debug-logs {

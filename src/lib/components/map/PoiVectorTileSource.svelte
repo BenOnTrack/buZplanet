@@ -3,20 +3,37 @@
 	// @ts-nocheck
 	import { VectorTileSource, HeatmapLayer, SymbolLayer, FillLayer } from 'svelte-maplibre';
 	import { appState } from '$lib/stores/AppState.svelte.js';
+	import { searchControl } from '$lib/stores/SearchControl.svelte.ts';
 	import { buildMapFilter } from '$lib/utils/categories';
 
 	let { nameExpression }: { nameExpression: any } = $props();
 
 	// AppState is initialized by default in constructor
 
+	// Check if POI should be visible (respects temporary search control override)
+	const shouldShowPOI = $derived.by(() => {
+		// If search drawer is open and POI is set to hidden, hide POI
+		if (searchControl.searchDrawerOpen && !searchControl.poiVisibility) {
+			return false;
+		}
+		// Otherwise show POI normally
+		return true;
+	});
+
 	// Derived filter based on AppState map filter settings
 	let featuresMapFilter = $derived.by(() => {
 		try {
+			// If POI should be hidden, return false filter
+			if (!shouldShowPOI) {
+				return ['==', ['literal', true], ['literal', false]]; // Always false - hide everything
+			}
+
 			const mapFilterSettings = appState.mapFilterSettings;
 			const selectedCategories = Array.from(mapFilterSettings.categories);
 
 			console.log('Map filter applied:', {
-				categories: selectedCategories.length
+				categories: selectedCategories.length,
+				poiVisible: shouldShowPOI
 			});
 
 			return buildMapFilter(selectedCategories);
@@ -29,11 +46,17 @@
 	// Derived filter based on AppState heat filter settings
 	let featuresHeatFilter = $derived.by(() => {
 		try {
+			// If POI should be hidden, return false filter
+			if (!shouldShowPOI) {
+				return ['==', ['literal', true], ['literal', false]]; // Always false - hide everything
+			}
+
 			const heatFilterSettings = appState.filterSettings.heat;
 			const selectedCategories = Array.from(heatFilterSettings.categories);
 
 			console.log('Heat filter applied:', {
-				categories: selectedCategories.length
+				categories: selectedCategories.length,
+				poiVisible: shouldShowPOI
 			});
 
 			// If no heat categories are selected, return a filter that shows nothing
@@ -119,10 +142,11 @@
 	});
 
 	// Reactive icon image expressions that use colors from AppState
-	const iconImage = $derived(() => {
-		// Get current color mappings from AppState
-		const colorMappings = appState.colorMappings;
+	const iconImage = $derived.by(() => {
+		// Get current color mappings from AppState as plain objects (no proxies)
+		const colorMappings = $state.snapshot(appState.colorMappings);
 
+		// Create plain object without reactive references
 		return {
 			attraction: [
 				'concat',
@@ -510,7 +534,7 @@
 		minzoom={13.5}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().attraction,
+			'icon-image': iconImage.attraction,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -535,7 +559,7 @@
 		minzoom={17}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().education,
+			'icon-image': iconImage.education,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -560,7 +584,7 @@
 		minzoom={16}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().entertainment,
+			'icon-image': iconImage.entertainment,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -585,7 +609,7 @@
 		minzoom={18}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().facility,
+			'icon-image': iconImage.facility,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -610,7 +634,7 @@
 		minzoom={14}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().food_and_drink,
+			'icon-image': iconImage.food_and_drink,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -635,7 +659,7 @@
 		minzoom={15}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().healthcare,
+			'icon-image': iconImage.healthcare,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -660,7 +684,7 @@
 		minzoom={10}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().leisure,
+			'icon-image': iconImage.leisure,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -685,7 +709,7 @@
 		minzoom={14}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().lodging,
+			'icon-image': iconImage.lodging,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -710,7 +734,7 @@
 		minzoom={8}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().natural,
+			'icon-image': iconImage.natural,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -735,7 +759,7 @@
 		minzoom={17}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().shop,
+			'icon-image': iconImage.shop,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -760,7 +784,7 @@
 		minzoom={15.5}
 		filter={featuresMapFilter}
 		layout={{
-			'icon-image': iconImage().transportation,
+			'icon-image': iconImage.transportation,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -785,7 +809,7 @@
 		sourceLayer={'poi_place'}
 		filter={placeMinorFilter}
 		layout={{
-			'icon-image': iconImage().place,
+			'icon-image': iconImage.place,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,
@@ -830,7 +854,7 @@
 		sourceLayer={'poi_place'}
 		filter={placeMajorFilter}
 		layout={{
-			'icon-image': iconImage().place,
+			'icon-image': iconImage.place,
 			'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.25, 14, 0.8, 18, 1],
 			'text-anchor': 'top',
 			'text-field': nameExpression,

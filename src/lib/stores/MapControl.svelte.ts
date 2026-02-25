@@ -432,23 +432,48 @@ class MapControl {
 	}
 
 	/**
-	 * Select a search result (converts to MapGeoJSONFeature and selects)
+	 * Select a search result and automatically cancel ongoing search
+	 * This optimizes performance by stopping the search when user finds what they want
 	 */
 	selectSearchResult(searchResult: SearchResult) {
 		const mapFeature = this.createMapFeatureFromSearchResult(searchResult);
+		// Auto-cancel search when user clicks on a result to maximize performance
+		this.autoAbortSearchOnSelection();
 		this.selectFeature(mapFeature);
 	}
 
 	/**
-	 * Zoom to and select a search result
+	 * Zoom to and select a search result and automatically cancel ongoing search
 	 * This method both zooms to the location and triggers the selectedFeature
 	 */
 	zoomToAndSelectSearchResult(searchResult: SearchResult) {
+		// Auto-cancel search when user clicks on a result to maximize performance
+		this.autoAbortSearchOnSelection();
+
 		// First zoom to the location
 		this.zoomToLocation(searchResult.lng, searchResult.lat, 16);
 
 		// Then select the feature (triggers selectedFeature and opens drawer)
 		this.selectSearchResult(searchResult);
+	}
+
+	/**
+	 * Auto-abort search when user selects a result (performance optimization)
+	 * This runs in the background and doesn't block the UI
+	 */
+	private autoAbortSearchOnSelection() {
+		// Import SearchControl dynamically to avoid circular dependencies
+		import('$lib/stores/SearchControl.svelte')
+			.then(({ searchControl }) => {
+				return searchControl.autoAbortSearchOnSelection();
+			})
+			.then(() => {
+				console.log('🎯 Search auto-cancelled after user selection - performance optimized!');
+			})
+			.catch((error) => {
+				// Silently handle errors - this is just an optimization
+				console.debug('Search auto-cancel completed (or no search was running):', error);
+			});
 	}
 
 	/**

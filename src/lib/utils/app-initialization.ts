@@ -156,7 +156,7 @@ class AppInitializer {
 				this.updateState({ status: 'database-scanning' });
 
 				try {
-					const scanResult = await worker.sendMessage('scan-databases', undefined, 10000); // 10s timeout
+					const scanResult = await worker.scanDatabases(); // Use proper method
 					this.addLog(
 						`✅ Database scan complete: ${scanResult.successfulDbs}/${scanResult.totalFiles} databases loaded`
 					);
@@ -172,7 +172,7 @@ class AppInitializer {
 			} else {
 				this.addLog('⚡ Fast mode: Skipping database scan (will run in background)');
 				// Start database scan in background
-				worker.sendMessage('scan-databases').catch((error) => {
+				worker.scanDatabases().catch((error: any) => {
 					console.warn('Background database scan failed:', error);
 				});
 			}

@@ -24,7 +24,9 @@
 	import BookmarksGeojsonSource from '$lib/components/map/BookmarksGeojsonSource.svelte';
 	import VisitedGeojsonSource from '$lib/components/map/VisitedGeojsonSource.svelte';
 	import TodoGeojsonSource from '$lib/components/map/TodoGeojsonSource.svelte';
+	import SearchResultsGeojsonSource from '$lib/components/map/SearchResultsGeojsonSource.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
+	import { searchControl } from '$lib/stores/SearchControl.svelte';
 	import CoastlineVectorTileSource from '$lib/components/map/CoastlineVectorTileSource.svelte';
 
 	interface Props {
@@ -83,6 +85,10 @@
 		type: 'FeatureCollection' as const,
 		features: []
 	});
+
+	// Search results - get filtered results from search control for map display
+	let searchResults = $derived(searchControl.filteredResults);
+	let showSearchResults = $derived(searchControl.drawerOpen && searchResults.length > 0);
 
 	async function loadBookmarkedFeatures() {
 		try {
@@ -246,6 +252,54 @@
 	let saveTimer: number | undefined;
 	let pendingMapState: any = null;
 
+	// Viewport update for tile cache
+	let viewportUpdateTimer: ReturnType<typeof setTimeout> | undefined;
+
+	// Update tile cache with viewport information
+	async function updateTileCacheViewport() {
+		if (!mapInstance) return;
+
+		try {
+			const { getWorker } = await import('$lib/utils/worker');
+			const worker = getWorker();
+
+			// Get current map view
+			const center = mapInstance.getCenter();
+			const zoom = mapInstance.getZoom();
+
+			// Calculate tile coordinates at current zoom
+			const scale = Math.pow(2, zoom);
+			const tileX = ((center.lng + 180) / 360) * scale;
+			const tileY =
+				((1 -
+					Math.log(
+						Math.tan((center.lat * Math.PI) / 180) + 1 / Math.cos((center.lat * Math.PI) / 180)
+					) /
+						Math.PI) /
+					2) *
+				scale;
+
+			// Estimate viewport size in tiles
+			const mapContainer = mapInstance.getContainer();
+			const containerWidth = mapContainer.offsetWidth;
+			const containerHeight = mapContainer.offsetHeight;
+			const tileSize = 512; // Standard tile size
+			const tilesX = Math.ceil(containerWidth / tileSize) + 1; // Add buffer
+			const tilesY = Math.ceil(containerHeight / tileSize) + 1; // Add buffer
+
+			// Update worker with viewport info
+			await worker.updateViewport?.(
+				Math.floor(zoom),
+				Math.floor(tileX),
+				Math.floor(tileY),
+				tilesX,
+				tilesY
+			);
+		} catch (error) {
+			console.debug('Failed to update tile cache viewport:', error);
+		}
+	}
+
 	// Save map state to IndexedDB only when app is closing/hidden
 	function updateMapState() {
 		if (!mapInstance) return;
@@ -338,11 +392,116 @@
 			if (mapInstance) {
 				// Register map instance with MapControl
 				mapControl.setMapInstance(mapInstance);
+
+				// Configure additional cache settings not available as props
+				try {
+					// Access the underlying MapLibre GL JS map instance
+					const glMap = (mapInstance as any)._map || mapInstance;
+
+					if (glMap) {
+						console.log('📋 Configuring MapLibre cache optimizations...');
+
+						// 1. Reduce tile cache size (default ~500 tiles → 100 tiles)
+						if (typeof glMap.setMaxTileCacheSize === 'function') {
+							glMap.setMaxTileCacheSize(100);
+							console.log('✅ MapLibre tile cache: 100 tiles (reduced from 500)');
+						}
+
+						// 2. Configure tile cache zoom levels (default 6 → 5)
+						if ((glMap as any)._sourceCaches) {
+							for (const sourceCache of Object.values((glMap as any)._sourceCaches)) {
+								if (sourceCache && (sourceCache as any)._cache) {
+									(sourceCache as any)._cache.max = 100; // Limit individual source caches
+								}
+							}
+							console.log('✅ MapLibre source cache limits: 100 tiles each');
+						}
+
+						// 3. Reduce concurrent requests to prevent overwhelming our cache
+						if ((glMap as any)._requestManager) {
+							if (
+								typeof (glMap as any)._requestManager.setMaxParallelImageRequests === 'function'
+							) {
+								(glMap as any)._requestManager.setMaxParallelImageRequests(6); // Default is 16
+								console.log('✅ MapLibre parallel requests: 6 (reduced from 16)');
+							}
+
+							// Reduce request timeouts for faster failure recovery
+							if ((glMap as any)._requestManager._transformRequestFn) {
+								// Configure request options for better performance
+								const originalTransform = (glMap as any)._requestManager._transformRequestFn;
+								(glMap as any)._requestManager._transformRequestFn = (
+									url: any,
+									resourceType: any
+								) => {
+									const result = originalTransform ? originalTransform(url, resourceType) : { url };
+									// Add cache-friendly headers
+									result.headers = {
+										...result.headers,
+										'Cache-Control': 'max-age=86400' // 24 hours
+									};
+									return result;
+								};
+							}
+						}
+
+						// 4. Configure rendering optimizations
+						if ((glMap as any)._painter) {
+							// Disable resource timing collection for better performance
+							(glMap as any)._collectResourceTiming = false;
+
+							// Configure GL context for better performance
+							if ((glMap as any)._painter.context && (glMap as any)._painter.context.gl) {
+								const gl = (glMap as any)._painter.context.gl;
+								// Enable optimizations
+								gl.hint(gl.FRAGMENT_SHADER_DERIVATIVE_HINT, gl.FASTEST);
+								gl.hint(gl.GENERATE_MIPMAP_HINT, gl.FASTEST);
+								console.log('✅ WebGL optimizations enabled');
+							}
+						}
+
+						// 5. Configure tile loading optimizations
+						if ((glMap as any).style && (glMap as any).style.sourceCaches) {
+							for (const [sourceId, sourceCache] of Object.entries(
+								(glMap as any).style.sourceCaches
+							)) {
+								if (sourceCache && (sourceCache as any)._source) {
+									// Configure vector tile sources for better performance
+									if ((sourceCache as any)._source.type === 'vector') {
+										// Reduce tile buffer for vector tiles (saves memory)
+										if ((sourceCache as any)._source.tileSize === undefined) {
+											(sourceCache as any)._source.tileSize = 512;
+										}
+									}
+								}
+							}
+							console.log('✅ Vector tile sources optimized');
+						}
+
+						console.log('✅ MapLibre cache optimization complete!');
+					}
+				} catch (error) {
+					console.debug('Could not configure advanced MapLibre cache settings:', error);
+				}
+
 				// Add event handlers to update map state (but not save immediately)
 				mapInstance.on('moveend', updateMapState);
 				mapInstance.on('zoomend', updateMapState);
 				mapInstance.on('rotateend', updateMapState);
 				mapInstance.on('pitchend', updateMapState);
+
+				// Add viewport update handlers for tile cache
+				const handleViewportUpdate = () => {
+					// Clear existing timer
+					if (viewportUpdateTimer) {
+						clearTimeout(viewportUpdateTimer);
+					}
+					// Debounce viewport updates to avoid overwhelming the cache
+					viewportUpdateTimer = setTimeout(updateTileCacheViewport, 150);
+				};
+
+				mapInstance.on('moveend', handleViewportUpdate);
+				mapInstance.on('zoomend', handleViewportUpdate);
 
 				// Add click event handler to query features and open drawer
 				mapInstance.on('click', async (e) => {
@@ -370,6 +529,10 @@
 
 			if (saveTimer) {
 				clearTimeout(saveTimer);
+			}
+
+			if (viewportUpdateTimer) {
+				clearTimeout(viewportUpdateTimer);
 			}
 
 			// Clean up event listeners
@@ -600,6 +763,7 @@
 			<BookmarksGeojsonSource {nameExpression} {bookmarksFeaturesGeoJSON} />
 			<VisitedGeojsonSource {nameExpression} {visitedFeaturesGeoJSON} />
 			<TodoGeojsonSource {nameExpression} {todoFeaturesGeoJSON} />
+			<SearchResultsGeojsonSource {nameExpression} {searchResults} visible={showSearchResults} />
 		</MapLibre>
 	{:else}
 		<div class="map-placeholder">

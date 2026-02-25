@@ -61,7 +61,8 @@
 		if (window.visualViewport) {
 			function handleViewportChange() {
 				// Standard calculation: keyboard open if visual viewport is significantly smaller
-				const heightDifference = window.innerHeight - window.visualViewport.height;
+				const heightDifference =
+					window.innerHeight - (window.visualViewport?.height ?? window.innerHeight);
 				isKeyboardOpen = heightDifference > 150; // Industry standard threshold
 			}
 

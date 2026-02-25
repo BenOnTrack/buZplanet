@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Drawer } from 'vaul-svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
+	import { searchControl } from '$lib/stores/SearchControl.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import FilterManager from '$lib/components/drawers/filters/FilterManager.svelte';
@@ -13,14 +14,18 @@
 		results = [],
 		searchQuery = '',
 		isSearching = false,
-		currentSearchingDatabase = undefined
+		currentSearchingDatabase = undefined,
+		showOnMap = $bindable(true)
 	}: {
 		open?: boolean;
 		results?: SearchResult[];
 		searchQuery?: string;
 		isSearching?: boolean;
 		currentSearchingDatabase?: string;
+		showOnMap?: boolean;
 	} = $props();
+
+	// No need for a separate state variable - use the bindable prop directly
 
 	let allStoredFeatures = $state<StoredFeature[]>([]);
 	let bookmarkLists = $state<BookmarkList[]>([]);
@@ -151,6 +156,21 @@
 		return filtered;
 	});
 
+	// Update search control with filtered results for map display
+	$effect(() => {
+		if (showOnMap) {
+			searchControl.setFilteredResults(finalFilteredResults);
+		} else {
+			searchControl.setFilteredResults([]);
+		}
+	});
+
+	// Sync drawer open state with SearchControl and manage POI visibility
+	$effect(() => {
+		// Update SearchControl when drawer open state changes
+		searchControl.setDrawerOpen(open);
+	});
+
 	// Clear all filters
 	function clearAllFilters() {
 		localSearchQuery = '';
@@ -175,7 +195,9 @@
 
 	// Match search results with stored features based on feature ID (using raw deduplicated results)
 	let enhancedResults = $derived.by(() => {
-		return deduplicateResults(results).map((searchResult) => {
+		const dedupedResults = deduplicateResults(results);
+
+		return dedupedResults.map((searchResult) => {
 			const storedFeature = allStoredFeatures.find((stored) => stored.id === searchResult.id);
 			return {
 				...searchResult,
@@ -212,6 +234,7 @@
 	}
 
 	// Handle result row click - zoom to location and select feature
+	// This automatically cancels ongoing search for performance optimization
 	function handleResultRowClick(result: SearchResult, event: Event) {
 		// Prevent default if this was a button click or other interactive element
 		if (event.target instanceof HTMLElement) {
@@ -223,6 +246,7 @@
 
 		// Use MapControl to zoom to and select the search result
 		// This will both zoom to the location AND trigger the selectedFeature
+		// AND automatically cancel the ongoing search for performance
 		if (result.lng !== 0 && result.lat !== 0) {
 			mapControl.zoomToAndSelectSearchResult(result);
 		}
@@ -249,10 +273,56 @@
 							<span>🔍</span>
 							Search Results
 						</Drawer.Title>
-						<Drawer.Close class="text-gray-500 hover:text-gray-700">
-							<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
-							<span class="sr-only">Close</span>
-						</Drawer.Close>
+						<div class="flex items-center gap-2">
+							<!-- Show on Map Toggle -->
+							{#if results.length > 0}
+								<button
+									onclick={() => (showOnMap = !showOnMap)}
+									onkeydown={(e) => e.key === 'Enter' && (showOnMap = !showOnMap)}
+									class="flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors"
+									class:bg-blue-100={showOnMap}
+									class:text-blue-700={showOnMap}
+									class:bg-gray-100={!showOnMap}
+									class:text-gray-600={!showOnMap}
+									title={showOnMap ? 'Hide results from map' : 'Show results on map'}
+									aria-label={showOnMap ? 'Hide results from map' : 'Show results on map'}
+								>
+									<PropertyIcon
+										key={'description'}
+										value={showOnMap ? 'map-pin-off' : 'map-pin'}
+										size={16}
+									/>
+									<span class="text-xs">{showOnMap ? 'Hide' : 'Show'}</span>
+								</button>
+								<!-- Hide POI Toggle -->
+								<button
+									onclick={() => searchControl.setPoiVisibility(!searchControl.poiVisibility)}
+									onkeydown={(e) =>
+										e.key === 'Enter' &&
+										searchControl.setPoiVisibility(!searchControl.poiVisibility)}
+									class="flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors"
+									class:bg-orange-100={!searchControl.poiVisibility}
+									class:text-orange-700={!searchControl.poiVisibility}
+									class:bg-gray-100={searchControl.poiVisibility}
+									class:text-gray-600={searchControl.poiVisibility}
+									title={searchControl.poiVisibility ? 'Hide map POI' : 'Show map POI'}
+									aria-label={searchControl.poiVisibility ? 'Hide map POI' : 'Show map POI'}
+								>
+									<PropertyIcon
+										key={'description'}
+										value={searchControl.poiVisibility ? 'eye-slash' : 'eye'}
+										size={16}
+									/>
+									<span class="text-xs"
+										>{searchControl.poiVisibility ? 'Hide POI' : 'Show POI'}</span
+									>
+								</button>
+							{/if}
+							<Drawer.Close class="text-gray-500 hover:text-gray-700">
+								<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
+								<span class="sr-only">Close</span>
+							</Drawer.Close>
+						</div>
 					</div>
 
 					<div class="mb-4">
@@ -264,10 +334,20 @@
 									Starting search...
 								{/if}
 							{:else if searchQuery}
-								Results for "{searchQuery}"
+								Results for "{searchQuery}" (prioritized by location, max 1000)
 								<!-- Show search completion indicator -->
 								{#if results.length > 0}
 									<span class="ml-2 text-xs text-green-600">✓ Complete</span>
+									{#if results.length >= 1000}
+										<span class="ml-1 text-xs text-orange-600">(limit reached)</span>
+									{/if}
+									<!-- Auto-cancel indicator hint -->
+									<span
+										class="ml-2 text-xs text-blue-500"
+										title="Search automatically stops when you click on a result"
+									>
+										💡 Click any result to stop search
+									</span>
 								{/if}
 							{:else}
 								Enter a search query to find places
@@ -275,8 +355,8 @@
 						</p>
 					</div>
 
-					{#if !isSearching && results.length > 0}
-						<!-- Filters Section -->
+					{#if results.length > 0}
+						<!-- Filters Section - Show for both searching and completed states -->
 						<FilterManager
 							features={enhancedResults}
 							{bookmarkLists}
@@ -298,19 +378,11 @@
 					{#if isSearching}
 						<!-- Show progressive results during search -->
 						{#if results.length > 0}
-							<div class="search-results-scrollable h-full overflow-auto px-4 py-4">
-								<div class="border-t border-gray-200 pt-4">
-									<div class="mb-3 flex items-center justify-between">
-										<p class="text-xs font-medium text-blue-600">Results found so far:</p>
-										<div class="flex items-center gap-1 text-xs text-gray-500">
-											<span>🔄</span>
-											<span>Live results</span>
-										</div>
-									</div>
+							<div class="search-results-scrollable h-full overflow-auto">
+								<div class="px-4 pt-4">
 									<FeaturesTable
 										features={finalFilteredResults}
 										onRowClick={handleResultRowClick}
-										maxResults={20}
 										showHeader={true}
 										showListsColumn={true}
 										showTypesColumn={true}
@@ -331,7 +403,7 @@
 											></div>
 											<span class="text-sm text-blue-700">
 												Searching {currentSearchingDatabase.replace(/\.mbtiles$/i, '')}... ({results.length}
-												results so far)
+												results so far, max 1000)
 											</span>
 										</div>
 									{/if}
@@ -360,7 +432,7 @@
 						<div class="flex flex-col items-center justify-center py-8 text-gray-500">
 							<span class="mb-2 text-2xl">🔍</span>
 							<p>Enter a search query to find places</p>
-							<p class="mt-1 text-sm">Search through all your local map data</p>
+							<p class="mt-1 text-sm">Search prioritizes results near your current location</p>
 						</div>
 					{:else}
 						<div class="search-results-scrollable h-full overflow-auto">

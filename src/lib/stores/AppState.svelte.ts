@@ -281,10 +281,35 @@ class AppState {
 					...DEFAULT_CONFIG.mapView,
 					...result.value.mapView
 				};
-				this._colorMappings = {
-					...DEFAULT_COLOR_MAPPINGS,
-					...result.value.colorMappings
-				};
+
+				// Ensure colorMappings are always strings, not arrays
+				const loadedColorMappings = result.value.colorMappings || {};
+				const cleanColorMappings: ColorMappings = { ...DEFAULT_COLOR_MAPPINGS };
+
+				// Clean and validate each color mapping
+				for (const [key, value] of Object.entries(loadedColorMappings)) {
+					if (typeof value === 'string' && value.length > 0) {
+						// Valid string value
+						cleanColorMappings[key as keyof ColorMappings] = value;
+					} else if (Array.isArray(value) && value.length > 0) {
+						// If it's an array, take the last element (most recent)
+						console.warn(
+							`Color mapping for ${key} was corrupted as array:`,
+							value,
+							'using last value'
+						);
+						const lastValue = value[value.length - 1];
+						if (typeof lastValue === 'string' && lastValue.length > 0) {
+							cleanColorMappings[key as keyof ColorMappings] = lastValue;
+						}
+					} else {
+						console.warn(`Invalid color mapping for ${key}:`, value, 'using default');
+						// Keep default value
+					}
+				}
+
+				this._colorMappings = cleanColorMappings;
+				console.log('🎨 Loaded and cleaned color mappings:', this._colorMappings);
 				this._language = result.value.language || DEFAULT_CONFIG.language;
 
 				// IMPORTANT: Always ensure filterSettings exist, even for old configs
@@ -419,12 +444,12 @@ class AppState {
 			// Create a plain object copy to avoid cloning issues with Svelte state
 			const plainConfig = {
 				mapView: {
-					center: [...this._mapView.center] as [number, number],
+					center: [this._mapView.center[0], this._mapView.center[1]] as [number, number],
 					zoom: this._mapView.zoom,
 					bearing: this._mapView.bearing,
 					pitch: this._mapView.pitch
 				},
-				colorMappings: { ...this._colorMappings },
+				colorMappings: JSON.parse(JSON.stringify(this._colorMappings)),
 				language: this._language,
 				filterSettings: {
 					map: {
@@ -552,11 +577,21 @@ class AppState {
 	 * Update color mapping for a specific category (isolated from map view)
 	 */
 	updateColorMapping(categoryKey: string, colorName: string): void {
+		console.log(`🎨 Updating color mapping: ${categoryKey} = ${colorName}`);
+
+		// Ensure we're always storing a clean string value
+		if (typeof colorName !== 'string' || colorName.length === 0) {
+			console.error('Invalid color name provided:', colorName);
+			return;
+		}
+
 		// Update color mappings directly without affecting map view
 		this._colorMappings = {
 			...this._colorMappings,
 			[categoryKey]: colorName
 		};
+
+		console.log(`✅ Color mapping updated. New mappings:`, this._colorMappings);
 		this.saveConfig(); // Auto-save changes
 	}
 

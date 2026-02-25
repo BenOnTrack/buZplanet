@@ -243,7 +243,7 @@
 
 		// If we get here, cursor is at the very end
 		const lastTextNodeIndex = content.findLastIndex((node) => node.type === 'text');
-		if (lastTextNodeIndex >= 0) {
+		if (lastTextNodeIndex >= 0 && content[lastTextNodeIndex].type === 'text') {
 			cursorPosition = {
 				nodeIndex: lastTextNodeIndex,
 				offset: content[lastTextNodeIndex].text.length

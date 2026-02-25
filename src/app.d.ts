@@ -267,6 +267,47 @@ declare global {
 		y: number;
 	}
 
+	// ==================== TILE CACHE INTERFACES ====================
+
+	interface CachedTile {
+		data: ArrayBuffer;
+		timestamp: number;
+		accessCount: number;
+		lastAccessed: number;
+		source: string;
+		z: number;
+		x: number;
+		y: number;
+		size: number;
+	}
+
+	interface TileCacheConfig {
+		maxMemorySize: number;
+		prefetchRadius: number;
+		prefetchZoomLevels: number[];
+		prefetchDirection: boolean;
+		maxPrefetchQueue: number;
+	}
+
+	interface Viewport {
+		z: number;
+		centerX: number;
+		centerY: number;
+		tilesX: number;
+		tilesY: number;
+	}
+
+	interface TileRequestWithPriority extends TileRequest {
+		priority: number;
+		isPrefetch: boolean;
+	}
+
+	interface MovementVector {
+		dx: number;
+		dy: number;
+		magnitude: number;
+	}
+
 	// ==================== WORKER INTERFACES ====================
 
 	interface WorkerMessage {

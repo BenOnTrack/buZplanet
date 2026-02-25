@@ -2,6 +2,7 @@
 	import { Select } from 'bits-ui';
 	import { COLORS } from '$lib/constants.js';
 	import { appState } from '$lib/stores/AppState.svelte.js';
+	import { Z_INDEX } from '$lib/styles/z-index.js';
 	import ChevronDown from 'phosphor-svelte/lib/CaretDown';
 	import Check from 'phosphor-svelte/lib/Check';
 
@@ -45,7 +46,7 @@
 	</div>
 {:else}
 	<div class="space-y-4">
-		<div class="flex items-center justify-between">
+		<div class="bg-background sticky top-0 z-10 flex items-center justify-between pb-4">
 			<div>
 				<h3 class="text-lg font-semibold tracking-tight">Color Settings</h3>
 				<p class="text-muted-foreground mt-1 text-sm">
@@ -69,8 +70,21 @@
 
 		<div class="space-y-2">
 			{#each categories as category}
-				{@const currentValue =
+				{@const rawCurrentValue =
 					appState.colorMappings[category.key as keyof typeof appState.colorMappings]}
+				{@const currentValue = (() => {
+					// Ensure currentValue is always a string, not an array
+					if (typeof rawCurrentValue === 'string') {
+						return rawCurrentValue;
+					} else if (Array.isArray(rawCurrentValue) && (rawCurrentValue as any[]).length > 0) {
+						// If it's corrupted as an array, take the last element
+						console.warn(`Corrupted color value for ${category.key}:`, rawCurrentValue);
+						const lastValue = (rawCurrentValue as any[])[(rawCurrentValue as any[]).length - 1];
+						return typeof lastValue === 'string' ? lastValue : 'neutral';
+					} else {
+						return 'neutral'; // fallback
+					}
+				})()}
 				{@const selectedLabel = currentValue
 					? colorOptions.find((option) => option.value === currentValue)?.label || 'Select color'
 					: 'Select color'}
@@ -90,9 +104,15 @@
 					<div class="flex-shrink-0">
 						<Select.Root
 							type="single"
-							onValueChange={(value) => {
-								if (value) {
-									appState.updateColorMapping(category.key, value);
+							value={currentValue}
+							onValueChange={(newValue) => {
+								console.log('🔍 Value changed to:', newValue, typeof newValue);
+
+								if (newValue && typeof newValue === 'string') {
+									console.log('✨ Setting color:', newValue, 'for category:', category.key);
+									appState.updateColorMapping(category.key, newValue);
+								} else {
+									console.warn('⚠️ Unexpected value type:', newValue);
 								}
 							}}
 							items={colorOptions}
@@ -108,7 +128,8 @@
 
 							<Select.Portal>
 								<Select.Content
-									class="bg-background text-foreground shadow-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 z-50 max-h-64 min-w-[140px] overflow-auto rounded-md border border-gray-200 p-1 outline-hidden dark:border-gray-800"
+									class="bg-background text-foreground shadow-popover data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 max-h-64 min-w-[140px] overflow-auto rounded-md border border-gray-200 p-1 outline-hidden dark:border-gray-800"
+									style="z-index: {Z_INDEX.DROPDOWN};"
 									sideOffset={4}
 								>
 									<Select.Viewport class="p-1">
@@ -124,7 +145,7 @@
 														style="background-color: {colorOption.color}"
 														aria-hidden="true"
 													></div>
-													{colorOption.label}
+													<span>{colorOption.label}</span>
 													{#if selected}
 														<div class="ml-auto">
 															<Check class="size-3" aria-label="selected" />

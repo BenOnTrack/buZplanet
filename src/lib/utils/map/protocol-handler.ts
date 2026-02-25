@@ -1,6 +1,10 @@
 import type { AddProtocolAction } from 'maplibre-gl';
 import type { WorkerManager } from '$lib/utils/worker';
 
+// Track viewport updates for tile prefetching
+let lastViewportUpdate = 0;
+const VIEWPORT_UPDATE_THROTTLE = 100; // ms
+
 export function createProtocolHandler(workerManager: WorkerManager): AddProtocolAction {
 	return async ({ url, type }) => {
 		// Handle non-tile requests
@@ -36,6 +40,9 @@ export function createProtocolHandler(workerManager: WorkerManager): AddProtocol
 			if (z < 0 || z > 22 || x < 0 || y < 0) {
 				throw new Error(`Tile coordinates out of range: z=${z} x=${x} y=${y}`);
 			}
+
+			// Update viewport information for prefetching (throttled)
+			updateViewportForPrefetching(workerManager, z, x, y);
 
 			// Request tile from worker
 			const tileData = await requestTileFromWorker(workerManager, {
@@ -92,4 +99,29 @@ async function requestTileFromWorker(
 		console.error('Worker tile request failed:', error);
 		return null; // Return null instead of throwing
 	}
+}
+
+/**
+ * Update viewport information for intelligent prefetching
+ */
+function updateViewportForPrefetching(
+	workerManager: WorkerManager,
+	z: number,
+	x: number,
+	y: number
+): void {
+	const now = Date.now();
+	if (now - lastViewportUpdate < VIEWPORT_UPDATE_THROTTLE) {
+		return; // Throttle updates
+	}
+	lastViewportUpdate = now;
+
+	// Estimate viewport size (approximate tiles visible)
+	const tilesX = 4; // Rough estimate for typical screen
+	const tilesY = 3; // Rough estimate for typical screen
+
+	// Update viewport in worker (don't await - run in background)
+	workerManager.updateViewport?.(z, x, y, tilesX, tilesY)?.catch((error) => {
+		console.debug('Viewport update failed (non-critical):', error);
+	});
 }
