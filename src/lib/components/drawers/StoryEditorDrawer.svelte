@@ -422,11 +422,12 @@
 				<!-- Tab Content -->
 				<div class="flex flex-1 flex-col overflow-hidden">
 					{#if activeTab === 'content'}
-						<!-- Story Content Editor -->
-						<div class="flex-1 overflow-hidden">
+						<!-- Story Content Editor with sticky toolbar -->
+						<div class="flex flex-1 flex-col overflow-hidden">
 							<StoryEditor
 								bind:content
 								placeholder="Write your story here. Click 'Insert Feature' to add map features to your story..."
+								class="story-editor-with-sticky-toolbar"
 							/>
 						</div>
 					{:else}
@@ -541,5 +542,28 @@
 		font-size: 16px !important;
 		/* Prevent iOS zoom */
 		transform-origin: left top;
+	}
+
+	/* Story Editor with sticky toolbar */
+	:global(.story-editor-with-sticky-toolbar) {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		overflow: hidden;
+	}
+
+	/* Make the toolbar sticky */
+	:global(.story-editor-with-sticky-toolbar .border-b.border-gray-200.bg-gray-50) {
+		position: sticky;
+		top: 0;
+		z-index: 10;
+		flex-shrink: 0;
+	}
+
+	/* Make the editor content scrollable */
+	:global(.story-editor-with-sticky-toolbar [contenteditable]) {
+		flex: 1;
+		overflow-y: auto;
+		min-height: 0;
 	}
 </style>

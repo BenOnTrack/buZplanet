@@ -32,6 +32,7 @@
 	let customDisplayText = $state('');
 	let showFeatureDialog = $state(false);
 	let lastRenderedContent = $state<string>(''); // Track what we last rendered to avoid cursor jumps
+	let cursorPosition = $state<{ nodeIndex: number; offset: number } | null>(null); // Track cursor position in content model
 
 	// Reactive state for feature statuses
 	let featureStatuses = $state<Map<string, FeatureStatus>>(new Map());
@@ -122,6 +123,166 @@
 		}
 	}
 
+	// Capture cursor position for feature insertion
+	function captureCursorPosition() {
+		if (!editorElement || readonly) return;
+
+		const selection = window.getSelection();
+		if (!selection || selection.rangeCount === 0) {
+			cursorPosition = null;
+			return;
+		}
+
+		const range = selection.getRangeAt(0);
+		const startContainer = range.startContainer;
+		const startOffset = range.startOffset;
+
+		// Only handle text nodes
+		if (startContainer.nodeType !== Node.TEXT_NODE) {
+			cursorPosition = null;
+			return;
+		}
+
+		// Get all text nodes in the editor in order
+		const walker = document.createTreeWalker(editorElement, NodeFilter.SHOW_TEXT, null);
+
+		const textNodes: Text[] = [];
+		let currentNode;
+		while ((currentNode = walker.nextNode())) {
+			textNodes.push(currentNode as Text);
+		}
+
+		// Find which text node contains our cursor
+		const targetTextNodeIndex = textNodes.indexOf(startContainer as Text);
+		if (targetTextNodeIndex === -1) {
+			cursorPosition = null;
+			return;
+		}
+
+		// Calculate the total character offset up to our cursor
+		let totalOffset = 0;
+		for (let i = 0; i < targetTextNodeIndex; i++) {
+			totalOffset += textNodes[i].textContent?.length || 0;
+		}
+		totalOffset += startOffset;
+
+		console.log('Total character offset in editor:', totalOffset);
+		console.log(
+			'All text content in DOM:',
+			textNodes.map((node) => `"${node.textContent}"`).join(' + ')
+		);
+		console.log(
+			'All content nodes:',
+			content
+				.map((node, i) => `[${i}] ${node.type === 'text' ? `"${node.text}"` : `<${node.type}>`}`)
+				.join(' ')
+		);
+
+		// Now map this total offset to our content model
+		// We need to account for feature text that appears in DOM but not in our text nodes
+		let currentContentOffset = 0;
+		let domTextOffset = 0; // Track actual DOM text characters seen
+		console.log('\nMapping DOM offset', totalOffset, 'to content model:');
+
+		for (let i = 0; i < content.length; i++) {
+			const contentNode = content[i];
+			if (contentNode.type === 'text') {
+				const nodeLength = contentNode.text.length;
+				console.log(
+					`  [${i}] text "${contentNode.text}" (length: ${nodeLength}, DOM range: ${domTextOffset}-${domTextOffset + nodeLength})`
+				);
+
+				// Check if cursor falls within this text node's DOM range
+				if (domTextOffset + nodeLength > totalOffset) {
+					// This content node contains our cursor
+					const offsetInNode = totalOffset - domTextOffset;
+					console.log(`    → CURSOR HERE at offset ${offsetInNode}`);
+					cursorPosition = {
+						nodeIndex: i,
+						offset: Math.max(0, offsetInNode)
+					};
+					console.log(
+						'Cursor mapped to:',
+						$state.snapshot(cursorPosition),
+						'in content node:',
+						contentNode.text
+					);
+					return;
+				}
+				domTextOffset += nodeLength;
+			} else if (contentNode.type === 'feature') {
+				// Features appear in DOM and contribute to total offset, but not to our content text
+				const featureTextLength = contentNode.displayText.length;
+				console.log(
+					`  [${i}] feature <${contentNode.displayText}> (DOM length: ${featureTextLength}, DOM range: ${domTextOffset}-${domTextOffset + featureTextLength})`
+				);
+
+				// Check if cursor is exactly at the end of this feature
+				if (totalOffset === domTextOffset + featureTextLength) {
+					// Cursor is right after this feature - position at start of next text node or create one
+					const nextTextIndex = i + 1;
+					if (nextTextIndex < content.length && content[nextTextIndex].type === 'text') {
+						cursorPosition = {
+							nodeIndex: nextTextIndex,
+							offset: 0
+						};
+					} else {
+						// Create insertion point after feature
+						cursorPosition = {
+							nodeIndex: nextTextIndex,
+							offset: 0
+						};
+					}
+					console.log(`    → CURSOR AFTER FEATURE at node ${cursorPosition.nodeIndex}`);
+					console.log('Cursor mapped to:', $state.snapshot(cursorPosition));
+					return;
+				}
+				domTextOffset += featureTextLength;
+			}
+		}
+
+		// If we get here, cursor is at the very end
+		const lastTextNodeIndex = content.findLastIndex((node) => node.type === 'text');
+		if (lastTextNodeIndex >= 0) {
+			cursorPosition = {
+				nodeIndex: lastTextNodeIndex,
+				offset: content[lastTextNodeIndex].text.length
+			};
+		} else {
+			// No text nodes at all
+			cursorPosition = {
+				nodeIndex: 0,
+				offset: 0
+			};
+		}
+		console.log('Cursor at end, mapped to:', $state.snapshot(cursorPosition));
+	}
+
+	// Handle clicks to capture cursor position
+	function handleEditorClick(event: MouseEvent) {
+		if (readonly) {
+			handleFeatureClick(event);
+		} else {
+			// Capture cursor position for potential feature insertion
+			setTimeout(captureCursorPosition, 10); // Small delay to ensure selection is updated
+		}
+	}
+
+	// Handle key events to capture cursor position
+	function handleKeyDown(event: KeyboardEvent) {
+		if (readonly) {
+			if (event.key === 'Enter' || event.key === ' ') {
+				event.preventDefault();
+				handleFeatureClick(event as any);
+			}
+		} else {
+			// Capture cursor position after key events that might move cursor
+			if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+				setTimeout(captureCursorPosition, 10);
+			}
+		}
+	}
+
 	// Handle feature clicks
 	function handleFeatureClick(event: MouseEvent) {
 		if (!readonly) return;
@@ -164,7 +325,7 @@
 			});
 	});
 
-	// Insert feature
+	// Insert feature at cursor position
 	function insertFeature() {
 		if (!selectedFeature) return;
 
@@ -176,17 +337,112 @@
 			customText: customDisplayText || undefined
 		};
 
-		content = [...content, featureNode, { type: 'text', text: ' ' }];
+		console.log('Inserting feature at position:', $state.snapshot(cursorPosition));
+		console.log('Current content:', $state.snapshot(content));
+
+		// Handle empty content
+		if (content.length === 0) {
+			content = [featureNode, { type: 'text', text: ' ' }];
+			console.log('Inserted into empty content');
+			return;
+		}
+
+		// No cursor position - append at end
+		if (!cursorPosition) {
+			content = [...content, featureNode, { type: 'text', text: ' ' }];
+			console.log('Appended at end (no cursor position)');
+
+			// Reset state even when appending at end
+			selectedFeature = null;
+			customDisplayText = '';
+			showFeatureDialog = false;
+			cursorPosition = null;
+
+			// Focus editor
+			setTimeout(() => {
+				if (editorElement) {
+					editorElement.focus();
+					// Position cursor at the end
+					const selection = window.getSelection();
+					if (selection) {
+						const range = document.createRange();
+						range.selectNodeContents(editorElement);
+						range.collapse(false);
+						selection.removeAllRanges();
+						selection.addRange(range);
+					}
+				}
+			}, 100);
+			return;
+		}
+
+		const nodeIndex = cursorPosition.nodeIndex;
+		const offset = cursorPosition.offset;
+		const newContent = [...content];
+
+		// Insert beyond existing content
+		if (nodeIndex >= newContent.length) {
+			newContent.push(featureNode, { type: 'text', text: ' ' });
+			console.log('Inserted beyond content length');
+		} else {
+			const targetNode = newContent[nodeIndex];
+
+			if (targetNode.type === 'text') {
+				// Split the text node at cursor position
+				const textBefore = targetNode.text.substring(0, offset);
+				const textAfter = targetNode.text.substring(offset);
+
+				console.log('Splitting text node:', {
+					original: targetNode.text,
+					before: textBefore,
+					after: textAfter,
+					offset
+				});
+
+				// Create replacement nodes
+				const replacementNodes: StoryContentNode[] = [];
+
+				// Add text before if not empty
+				if (textBefore) {
+					replacementNodes.push({ type: 'text', text: textBefore });
+				}
+
+				// Add the feature
+				replacementNodes.push(featureNode);
+
+				// Add text after - DON'T add extra spaces, just use what was there
+				if (textAfter) {
+					replacementNodes.push({ type: 'text', text: textAfter });
+				} else {
+					// Only add a space if there was no text after AND we're at the very end
+					replacementNodes.push({ type: 'text', text: ' ' });
+				}
+
+				console.log('Replacement nodes:', replacementNodes);
+
+				// Replace the target node
+				newContent.splice(nodeIndex, 1, ...replacementNodes);
+			} else {
+				// Target is not a text node, insert before it
+				newContent.splice(nodeIndex, 0, featureNode, { type: 'text', text: ' ' });
+				console.log('Inserted before non-text node');
+			}
+		}
+
+		content = newContent;
+		console.log('Final content after insertion:', $state.snapshot(newContent));
 
 		// Reset state
 		selectedFeature = null;
 		customDisplayText = '';
 		showFeatureDialog = false;
+		cursorPosition = null;
 
-		// Focus editor
+		// Focus editor and try to position cursor after the inserted feature
 		setTimeout(() => {
 			if (editorElement) {
 				editorElement.focus();
+				// Position cursor at the end for now (we can improve this later)
 				const selection = window.getSelection();
 				if (selection) {
 					const range = document.createRange();
@@ -207,7 +463,32 @@
 			<div class="flex items-center gap-2">
 				<button
 					class="flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
-					onclick={() => (showFeatureDialog = true)}
+					onclick={() => {
+						// Ensure editor has focus and capture position
+						if (editorElement) {
+							editorElement.focus();
+							setTimeout(() => {
+								captureCursorPosition();
+								showFeatureDialog = true;
+							}, 10);
+						} else {
+							showFeatureDialog = true;
+						}
+					}}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							if (editorElement) {
+								editorElement.focus();
+								setTimeout(() => {
+									captureCursorPosition();
+									showFeatureDialog = true;
+								}, 10);
+							} else {
+								showFeatureDialog = true;
+							}
+						}
+					}}
 				>
 					<PropertyIcon key="description" value="location" size={16} />
 					Insert Feature
@@ -230,13 +511,8 @@
 		})}
 		contenteditable={!readonly}
 		oninput={handleInput}
-		onclick={handleFeatureClick}
-		onkeydown={(e) => {
-			if (readonly && (e.key === 'Enter' || e.key === ' ')) {
-				e.preventDefault();
-				handleFeatureClick(e as any);
-			}
-		}}
+		onclick={handleEditorClick}
+		onkeydown={handleKeyDown}
 		data-placeholder={placeholder}
 		style:border-style={readonly ? 'none' : 'solid'}
 		role={readonly ? 'article' : 'textbox'}

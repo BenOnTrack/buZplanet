@@ -75,7 +75,8 @@ class FeaturesDB {
 				console.log('🌐 FeaturesDB: Connection restored - starting sync');
 				if (this.currentUser) {
 					this.startFirestoreSync();
-					// Firestore handles sync automatically
+					// IMPORTANT: Force upload of local changes when coming back online
+					await this.uploadPendingLocalChanges();
 				}
 			});
 
@@ -441,6 +442,12 @@ class FeaturesDB {
 		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
 
+		// Mark for upload if offline
+		if (!this.isOnline || !this.currentUser) {
+			(storedFeature as any).pendingUpload = true;
+			console.log(`⚠️ Feature "${storedFeature.id}" stored offline - marked for upload`);
+		}
+
 		await new Promise<void>((resolve, reject) => {
 			try {
 				// Create a clean copy to ensure it can be cloned
@@ -591,6 +598,12 @@ class FeaturesDB {
 		feature.searchText = this.generateSearchText(feature);
 		feature.dateModified = Date.now();
 		feature.lastSyncTimestamp = Date.now(); // Track for sync
+
+		// Mark for upload if offline
+		if (!this.isOnline || !this.currentUser) {
+			(feature as any).pendingUpload = true;
+			console.log(`⚠️ Feature "${feature.id}" updated offline - marked for upload`);
+		}
 
 		const transaction = this.db.transaction([this.FEATURES_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.FEATURES_STORE_NAME);
@@ -1265,6 +1278,12 @@ class FeaturesDB {
 
 		console.log('Created bookmark list object:', bookmarkList);
 
+		// Mark for upload if offline
+		if (!this.isOnline || !this.currentUser) {
+			(bookmarkList as any).pendingUpload = true;
+			console.log(`⚠️ Bookmark list "${bookmarkList.name}" created offline - marked for upload`);
+		}
+
 		const transaction = this.db.transaction([this.LISTS_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.LISTS_STORE_NAME);
 
@@ -1351,6 +1370,12 @@ class FeaturesDB {
 		list.userId = this.getCurrentUserId();
 		list.dateModified = Date.now();
 		list.lastSyncTimestamp = Date.now(); // Track for sync
+
+		// Mark for upload if offline
+		if (!this.isOnline || !this.currentUser) {
+			(list as any).pendingUpload = true;
+			console.log(`⚠️ Bookmark list "${list.name}" updated offline - marked for upload`);
+		}
 
 		const transaction = this.db.transaction([this.LISTS_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.LISTS_STORE_NAME);
@@ -1873,16 +1898,22 @@ class FeaturesDB {
 	}
 
 	/**
-	 * Sync feature to Firestore with retry logic
+	 * Sync feature to Firestore with enhanced error handling
 	 */
 	private async syncFeatureToFirestore(feature: StoredFeature, retryCount = 0): Promise<void> {
-		if (!this.currentUser || !this.isOnline) return;
+		if (!this.currentUser || !this.isOnline) {
+			console.warn(`Cannot sync feature ${feature.id}: user not authenticated or offline`);
+			// Mark feature for upload when back online
+			(feature as any).pendingUpload = true;
+			return;
+		}
 
 		const MAX_RETRIES = 3;
 		const RETRY_DELAY = 1000; // 1 second
 
 		try {
 			const userId = this.currentUser.uid;
+			console.log(`📤 Syncing feature "${feature.id}" to Firestore (attempt ${retryCount + 1})`);
 
 			// Clean feature data for Firestore (remove undefined values)
 			const cleanFeature = this.cleanForFirestore({
@@ -1899,32 +1930,43 @@ class FeaturesDB {
 			feature.lastSyncTimestamp = Date.now();
 			await this.storeFeatureLocally(feature);
 
-			console.log(`Successfully synced feature ${feature.id} to Firestore`);
+			console.log(`✅ Successfully synced feature "${feature.id}" to Firestore`);
+			// Clear pending upload flag on success
+			delete (feature as any).pendingUpload;
 		} catch (error: any) {
-			console.error(`Failed to sync feature to Firestore (attempt ${retryCount + 1}):`, error);
+			console.error(
+				`❌ Failed to sync feature "${feature.id}" to Firestore (attempt ${retryCount + 1}):`,
+				error
+			);
+
+			// Mark for retry even on error
+			(feature as any).pendingUpload = true;
 
 			// Retry logic for transient errors
 			if (retryCount < MAX_RETRIES && this.shouldRetry(error)) {
-				console.log(`Retrying sync in ${RETRY_DELAY}ms...`);
+				console.log(`⏳ Retrying sync in ${RETRY_DELAY}ms...`);
 				setTimeout(() => {
 					this.syncFeatureToFirestore(feature, retryCount + 1);
 				}, RETRY_DELAY);
 			} else {
-				// Log final failure
+				// Log final failure but keep pendingUpload flag for later retry
 				console.error(
-					`Failed to sync feature ${feature.id} after ${MAX_RETRIES} attempts:`,
+					`💥 Failed to sync feature "${feature.id}" after ${MAX_RETRIES} attempts:`,
 					error.message
 				);
+				console.warn('Feature will be retried when connection is restored.');
 			}
 		}
 	}
 
 	/**
-	 * Sync bookmark list to Firestore with retry logic
+	 * Sync bookmark list to Firestore with enhanced error handling
 	 */
 	private async syncBookmarkListToFirestore(list: BookmarkList, retryCount = 0): Promise<void> {
 		if (!this.currentUser || !this.isOnline) {
-			console.log('Skipping bookmark list sync - not authenticated or offline');
+			console.warn(`Cannot sync bookmark list ${list.name}: user not authenticated or offline`);
+			// Mark list for upload when back online
+			(list as any).pendingUpload = true;
 			return;
 		}
 
@@ -1933,7 +1975,9 @@ class FeaturesDB {
 
 		try {
 			const userId = this.currentUser.uid;
-			console.log(`Syncing bookmark list ${list.id} to Firestore for user ${userId}`);
+			console.log(
+				`📤 Syncing bookmark list "${list.name}" to Firestore (attempt ${retryCount + 1})`
+			);
 
 			// Clean list data for Firestore (remove undefined values)
 			const cleanList = this.cleanForFirestore({
@@ -1952,25 +1996,31 @@ class FeaturesDB {
 			list.lastSyncTimestamp = Date.now();
 			await this.storeBookmarkListLocally(list);
 
-			console.log(`Successfully synced bookmark list ${list.id} to Firestore`);
+			console.log(`✅ Successfully synced bookmark list "${list.name}" to Firestore`);
+			// Clear pending upload flag on success
+			delete (list as any).pendingUpload;
 		} catch (error: any) {
 			console.error(
-				`Failed to sync bookmark list to Firestore (attempt ${retryCount + 1}):`,
+				`❌ Failed to sync bookmark list "${list.name}" to Firestore (attempt ${retryCount + 1}):`,
 				error
 			);
 
+			// Mark for retry even on error
+			(list as any).pendingUpload = true;
+
 			// Retry logic for transient errors
 			if (retryCount < MAX_RETRIES && this.shouldRetry(error)) {
-				console.log(`Retrying sync in ${RETRY_DELAY}ms...`);
+				console.log(`⏳ Retrying sync in ${RETRY_DELAY}ms...`);
 				setTimeout(() => {
 					this.syncBookmarkListToFirestore(list, retryCount + 1);
 				}, RETRY_DELAY);
 			} else {
-				// Log final failure
+				// Log final failure but keep pendingUpload flag for later retry
 				console.error(
-					`Failed to sync bookmark list ${list.id} after ${MAX_RETRIES} attempts:`,
+					`💥 Failed to sync bookmark list "${list.name}" after ${MAX_RETRIES} attempts:`,
 					error.message
 				);
+				console.warn('Bookmark list will be retried when connection is restored.');
 			}
 		}
 	}
@@ -2005,28 +2055,42 @@ class FeaturesDB {
 	private async uploadLocalChanges(): Promise<void> {
 		if (!this.currentUser) return;
 
+		console.log('📤 Uploading local features changes to Firestore...');
 		const localFeatures = await this.exportFeatures();
 		const userId = this.currentUser.uid;
+		let uploadedCount = 0;
 
 		for (const feature of localFeatures) {
 			const lastSyncTimestamp = feature.lastSyncTimestamp || 0;
 
 			// Upload if never synced or modified since last sync
 			if (lastSyncTimestamp === 0 || feature.dateModified > lastSyncTimestamp) {
+				console.log(
+					`📤 Uploading feature: ${feature.id} (modified: ${new Date(feature.dateModified)}, lastSync: ${new Date(lastSyncTimestamp)})`
+				);
 				await this.syncFeatureToFirestore(feature);
+				uploadedCount++;
 			}
 		}
 
+		console.log(`📤 Uploaded ${uploadedCount}/${localFeatures.length} features to Firestore`);
+
 		// Upload local bookmark lists
 		const localLists = await this.getAllBookmarkLists();
+		let uploadedListsCount = 0;
+
 		for (const list of localLists) {
 			const lastSyncTimestamp = list.lastSyncTimestamp || 0;
 
 			// Upload if never synced or modified since last sync
 			if (lastSyncTimestamp === 0 || list.dateModified > lastSyncTimestamp) {
+				console.log(`📤 Uploading bookmark list: ${list.name}`);
 				await this.syncBookmarkListToFirestore(list);
+				uploadedListsCount++;
 			}
 		}
+
+		console.log(`📤 Uploaded ${uploadedListsCount} bookmark lists to Firestore`);
 	}
 
 	/**
@@ -2272,6 +2336,86 @@ class FeaturesDB {
 		}
 
 		await this.performInitialSync();
+	}
+
+	/**
+	 * Force upload of all pending local changes (called when coming back online)
+	 */
+	async uploadPendingLocalChanges(): Promise<void> {
+		if (!this.currentUser || !this.isOnline) {
+			console.warn('Cannot upload pending changes: user not authenticated or offline');
+			return;
+		}
+
+		console.log('🔄 Force uploading all pending local changes...');
+		this.isSyncing = true;
+
+		try {
+			// Get all local features and force upload any that have been modified
+			const localFeatures = await this.exportFeatures();
+			let uploadedCount = 0;
+
+			for (const feature of localFeatures) {
+				// Check if feature needs to be uploaded
+				const lastSyncTimestamp = feature.lastSyncTimestamp || 0;
+				const needsUpload =
+					lastSyncTimestamp === 0 ||
+					feature.dateModified > lastSyncTimestamp ||
+					(feature as any).pendingUpload;
+
+				if (needsUpload) {
+					console.log(`📤 Force uploading feature: ${feature.id}`);
+					try {
+						await this.syncFeatureToFirestore(feature);
+						uploadedCount++;
+						// Clear pending upload flag
+						delete (feature as any).pendingUpload;
+					} catch (error) {
+						console.error(`Failed to upload feature ${feature.id}:`, error);
+						// Mark for retry
+						(feature as any).pendingUpload = true;
+					}
+				}
+			}
+
+			console.log(`✅ Force uploaded ${uploadedCount}/${localFeatures.length} features`);
+
+			// Upload local bookmark lists
+			const localLists = await this.getAllBookmarkLists();
+			let uploadedListsCount = 0;
+
+			for (const list of localLists) {
+				const lastSyncTimestamp = list.lastSyncTimestamp || 0;
+				const needsUpload =
+					lastSyncTimestamp === 0 ||
+					list.dateModified > lastSyncTimestamp ||
+					(list as any).pendingUpload;
+
+				if (needsUpload) {
+					console.log(`📤 Force uploading bookmark list: ${list.name}`);
+					try {
+						await this.syncBookmarkListToFirestore(list);
+						uploadedListsCount++;
+						// Clear pending upload flag
+						delete (list as any).pendingUpload;
+					} catch (error) {
+						console.error(`Failed to upload bookmark list ${list.name}:`, error);
+						// Mark for retry
+						(list as any).pendingUpload = true;
+					}
+				}
+			}
+
+			console.log(`✅ Force uploaded ${uploadedListsCount} bookmark lists`);
+
+			this.lastSyncTimestamp = Date.now();
+			await this.updateSyncMetadata();
+			console.log('✅ Completed force upload of pending local changes');
+		} catch (error) {
+			console.error('❌ Failed to upload pending local changes:', error);
+		} finally {
+			this.isSyncing = false;
+		}
 	}
 
 	/**

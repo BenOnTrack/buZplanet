@@ -80,7 +80,8 @@ class StoriesDB {
 				console.log('🌐 StoriesDB: Connection restored - starting sync');
 				if (this.currentUser) {
 					this.startFirestoreSync();
-					// Firestore handles sync automatically
+					// IMPORTANT: Force upload of local changes when coming back online
+					await this.uploadPendingLocalChanges();
 				}
 			});
 
@@ -890,16 +891,22 @@ class StoriesDB {
 	}
 
 	/**
-	 * Sync story to Firestore (placeholder)
+	 * Sync story to Firestore with enhanced error handling
 	 */
 	private async syncStoryToFirestore(story: Story, retryCount = 0): Promise<void> {
-		if (!this.currentUser || !this.isOnline) return;
+		if (!this.currentUser || !this.isOnline) {
+			console.warn(`Cannot sync story ${story.title}: user not authenticated or offline`);
+			// Mark story for upload when back online
+			(story as any).pendingUpload = true;
+			return;
+		}
 
 		const MAX_RETRIES = 3;
 		const RETRY_DELAY = 1000; // 1 second
 
 		try {
 			const userId = this.currentUser.uid;
+			console.log(`📤 Syncing story "${story.title}" to Firestore (attempt ${retryCount + 1})`);
 
 			// Clean story data for Firestore (remove undefined values)
 			const cleanStory = this.cleanForFirestore({
@@ -916,22 +923,31 @@ class StoriesDB {
 			story.lastSyncTimestamp = Date.now();
 			await this.storeStoryLocally(story);
 
-			console.log(`Successfully synced story ${story.id} to Firestore`);
+			console.log(`✅ Successfully synced story "${story.title}" to Firestore`);
+			// Clear pending upload flag on success
+			delete (story as any).pendingUpload;
 		} catch (error: any) {
-			console.error(`Failed to sync story to Firestore (attempt ${retryCount + 1}):`, error);
+			console.error(
+				`❌ Failed to sync story "${story.title}" to Firestore (attempt ${retryCount + 1}):`,
+				error
+			);
+
+			// Mark for retry even on error
+			(story as any).pendingUpload = true;
 
 			// Retry logic for transient errors
 			if (retryCount < MAX_RETRIES && this.shouldRetry(error)) {
-				console.log(`Retrying sync in ${RETRY_DELAY}ms...`);
+				console.log(`⏳ Retrying sync in ${RETRY_DELAY}ms...`);
 				setTimeout(() => {
 					this.syncStoryToFirestore(story, retryCount + 1);
 				}, RETRY_DELAY);
 			} else {
-				// Log final failure
+				// Log final failure but keep pendingUpload flag for later retry
 				console.error(
-					`Failed to sync story ${story.id} after ${MAX_RETRIES} attempts:`,
+					`💥 Failed to sync story "${story.title}" after ${MAX_RETRIES} attempts:`,
 					error.message
 				);
+				console.warn('Story will be retried when connection is restored.');
 			}
 		}
 	}
@@ -1137,6 +1153,12 @@ class StoriesDB {
 		const transaction = this.db.transaction([this.STORIES_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.STORIES_STORE_NAME);
 
+		// Mark for upload if offline
+		if (!this.isOnline || !this.currentUser) {
+			(story as any).pendingUpload = true;
+			console.log(`⚠️ Story "${story.title}" created offline - marked for upload`);
+		}
+
 		await new Promise<void>((resolve, reject) => {
 			try {
 				const cleanStory = JSON.parse(JSON.stringify(story));
@@ -1185,6 +1207,12 @@ class StoriesDB {
 
 		const transaction = this.db.transaction([this.CATEGORIES_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.CATEGORIES_STORE_NAME);
+
+		// Mark for upload if offline
+		if (!this.isOnline || !this.currentUser) {
+			(category as any).pendingUpload = true;
+			console.log(`⚠️ Category "${category.name}" created offline - marked for upload`);
+		}
 
 		await new Promise<void>((resolve, reject) => {
 			const request = store.put(category);
@@ -1495,6 +1523,72 @@ class StoriesDB {
 	}
 
 	/**
+	 * Force upload of all pending local changes (called when coming back online)
+	 */
+	async uploadPendingLocalChanges(): Promise<void> {
+		if (!this.currentUser || !this.isOnline) {
+			console.warn('Cannot upload pending changes: user not authenticated or offline');
+			return;
+		}
+
+		console.log('🔄 Force uploading all pending local changes...');
+		this.isSyncing = true;
+
+		try {
+			// Get all local stories and force upload any that have been modified
+			const localStories = await this.exportStories();
+			let uploadedCount = 0;
+
+			for (const story of localStories) {
+				// Check if story needs to be uploaded
+				// Upload if: never synced, or modified after last sync, or explicitly marked for upload
+				const lastSyncTimestamp = story.lastSyncTimestamp || 0;
+				const needsUpload =
+					lastSyncTimestamp === 0 ||
+					story.dateModified > lastSyncTimestamp ||
+					(story as any).pendingUpload;
+
+				if (needsUpload) {
+					console.log(`📤 Force uploading story: ${story.title}`);
+					try {
+						await this.syncStoryToFirestore(story);
+						uploadedCount++;
+						// Clear pending upload flag
+						delete (story as any).pendingUpload;
+					} catch (error) {
+						console.error(`Failed to upload story ${story.title}:`, error);
+						// Mark for retry
+						(story as any).pendingUpload = true;
+					}
+				}
+			}
+
+			console.log(`✅ Force uploaded ${uploadedCount}/${localStories.length} stories`);
+
+			// Upload local categories
+			const localCategories = await this.getAllCategories();
+			for (const category of localCategories) {
+				const lastSyncTimestamp = (category as any).lastSyncTimestamp || 0;
+				if (lastSyncTimestamp === 0 && !isDefaultCategory(category.id)) {
+					try {
+						await this.syncCategoryToFirestore(category);
+					} catch (error) {
+						console.error(`Failed to upload category ${category.name}:`, error);
+					}
+				}
+			}
+
+			this.lastSyncTimestamp = Date.now();
+			await this.updateSyncMetadata();
+			console.log('✅ Completed force upload of pending local changes');
+		} catch (error) {
+			console.error('❌ Failed to upload pending local changes:', error);
+		} finally {
+			this.isSyncing = false;
+		}
+	}
+
+	/**
 	 * Get sync status
 	 */
 	getSyncStatus(): {
@@ -1567,6 +1661,12 @@ class StoriesDB {
 		// Store updated story
 		const transaction = this.db.transaction([this.STORIES_STORE_NAME], 'readwrite');
 		const store = transaction.objectStore(this.STORIES_STORE_NAME);
+
+		// Mark for upload if offline
+		if (!this.isOnline || !this.currentUser) {
+			(updatedStory as any).pendingUpload = true;
+			console.log(`⚠️ Story "${updatedStory.title}" updated offline - marked for upload`);
+		}
 
 		await new Promise<void>((resolve, reject) => {
 			try {
@@ -2497,27 +2597,41 @@ class StoriesDB {
 	private async uploadLocalChanges(): Promise<void> {
 		if (!this.currentUser) return;
 
+		console.log('📤 Uploading local stories changes to Firestore...');
 		const localStories = await this.exportStories();
+		let uploadedCount = 0;
 
 		for (const story of localStories) {
 			const lastSyncTimestamp = story.lastSyncTimestamp || 0;
 
 			// Upload if never synced or modified since last sync
 			if (lastSyncTimestamp === 0 || story.dateModified > lastSyncTimestamp) {
+				console.log(
+					`📤 Uploading story: ${story.title} (modified: ${new Date(story.dateModified)}, lastSync: ${new Date(lastSyncTimestamp)})`
+				);
 				await this.syncStoryToFirestore(story);
+				uploadedCount++;
 			}
 		}
 
+		console.log(`📤 Uploaded ${uploadedCount}/${localStories.length} stories to Firestore`);
+
 		// Upload local categories (if any custom ones)
 		const localCategories = await this.getAllCategories();
+		let uploadedCategoriesCount = 0;
+
 		for (const category of localCategories) {
 			const lastSyncTimestamp = (category as any).lastSyncTimestamp || 0;
 
 			// Upload if never synced or is a custom category
 			if (lastSyncTimestamp === 0 && !isDefaultCategory(category.id)) {
+				console.log(`📤 Uploading category: ${category.name}`);
 				await this.syncCategoryToFirestore(category);
+				uploadedCategoriesCount++;
 			}
 		}
+
+		console.log(`📤 Uploaded ${uploadedCategoriesCount} categories to Firestore`);
 	}
 
 	/**
