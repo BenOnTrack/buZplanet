@@ -358,21 +358,30 @@
 			showFeatureDialog = false;
 			cursorPosition = null;
 
-			// Focus editor
+			// Handle focus based on device type - dismiss keyboard on mobile
 			setTimeout(() => {
 				if (editorElement) {
-					editorElement.focus();
-					// Position cursor at the end
-					const selection = window.getSelection();
-					if (selection) {
-						const range = document.createRange();
-						range.selectNodeContents(editorElement);
-						range.collapse(false);
-						selection.removeAllRanges();
-						selection.addRange(range);
+					const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
+
+					if (isMobile) {
+						// On mobile: blur to dismiss keyboard
+						editorElement.blur();
+						console.log('📱 Feature appended - keyboard dismissed on mobile');
+					} else {
+						// On desktop: focus and position cursor at the end
+						editorElement.focus();
+						const selection = window.getSelection();
+						if (selection) {
+							const range = document.createRange();
+							range.selectNodeContents(editorElement);
+							range.collapse(false);
+							selection.removeAllRanges();
+							selection.addRange(range);
+						}
+						console.log('💻 Feature appended - focus maintained on desktop');
 					}
 				}
-			}, 100);
+			}, 50);
 			return;
 		}
 
@@ -438,21 +447,30 @@
 		showFeatureDialog = false;
 		cursorPosition = null;
 
-		// Focus editor and try to position cursor after the inserted feature
+		// Focus editor after feature insertion - dismiss keyboard on mobile
 		setTimeout(() => {
 			if (editorElement) {
-				editorElement.focus();
-				// Position cursor at the end for now (we can improve this later)
-				const selection = window.getSelection();
-				if (selection) {
-					const range = document.createRange();
-					range.selectNodeContents(editorElement);
-					range.collapse(false);
-					selection.removeAllRanges();
-					selection.addRange(range);
+				const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
+
+				if (isMobile) {
+					// On mobile: blur to dismiss keyboard
+					editorElement.blur();
+					console.log('📱 Feature inserted - keyboard dismissed on mobile');
+				} else {
+					// On desktop: maintain focus and position cursor
+					editorElement.focus();
+					const selection = window.getSelection();
+					if (selection) {
+						const range = document.createRange();
+						range.selectNodeContents(editorElement);
+						range.collapse(false);
+						selection.removeAllRanges();
+						selection.addRange(range);
+					}
+					console.log('💻 Feature inserted - focus maintained on desktop');
 				}
 			}
-		}, 100);
+		}, 50);
 	}
 </script>
 

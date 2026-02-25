@@ -50,6 +50,36 @@
 		return hasFormChanges();
 	});
 
+	// Modern mobile keyboard detection using Visual Viewport API
+	let isKeyboardOpen = $state(false);
+
+	// Track viewport changes for mobile keyboard - industry standard approach
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+
+		// Use Visual Viewport API (modern standard) if available
+		if (window.visualViewport) {
+			function handleViewportChange() {
+				// Standard calculation: keyboard open if visual viewport is significantly smaller
+				const heightDifference = window.innerHeight - window.visualViewport.height;
+				isKeyboardOpen = heightDifference > 150; // Industry standard threshold
+			}
+
+			window.visualViewport.addEventListener('resize', handleViewportChange);
+			return () => window.visualViewport?.removeEventListener('resize', handleViewportChange);
+		}
+
+		// Fallback for older browsers
+		let initialHeight = window.innerHeight;
+		function handleResize() {
+			const currentHeight = window.innerHeight;
+			isKeyboardOpen = initialHeight - currentHeight > 150;
+		}
+
+		window.addEventListener('resize', handleResize);
+		return () => window.removeEventListener('resize', handleResize);
+	});
+
 	// Load data when drawer opens - VALID SIDE EFFECT (calls async functions)
 	$effect(() => {
 		if (open) {
@@ -268,11 +298,18 @@
 >
 	<Drawer.Portal>
 		<Drawer.Overlay
-			class="fixed inset-0 bg-black/40 transition-opacity duration-300"
+			class={clsx('fixed inset-0 bg-black/40 transition-opacity duration-300', {
+				'keyboard-open': isKeyboardOpen
+			})}
 			style="z-index: {Z_INDEX.DRAWER_OVERLAY}"
 		/>
 		<Drawer.Content
-			class="story-editor-drawer fixed right-0 bottom-0 left-0 flex h-[50vh] max-h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class={clsx(
+				'story-editor-drawer fixed right-0 bottom-0 left-0 flex h-[50vh] max-h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-white',
+				{
+					'keyboard-open': isKeyboardOpen
+				}
+			)}
 			style="z-index: {Z_INDEX.DRAWER_CONTENT}"
 		>
 			<div class="mx-auto flex h-full w-full max-w-full flex-col overflow-hidden">
@@ -517,31 +554,59 @@
 />
 
 <style>
-	/* Modern mobile keyboard handling - industry standard approach */
+	/* Mobile keyboard handling - industry standard approach */
 	.story-editor-drawer {
-		/* Use dynamic viewport units for mobile keyboard support */
-		height: 50dvh;
-		max-height: 50dvh;
-		/* Fallback for browsers that don't support dvh */
-		height: 50vh;
-		max-height: 50vh;
-		/* Prevent iOS bounce/scroll when keyboard appears */
+		/* Fixed positioning that resists keyboard displacement */
 		position: fixed !important;
-		bottom: 0;
-		/* Use transform to prevent repositioning issues */
-		transform: translateZ(0);
-		/* Ensure proper z-stacking */
-		will-change: transform;
+		left: 0 !important;
+		right: 0 !important;
+		bottom: 0 !important;
+		/* Use modern viewport units - industry standard 2023+ */
+		height: min(50vh, 50dvh) !important;
+		max-height: min(50vh, 50dvh) !important;
+		/* Prevent iOS Safari repositioning */
+		bottom: env(safe-area-inset-bottom, 0) !important;
+		/* Ensure solid background */
+		background: white !important;
+		/* Standard mobile optimization */
+		-webkit-overflow-scrolling: touch;
 	}
 
-	/* Ensure inputs don't trigger zoom on iOS */
+	/* Keyboard open state - reduce height */
+	.story-editor-drawer.keyboard-open {
+		height: min(45vh, 400px) !important;
+		max-height: min(45vh, 400px) !important;
+	}
+
+	/* Ensure overlay stays visible when keyboard is open */
+	:global(.fixed.inset-0.bg-black\/40.keyboard-open) {
+		/* Keep overlay covering the visible area */
+		position: fixed !important;
+		top: 0 !important;
+		left: 0 !important;
+		right: 0 !important;
+		bottom: 0 !important;
+		background-color: rgba(0, 0, 0, 0.6) !important;
+	}
+
+	/* Mobile input optimizations - prevent iOS zoom */
 	:global(.story-editor-drawer input[type='text']),
 	:global(.story-editor-drawer input[type='email']),
 	:global(.story-editor-drawer input[type='password']),
-	:global(.story-editor-drawer textarea) {
-		font-size: 16px !important;
-		/* Prevent iOS zoom */
-		transform-origin: left top;
+	:global(.story-editor-drawer textarea),
+	:global(.story-editor-drawer [contenteditable]) {
+		font-size: 16px !important; /* Prevents iOS zoom - industry standard */
+	}
+
+	/* Responsive adjustments for mobile */
+	@media screen and (max-width: 768px) {
+		.story-editor-drawer {
+			/* Smaller height on mobile to account for keyboard */
+			height: 45vh !important;
+			max-height: 45vh !important;
+			/* Minimum usable height */
+			min-height: 300px !important;
+		}
 	}
 
 	/* Story Editor with sticky toolbar */
