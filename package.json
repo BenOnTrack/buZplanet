@@ -48,6 +48,8 @@
 	"dependencies": {
 		"@mapbox/vector-tile": "^2.0.4",
 		"@sqlite.org/sqlite-wasm": "^3.49.1-build4",
+		"@turf/distance": "^7.3.4",
+		"@turf/helpers": "^7.3.4",
 		"bits-ui": "^2.15.5",
 		"firebase": "^12.9.0",
 		"p-defer": "^4.0.1",

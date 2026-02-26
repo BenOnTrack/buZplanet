@@ -12,6 +12,13 @@ class MapControl {
 	selectedFeatureDrawerOpen = $state(false);
 	private _storyInsertionMode = $state(false); // Flag for story feature insertion mode
 
+	// Story connections state - for displaying story feature connections on map
+	storyConnectionGeoJSON = $state({
+		type: 'FeatureCollection' as const,
+		features: []
+	});
+	showStoryConnections = $state(false);
+
 	// Getters for reactive state
 	get storyInsertionMode(): boolean {
 		return this._storyInsertionMode;
@@ -43,6 +50,20 @@ class MapControl {
 		if (active && this.selectedFeatureDrawerOpen) {
 			this.selectedFeatureDrawerOpen = false;
 		}
+	}
+
+	// Story connection methods
+	setStoryConnection(geoJSON: any, show: boolean = true) {
+		this.storyConnectionGeoJSON = geoJSON;
+		this.showStoryConnections = show;
+	}
+
+	clearStoryConnection() {
+		this.storyConnectionGeoJSON = {
+			type: 'FeatureCollection',
+			features: []
+		};
+		this.showStoryConnections = false;
 	}
 
 	// Register map instance

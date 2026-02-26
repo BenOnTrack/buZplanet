@@ -26,6 +26,7 @@
 	import TodoGeojsonSource from '$lib/components/map/TodoGeojsonSource.svelte';
 	import SearchResultsGeojsonSource from '$lib/components/map/SearchResultsGeojsonSource.svelte';
 	import SearchCategoryGeojsonSource from '$lib/components/map/SearchCategoryGeojsonSource.svelte';
+	import StoryConnectionGeojsonSource from '$lib/components/map/StoryConnectionGeojsonSource.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { searchControl } from '$lib/stores/SearchControl.svelte';
 	import { categoryFilterStore } from '$lib/stores/CategoryFilterStore.svelte';
@@ -98,6 +99,10 @@
 
 	// Category filter - get from store
 	let categoryFilterVisible = $derived(categoryFilterStore.isActive);
+
+	// Story connections - use MapControl state
+	let storyConnectionGeoJSON = $derived(mapControl.storyConnectionGeoJSON);
+	let showStoryConnections = $derived(mapControl.showStoryConnections);
 
 	// Setup map in store when map instance is ready
 	$effect(() => {
@@ -802,6 +807,7 @@
 				visible={categoryFilterVisible}
 				map={mapInstance}
 			/>
+			<StoryConnectionGeojsonSource {storyConnectionGeoJSON} visible={showStoryConnections} />
 		</MapLibre>
 	{:else}
 		<div class="map-placeholder">

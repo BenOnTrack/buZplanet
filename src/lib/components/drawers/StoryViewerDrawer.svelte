@@ -9,6 +9,10 @@
 	import StoriesList from '$lib/components/stories/StoriesList.svelte';
 	import StoryViewer from '$lib/components/stories/StoryViewer.svelte';
 	import StoryEditorDrawer from '$lib/components/drawers/StoryEditorDrawer.svelte';
+	import {
+		generateStoryConnectionPath,
+		generateSequentialConnectionPath
+	} from '$lib/utils/storyConnections';
 	import FollowedStoryCategoryEditDialog from '$lib/components/dialogs/FollowedStoryCategoryEditDialog.svelte';
 	import StoryCategoryManager from '$lib/components/stories/StoryCategoryManager.svelte';
 	import ConfirmDialog from '$lib/components/dialogs/ConfirmDialog.svelte';
@@ -67,6 +71,9 @@
 	let confirmDialogOpen = $state(false);
 	let storyToDelete = $state<Story | null>(null);
 
+	// Story connection state
+	let storyConnectionVisible = $state(false);
+
 	// Reset view when drawer closes - VALID SIDE EFFECT (external store mutation + state reset)
 	$effect(() => {
 		if (!open) {
@@ -75,6 +82,9 @@
 			searchQuery = '';
 			selectedCategories = [];
 			activeTab = 'stories';
+			storyConnectionVisible = false;
+			// Clear any story connections when closing
+			mapControl.clearStoryConnection();
 			// Make sure to disable story insertion mode when closing stories drawer
 			mapControl.setStoryInsertionMode(false);
 		}
@@ -178,12 +188,82 @@
 		}
 	}
 
-	// Back to list from story view
+	// Handle story connection toggle
+	function handleToggleStoryConnection() {
+		if (!currentStory) return;
+
+		if (storyConnectionVisible) {
+			// Hide connections
+			storyConnectionVisible = false;
+			mapControl.clearStoryConnection();
+			console.log('🔗 Story connections hidden');
+		} else {
+			// Show connections
+			const connectionGeoJSON = generateStoryConnectionPath(currentStory);
+
+			if (connectionGeoJSON.features.length > 0) {
+				storyConnectionVisible = true;
+				mapControl.setStoryConnection(connectionGeoJSON, true);
+				console.log('🔗 Story connections displayed:', connectionGeoJSON);
+
+				// Optionally zoom to fit all connections
+				zoomToStoryConnections(connectionGeoJSON);
+			} else {
+				console.log('⚠️ No connections to display - story needs at least 2 features');
+			}
+		}
+	}
+
+	// Zoom map to fit story connections
+	function zoomToStoryConnections(geoJSON: any) {
+		const mapInstance = mapControl.getMapInstance();
+		if (!mapInstance || geoJSON.features.length === 0) return;
+
+		try {
+			// Get coordinates from the LineString
+			const feature = geoJSON.features[0];
+			if (feature.geometry.type === 'LineString') {
+				const coordinates = feature.geometry.coordinates as [number, number][];
+
+				// Calculate bounds
+				let minLng = Infinity,
+					maxLng = -Infinity;
+				let minLat = Infinity,
+					maxLat = -Infinity;
+
+				coordinates.forEach(([lng, lat]) => {
+					if (lng < minLng) minLng = lng;
+					if (lng > maxLng) maxLng = lng;
+					if (lat < minLat) minLat = lat;
+					if (lat > maxLat) maxLat = lat;
+				});
+
+				// Fit bounds with padding
+				mapInstance.fitBounds(
+					[
+						[minLng, minLat],
+						[maxLng, maxLat]
+					],
+					{
+						padding: 100,
+						duration: 1000,
+						essential: true
+					}
+				);
+			}
+		} catch (error) {
+			console.error('Failed to zoom to story connections:', error);
+		}
+	}
 	function backToList() {
 		console.log('⬅️ Back to list clicked, current state:', {
 			viewMode,
 			currentStory: currentStory?.id
 		});
+		// Clear any story connections when going back to list
+		storyConnectionVisible = false;
+		mapControl.clearStoryConnection();
+
 		viewMode = 'list';
 		currentStory = null;
 		console.log('⬅️ After back to list, state:', { viewMode, currentStoryId: 'null' });
@@ -302,54 +382,78 @@
 								>
 									NEW
 								</button>
-							{:else if currentStory && !isCurrentStoryReadOnly}
-								<!-- Edit button for user's own stories -->
+							{:else if currentStory}
+								<!-- View connections button for any story view -->
 								<button
-									class="rounded bg-blue-500 px-3 py-1 text-sm font-medium text-white hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-									onclick={() => currentStory && handleEditStory(currentStory)}
+									class="rounded px-3 py-1 text-sm font-medium text-white transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none {storyConnectionVisible
+										? 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
+										: 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'}"
+									onclick={handleToggleStoryConnection}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
 											e.preventDefault();
-											currentStory && handleEditStory(currentStory);
+											handleToggleStoryConnection();
 										}
 									}}
-									title="Edit story"
-									aria-label="Edit story"
+									title={storyConnectionVisible
+										? 'Hide feature connections'
+										: 'View feature connections'}
+									aria-label={storyConnectionVisible
+										? 'Hide feature connections'
+										: 'View feature connections'}
 								>
-									EDIT
+									{storyConnectionVisible ? 'HIDE' : 'VIEW'}
 								</button>
 
-								<!-- Delete button for user's own stories -->
-								<button
-									class="rounded bg-red-500 px-3 py-1 text-sm font-medium text-white hover:bg-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
-									onclick={() => currentStory && handleDeleteStory(currentStory)}
-									onkeydown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											currentStory && handleDeleteStory(currentStory);
-										}
-									}}
-									title="Delete story"
-									aria-label="Delete story"
-								>
-									DELETE
-								</button>
-							{:else if currentStory && isCurrentStoryReadOnly}
-								<!-- Edit categories button for followed stories -->
-								<button
-									class="rounded bg-orange-500 px-3 py-1 text-sm font-medium text-white hover:bg-orange-600 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:outline-none"
-									onclick={() => currentStory && handleEditFollowedStoryCategories(currentStory)}
-									onkeydown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											currentStory && handleEditFollowedStoryCategories(currentStory);
-										}
-									}}
-									title="Edit categories for this story"
-									aria-label="Edit categories for this story"
-								>
-									EDIT
-								</button>
+								{#if !isCurrentStoryReadOnly}
+									<!-- Edit button for user's own stories -->
+									<button
+										class="rounded bg-blue-500 px-3 py-1 text-sm font-medium text-white hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => currentStory && handleEditStory(currentStory)}
+										onkeydown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												currentStory && handleEditStory(currentStory);
+											}
+										}}
+										title="Edit story"
+										aria-label="Edit story"
+									>
+										EDIT
+									</button>
+
+									<!-- Delete button for user's own stories -->
+									<button
+										class="rounded bg-red-500 px-3 py-1 text-sm font-medium text-white hover:bg-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => currentStory && handleDeleteStory(currentStory)}
+										onkeydown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												currentStory && handleDeleteStory(currentStory);
+											}
+										}}
+										title="Delete story"
+										aria-label="Delete story"
+									>
+										DELETE
+									</button>
+								{:else}
+									<!-- Edit categories button for followed stories -->
+									<button
+										class="rounded bg-orange-500 px-3 py-1 text-sm font-medium text-white hover:bg-orange-600 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:outline-none"
+										onclick={() => currentStory && handleEditFollowedStoryCategories(currentStory)}
+										onkeydown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												currentStory && handleEditFollowedStoryCategories(currentStory);
+											}
+										}}
+										title="Edit categories for this story"
+										aria-label="Edit categories for this story"
+									>
+										EDIT
+									</button>
+								{/if}
 							{/if}
 
 							{#if currentStory}
