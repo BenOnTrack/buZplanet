@@ -442,7 +442,7 @@ function normalizeForName(s: string): string {
 function prioritizeDatabasesByLocation(
 	databases: Array<[string, any]>,
 	userLocation: { lng: number; lat: number }
-): Array<[string, any, number, number]> {
+): Array<[string, any, number]> {
 	const prioritized: Array<[string, any, number, number]> = [];
 	const ZOOM_LEVEL = 14; // Same zoom level used for search
 
@@ -479,9 +479,9 @@ function prioritizeDatabasesByLocation(
 					const tmsY = n - 1 - centerTile.y;
 
 					const tileExistsStmt = db.prepare(`
-						SELECT COUNT(*) FROM tiles 
-						WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?
-					`);
+							SELECT COUNT(*) FROM tiles 
+							WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?
+						`);
 
 					try {
 						tileExistsStmt.bind([ZOOM_LEVEL, centerTile.x, tmsY]);
@@ -548,6 +548,7 @@ function prioritizeDatabasesByLocation(
 		return areaA - areaB;
 	});
 
+	// Return only the first 3 elements as expected by the calling code
 	return prioritized.map(([filename, db, distance]) => [filename, db, distance]);
 }
 

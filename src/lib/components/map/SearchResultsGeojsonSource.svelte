@@ -48,10 +48,8 @@
 						subclass: searchResult.subclass,
 						category: searchResult.category,
 						database: searchResult.database,
-						// Use the names object for display names
-						name: names.name || names.name_en || names.name_int || searchResult.id,
-						name_en: names.name_en,
-						name_int: names.name_int,
+						// Preserve all name properties from the search result
+						...names,
 						// Add search-specific properties
 						isSearchResult: true,
 						searchScore: searchResult.score || 0,
@@ -141,35 +139,6 @@
 
 	// Circle color for clusters - use search color (static value)
 	let clusterCircleColor = $state('rgba(37, 99, 235, 0.6)'); // Default blue
-
-	// Update cluster color when color mappings change
-	$effect(() => {
-		if (appState.colorMappings?.search) {
-			try {
-				const searchColor = appState.colorMappings.search;
-				// Validate hex color format
-				if (typeof searchColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(searchColor)) {
-					// Convert hex color to RGB for opacity
-					const hex = searchColor.replace('#', '');
-					const r = parseInt(hex.substring(0, 2), 16);
-					const g = parseInt(hex.substring(2, 4), 16);
-					const b = parseInt(hex.substring(4, 6), 16);
-
-					// Validate parsed values
-					if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
-						clusterCircleColor = `rgba(${r}, ${g}, ${b}, 0.6)`;
-						console.log('Updated cluster color:', clusterCircleColor);
-					} else {
-						console.warn('Failed to parse RGB values from hex:', searchColor);
-					}
-				} else {
-					console.warn('Invalid hex color format:', searchColor);
-				}
-			} catch (error) {
-				console.error('Error updating cluster color:', error);
-			}
-		}
-	});
 
 	// Should render layers - only when visible AND has features
 	const shouldRenderLayers = $derived.by(() => {

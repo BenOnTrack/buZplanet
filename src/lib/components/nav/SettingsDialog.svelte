@@ -3,8 +3,20 @@
 	import ColorsSettings from '$lib/components/settings/ColorsSettings.svelte';
 	import LanguageSettings from '$lib/components/settings/LanguageSettings.svelte';
 	import AppUpdateSettings from '$lib/components/settings/AppUpdateSettings.svelte';
+	import DebugSettings from '$lib/components/settings/DebugSettings.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
+
+	// Props for debug functionality
+	let { initState, isAppReady, isOnline } = $props<{
+		initState?: {
+			status: string;
+			logs: string[];
+			error?: string;
+		};
+		isAppReady?: boolean;
+		isOnline?: boolean;
+	}>();
 </script>
 
 <Dialog.Root>
@@ -45,7 +57,8 @@
 					class="rounded-card border-muted bg-background-alt shadow-card w-full border p-3"
 				>
 					<Tabs.List
-						class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background grid w-full grid-cols-3 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
+						class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background grid w-full gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
+						style="grid-template-columns: repeat({import.meta.env.DEV ? '4' : '3'}, 1fr);"
 					>
 						<Tabs.Trigger
 							value="language"
@@ -62,6 +75,13 @@
 							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
 							>Updates</Tabs.Trigger
 						>
+						{#if import.meta.env.DEV}
+							<Tabs.Trigger
+								value="debug"
+								class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+								>Debug</Tabs.Trigger
+							>
+						{/if}
 					</Tabs.List>
 					<Tabs.Content value="colors" class="pt-3">
 						<div class="max-h-[60vh] overflow-y-auto px-1">
@@ -78,6 +98,13 @@
 							<AppUpdateSettings />
 						</div>
 					</Tabs.Content>
+					{#if import.meta.env.DEV}
+						<Tabs.Content value="debug" class="pt-3">
+							<div class="max-h-[60vh] overflow-y-auto px-1">
+								<DebugSettings {initState} {isAppReady} {isOnline} />
+							</div>
+						</Tabs.Content>
+					{/if}
 				</Tabs.Root>
 			</div>
 

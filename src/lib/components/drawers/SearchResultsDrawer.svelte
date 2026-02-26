@@ -280,10 +280,10 @@
 									onclick={() => (showOnMap = !showOnMap)}
 									onkeydown={(e) => e.key === 'Enter' && (showOnMap = !showOnMap)}
 									class="flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors"
-									class:bg-blue-100={showOnMap}
-									class:text-blue-700={showOnMap}
-									class:bg-gray-100={!showOnMap}
-									class:text-gray-600={!showOnMap}
+									class:bg-red-100={showOnMap}
+									class:text-red-700={showOnMap}
+									class:bg-green-100={!showOnMap}
+									class:text-green-700={!showOnMap}
 									title={showOnMap ? 'Hide results from map' : 'Show results on map'}
 									aria-label={showOnMap ? 'Hide results from map' : 'Show results on map'}
 								>
@@ -292,7 +292,7 @@
 										value={showOnMap ? 'map-pin-off' : 'map-pin'}
 										size={16}
 									/>
-									<span class="text-xs">{showOnMap ? 'Hide' : 'Show'}</span>
+									<span class="text-xs">{showOnMap ? 'Hide Results' : 'Show Results'}</span>
 								</button>
 								<!-- Hide POI Toggle -->
 								<button
@@ -301,10 +301,10 @@
 										e.key === 'Enter' &&
 										searchControl.setPoiVisibility(!searchControl.poiVisibility)}
 									class="flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors"
-									class:bg-orange-100={!searchControl.poiVisibility}
-									class:text-orange-700={!searchControl.poiVisibility}
-									class:bg-gray-100={searchControl.poiVisibility}
-									class:text-gray-600={searchControl.poiVisibility}
+									class:bg-red-100={searchControl.poiVisibility}
+									class:text-red-700={searchControl.poiVisibility}
+									class:bg-green-100={!searchControl.poiVisibility}
+									class:text-green-700={!searchControl.poiVisibility}
 									title={searchControl.poiVisibility ? 'Hide map POI' : 'Show map POI'}
 									aria-label={searchControl.poiVisibility ? 'Hide map POI' : 'Show map POI'}
 								>
@@ -341,13 +341,6 @@
 									{#if results.length >= 1000}
 										<span class="ml-1 text-xs text-orange-600">(limit reached)</span>
 									{/if}
-									<!-- Auto-cancel indicator hint -->
-									<span
-										class="ml-2 text-xs text-blue-500"
-										title="Search automatically stops when you click on a result"
-									>
-										💡 Click any result to stop search
-									</span>
 								{/if}
 							{:else}
 								Enter a search query to find places

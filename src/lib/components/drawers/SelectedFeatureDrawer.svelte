@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { Drawer } from 'vaul-svelte';
 	import { clsx } from 'clsx';
 	import { Tabs } from 'bits-ui';
@@ -19,106 +20,15 @@
 		feature?: MapGeoJSONFeature | null;
 	} = $props();
 
-	let activeSnapPoint = $state<string | number>('200px');
+	let snapPoints = $state<[number, number, number]>([0.25, 0.5, 0.75]);
+	let activeSnapPoint = $state<string | number>(snapPoints[0]); // Will be updated to actual first snappoint
 	let activeTab = $state('info');
 
-	// Reactive window dimensions for responsive snappoints
-	let windowHeight = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
-
-	// Listen for window resize events
-	$effect(() => {
-		if (typeof window === 'undefined') return;
-
-		function handleResize() {
-			windowHeight = window.innerHeight;
-		}
-
-		window.addEventListener('resize', handleResize);
-		return () => window.removeEventListener('resize', handleResize);
-	});
-
-	// Calculate responsive snappoints - use a more stable approach
-	function calculateSnapPoints(): [number, number, number] {
-		// Fallback values if window is not available
-		if (typeof window === 'undefined') return [0.25, 0.5, 0.75];
-
-		const viewportHeight = windowHeight;
-		const isSmallMobile = viewportHeight <= 667; // iPhone SE, etc.
-		const isMobile = viewportHeight <= 896; // Most phones
-		const isTablet = viewportHeight > 896 && viewportHeight <= 1366; // Tablets
-
-		// Base snappoints for different device types
-		let compactPercent: number;
-		let mediumPercent: number;
-		let fullPercent: number;
-
-		if (isSmallMobile) {
-			compactPercent = Math.max(0.2, 140 / viewportHeight); // Slightly reduced
-			mediumPercent = 0.45;
-			fullPercent = 0.9; // Increased from 0.8 to test limits
-		} else if (isMobile) {
-			compactPercent = Math.max(0.18, 145 / viewportHeight); // Slightly reduced
-			mediumPercent = 0.5;
-			fullPercent = 0.92; // Increased from 0.85 to test mobile limits
-		} else if (isTablet) {
-			compactPercent = Math.max(0.13, 125 / viewportHeight); // Slightly reduced
-			mediumPercent = 0.4;
-			fullPercent = 0.75;
-		} else {
-			// Desktop/large screens - slightly more conservative
-			compactPercent = Math.max(0.07, 110 / viewportHeight); // Reduced from 0.08 and 120px
-			mediumPercent = 0.35;
-			fullPercent = 0.7;
-		}
-
-		// Content-based height adjustment - with tighter spacing
-		if (hasFeature) {
-			let estimatedHeight = 90; // Title + close button (reduced from 100)
-			estimatedHeight += 32; // Fixed feature name container (reduced from 40)
-
-			if (hasClassificationData(feature)) {
-				estimatedHeight += 28; // Classification grid (reduced from 32)
-			}
-
-			estimatedHeight += 56; // Action buttons (reduced from 60)
-			estimatedHeight += 4; // Minimal bottom spacing (reduced from 8)
-			// Total: ~210px maximum - tighter fit
-
-			const calculatedPercent = estimatedHeight / viewportHeight;
-			compactPercent = Math.max(compactPercent, calculatedPercent);
-		}
-
-		// Ensure bounds
-		compactPercent = Math.min(compactPercent, 0.4);
-		mediumPercent = Math.max(mediumPercent, compactPercent + 0.1);
-		fullPercent = Math.max(fullPercent, mediumPercent + 0.1);
-
-		// Round to avoid floating point precision issues
-		compactPercent = Math.round(compactPercent * 100) / 100;
-		mediumPercent = Math.round(mediumPercent * 100) / 100;
-		fullPercent = Math.round(fullPercent * 100) / 100;
-
-		return [compactPercent, mediumPercent, fullPercent];
-	}
-
-	// Static snappoints that update only when necessary
-	let snapPoints = $state<[number, number, number]>([0.25, 0.5, 0.75]);
-
-	// Update snappoints when window size or feature changes
-	$effect(() => {
-		// Throttle updates to avoid too frequent recalculations
-		const newSnapPoints = calculateSnapPoints();
-
-		// Only update if values actually changed significantly
-		const [currentCompact, currentMedium, currentFull] = snapPoints;
-		const [newCompact, newMedium, newFull] = newSnapPoints;
-
-		if (
-			Math.abs(currentCompact - newCompact) > 0.02 ||
-			Math.abs(currentMedium - newMedium) > 0.02 ||
-			Math.abs(currentFull - newFull) > 0.02
-		) {
-			snapPoints = newSnapPoints;
+	// Initialize window height, snappoints, and feature status on mount
+	onMount(() => {
+		// Initial load
+		if (feature) {
+			updateFeatureStatusForFeature(feature);
 		}
 	});
 
@@ -128,8 +38,8 @@
 	// State for tracking feature status in database
 	let featureStatus = $state<{
 		bookmarked: boolean;
-		listIds: string[]; // Array of bookmark list IDs
-		visitedDates: number[]; // Array of visit timestamps
+		listIds: string[];
+		visitedDates: number[];
 		todo: boolean;
 		loading: boolean;
 	}>({ bookmarked: false, listIds: [], visitedDates: [], todo: false, loading: false });
@@ -138,27 +48,29 @@
 	let bookmarkDialogOpen = $state(false);
 	let visitHistoryExpanded = $state(false);
 
-	// Watch for feature changes and update status (side effect - remains $effect)
-	$effect(() => {
-		// Only track the feature ID to avoid complex object dependencies
-		const featureId = feature?.id;
+	// Derived current feature ID
+	let featureId = $derived(feature?.id ? String(feature.id) : undefined);
 
-		if (feature && featureId !== undefined) {
-			console.log('🔍 SelectedFeatureDrawer: Feature changed:', {
-				featureId,
-				properties: feature.properties,
-				hasProperties: !!feature.properties,
-				propertyKeys: feature.properties ? Object.keys(feature.properties) : [],
-				hasWebsite: !!feature.properties?.website,
-				hasPhone: !!feature.properties?.phone,
-				hasOpeningHours: !!feature.properties?.opening_hours,
-				hasInternetAccess: !!feature.properties?.internet_access,
-				hasType: !!feature.properties?.type
-			});
-			updateFeatureStatus();
-		} else {
+	// Simple effect to watch feature changes (this is appropriate for side effects)
+	// Only run when drawer is actually open to avoid interference with close transition
+	$effect(() => {
+		// Only react to feature changes when drawer is open
+		// This prevents effects from running during drawer close transition
+		if (!open) {
+			// When drawer closes, just reset status without async operations
+			if (!feature) {
+				console.log('🔍 SelectedFeatureDrawer: Drawer closed, resetting status');
+				resetFeatureStatus();
+			}
+			return;
+		}
+
+		// React to feature changes only when drawer is open
+		if (feature && featureId) {
+			console.log('🔍 SelectedFeatureDrawer: Feature changed:', featureId);
+			updateFeatureStatusForFeature(feature);
+		} else if (!feature) {
 			console.log('🔍 SelectedFeatureDrawer: Feature cleared');
-			// Reset state when no feature is selected
 			resetFeatureStatus();
 		}
 	});
@@ -173,9 +85,9 @@
 		visitHistoryExpanded = false;
 	}
 
-	// Update feature status from database
-	async function updateFeatureStatus() {
-		if (!feature) {
+	// Update feature status from database (renamed for clarity)
+	async function updateFeatureStatusForFeature(targetFeature: MapGeoJSONFeature) {
+		if (!targetFeature) {
 			resetFeatureStatus();
 			return;
 		}
@@ -189,7 +101,7 @@
 			}
 
 			// Get feature ID the same way as FeaturesDB
-			const featureId = getFeatureId(feature);
+			const featureId = getFeatureId(targetFeature);
 			const storedFeature = await featuresDB.getFeatureById(featureId);
 
 			if (storedFeature) {
@@ -218,22 +130,6 @@
 		// This should not happen according to your note, but keeping as fallback
 		console.warn('Feature missing ID, using fallback:', feature);
 		return `fallback-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-	}
-
-	// Helper function to format visit dates for display
-	function formatVisitDates(timestamps: number[]): string {
-		if (timestamps.length === 0) return 'Never visited';
-
-		const dates = timestamps.map((ts) => new Date(ts).toLocaleDateString());
-		const uniqueDates = [...new Set(dates)];
-
-		if (uniqueDates.length === 1) {
-			return `Visited on ${uniqueDates[0]}`;
-		} else if (uniqueDates.length <= 3) {
-			return `Visited on ${uniqueDates.join(', ')}`;
-		} else {
-			return `Visited ${uniqueDates.length} times (${uniqueDates[0]} to ${uniqueDates[uniqueDates.length - 1]})`;
-		}
 	}
 
 	// Helper function to format individual visit date and time
@@ -591,11 +487,11 @@
 <Drawer.Root bind:open {snapPoints} bind:activeSnapPoint modal={false}>
 	<Drawer.Overlay
 		class="fixed inset-0 bg-black/40"
-		style="pointer-events: none;z-index: {Z_INDEX.SELECTED_FEATURE_DRAWER_OVERLAY}"
+		style="z-index: {Z_INDEX.SELECTED_FEATURE_DRAWER_OVERLAY}"
 	/>
 	<Drawer.Portal>
 		<Drawer.Content
-			class="border-b-none fixed right-0 bottom-0 left-0 mx-[-1px] flex h-full max-h-[97%] flex-col rounded-t-[10px] border border-gray-200 bg-white"
+			class="border-b-none rounded-t-10px fixed right-0 bottom-0 left-0 -mx-px flex h-full max-h-[97%] flex-col border border-gray-200 bg-white"
 			style="z-index: {Z_INDEX.SELECTED_FEATURE_DRAWER_CONTENT}"
 		>
 			<div
@@ -613,14 +509,27 @@
 							Selected Feature
 						{/if}
 					</Drawer.Title>
-					<Drawer.Close class="text-gray-500 hover:text-gray-700">
-						<PropertyIcon key={'description'} value={'x'} size={20} class="text-foreground" />
-						<span class="sr-only">Close</span>
-					</Drawer.Close>
+					<!-- Custom close button instead of Drawer.Close -->
+					<button
+						class="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:bg-gray-100 focus:text-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+						onclick={() => {
+							open = false;
+						}}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								open = false;
+							}
+						}}
+						title="Close drawer"
+						aria-label="Close feature details drawer"
+					>
+						<PropertyIcon key={'description'} value={'x'} size={20} class="text-current" />
+					</button>
 				</div>
 
 				<!-- Fixed height container for feature name to maintain consistent spacing -->
-				<div class="mb-2 flex min-h-[24px] items-start">
+				<div class="mb-2 flex min-h-6 items-start">
 					{#if hasFeature && getFeatureName(feature) && getFeatureName(feature) !== getDisplayName(feature)}
 						<h3 class="text-lg font-medium text-gray-700">
 							<span class="truncate">{getFeatureName(feature)}</span>
@@ -638,7 +547,7 @@
 									<!-- Class -->
 									<div class="text-center">
 										<div
-											class="flex min-h-[2rem] items-center justify-center rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900"
+											class="flex min-h-8 items-center justify-center rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900"
 										>
 											{#if classData.class}
 												{#if classData.class.length > 10}
@@ -655,7 +564,7 @@
 									<!-- Subclass -->
 									<div class="text-center">
 										<div
-											class="flex min-h-[2rem] items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-gray-900"
+											class="flex min-h-8 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-gray-900"
 										>
 											{#if classData.subclass}
 												{#if classData.subclass.length > 10}
@@ -676,7 +585,7 @@
 									<!-- Category -->
 									<div class="text-center">
 										<div
-											class="flex min-h-[2rem] items-center justify-center rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900"
+											class="flex min-h-8 items-center justify-center rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900"
 										>
 											{#if classData.category}
 												{#if classData.category.length > 10}
@@ -767,7 +676,7 @@
 									/>
 									{#if featureStatus.visitedDates.length > 0}
 										<span
-											class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-green-600 text-[10px] font-bold text-white"
+											class="text-xxs absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-green-600 font-bold text-white"
 										>
 											{featureStatus.visitedDates.length}
 										</span>

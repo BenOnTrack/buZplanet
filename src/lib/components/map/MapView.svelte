@@ -25,8 +25,10 @@
 	import VisitedGeojsonSource from '$lib/components/map/VisitedGeojsonSource.svelte';
 	import TodoGeojsonSource from '$lib/components/map/TodoGeojsonSource.svelte';
 	import SearchResultsGeojsonSource from '$lib/components/map/SearchResultsGeojsonSource.svelte';
+	import SearchCategoryGeojsonSource from '$lib/components/map/SearchCategoryGeojsonSource.svelte';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { searchControl } from '$lib/stores/SearchControl.svelte';
+	import { categoryFilterStore } from '$lib/stores/CategoryFilterStore.svelte';
 	import CoastlineVectorTileSource from '$lib/components/map/CoastlineVectorTileSource.svelte';
 
 	interface Props {
@@ -89,6 +91,16 @@
 	// Search results - get filtered results from search control for map display
 	let searchResults = $derived(searchControl.filteredResults);
 	let showSearchResults = $derived(searchControl.drawerOpen && searchResults.length > 0);
+
+	// Category filter - get from store
+	let categoryFilterVisible = $derived(categoryFilterStore.isActive);
+
+	// Setup map in store when map instance is ready
+	$effect(() => {
+		if (mapInstance) {
+			categoryFilterStore.setMap(mapInstance);
+		}
+	});
 
 	async function loadBookmarkedFeatures() {
 		try {
@@ -764,6 +776,11 @@
 			<VisitedGeojsonSource {nameExpression} {visitedFeaturesGeoJSON} />
 			<TodoGeojsonSource {nameExpression} {todoFeaturesGeoJSON} />
 			<SearchResultsGeojsonSource {nameExpression} {searchResults} visible={showSearchResults} />
+			<SearchCategoryGeojsonSource
+				{nameExpression}
+				visible={categoryFilterVisible}
+				map={mapInstance}
+			/>
 		</MapLibre>
 	{:else}
 		<div class="map-placeholder">

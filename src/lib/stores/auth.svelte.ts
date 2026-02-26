@@ -83,10 +83,22 @@ class AuthState {
 			this._loading = true;
 
 			const userCredential = await signInWithEmailAndPassword(auth, email, password);
+
+			// Check if email is verified
+			if (!userCredential.user.emailVerified) {
+				// Sign out the user immediately
+				await firebaseSignOut(auth);
+				this._authError =
+					'Account not verified. Please contact administrator to verify your account.';
+				throw new Error('Email not verified');
+			}
+
 			return userCredential.user;
 		} catch (error: any) {
 			console.error('Sign in error:', error);
-			this._authError = error.message;
+			if (error.message !== 'Email not verified') {
+				this._authError = error.message;
+			}
 			throw error;
 		} finally {
 			this._loading = false;
@@ -101,10 +113,22 @@ class AuthState {
 
 			const provider = new GoogleAuthProvider();
 			const userCredential = await signInWithPopup(auth, provider);
+
+			// Check if email is verified
+			if (!userCredential.user.emailVerified) {
+				// Sign out the user immediately
+				await firebaseSignOut(auth);
+				this._authError =
+					'Account not verified. Please contact administrator to verify your account.';
+				throw new Error('Email not verified');
+			}
+
 			return userCredential.user;
 		} catch (error: any) {
 			console.error('Google sign in error:', error);
-			this._authError = error.message;
+			if (error.message !== 'Email not verified') {
+				this._authError = error.message;
+			}
 			throw error;
 		} finally {
 			this._loading = false;
