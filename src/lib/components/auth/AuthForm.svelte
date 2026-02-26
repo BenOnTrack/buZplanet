@@ -10,11 +10,12 @@
 	let formError = $state('');
 
 	const errorMessage = $derived(authState.authError || formError);
+	const successMessage = $derived(authState.successMessage);
 
 	// Clear errors when switching between forms
 	function toggleForm() {
 		isSignUp = !isSignUp;
-		authState.clearAuthError();
+		authState.clearMessages();
 		formError = '';
 		email = '';
 		password = '';
@@ -25,6 +26,7 @@
 	async function handleSubmit(event: Event) {
 		event.preventDefault();
 		formError = '';
+		authState.clearMessages();
 
 		// Basic validation
 		if (!email || !password) {
@@ -127,6 +129,12 @@
 	{#if errorMessage}
 		<div class="bg-destructive/15 text-destructive rounded-md p-3 text-sm">
 			{errorMessage}
+		</div>
+	{/if}
+
+	{#if successMessage}
+		<div class="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+			{successMessage}
 		</div>
 	{/if}
 

@@ -302,7 +302,7 @@
 		/>
 		<Drawer.Content
 			class={clsx(
-				'story-editor-drawer fixed right-0 bottom-0 left-0 flex h-[50vh] max-h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-white',
+				'story-editor-drawer fixed right-0 bottom-0 left-0 flex h-[50vh] max-h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-red-100',
 				{
 					'keyboard-open': isKeyboardOpen
 				}
@@ -311,7 +311,7 @@
 		>
 			<div class="mx-auto flex h-full w-full max-w-full flex-col overflow-hidden">
 				<!-- Header -->
-				<div class="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-3">
+				<div class="flex-shrink-0 border-b border-gray-200 bg-red-100 px-4 py-3">
 					<div class="flex items-center justify-between">
 						<Drawer.Title class="flex items-center gap-2 text-xl font-semibold">
 							<PropertyIcon key="description" value="edit" size={24} />
@@ -389,10 +389,10 @@
 				<div class="flex-1 overflow-hidden px-3 pb-3">
 					<Tabs.Root
 						bind:value={activeTab}
-						class="rounded-card border-muted bg-background-alt shadow-card flex h-full w-full flex-col border p-3"
+						class="rounded-card shadow-card flex h-full w-full flex-col border border-gray-200 bg-red-100 p-3"
 					>
 						<Tabs.List
-							class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background mb-3 grid w-full grid-cols-2 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
+							class="rounded-9px shadow-mini-inset mb-3 grid w-full grid-cols-2 gap-1 border border-red-400 bg-red-300 p-1 text-sm leading-[0.01em] font-semibold"
 						>
 							<Tabs.Trigger
 								value="content"

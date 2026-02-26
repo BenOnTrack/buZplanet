@@ -21,12 +21,26 @@ class AuthState {
 	private _user = $state<User | null>(null);
 	private _loading = $state<boolean>(true);
 	private _authError = $state<string | null>(null);
+	private _successMessage = $state<string | null>(null);
 
 	constructor() {
 		// Initialize auth state listener (only in browser)
 		if (browser) {
-			onAuthStateChanged(auth, (firebaseUser) => {
-				this._user = firebaseUser;
+			onAuthStateChanged(auth, async (firebaseUser) => {
+				// Only set user if they exist and are email verified
+				if (firebaseUser && !firebaseUser.emailVerified) {
+					// Sign out unverified users
+					try {
+						await firebaseSignOut(auth);
+						this._authError =
+							'Account not verified. Please contact administrator to verify your account.';
+					} catch (error) {
+						console.error('Error signing out unverified user:', error);
+					}
+					this._user = null;
+				} else {
+					this._user = firebaseUser;
+				}
 				this._loading = false;
 			});
 		} else {
@@ -48,15 +62,29 @@ class AuthState {
 		return this._authError;
 	}
 
-	// Clear auth error
+	get successMessage(): string | null {
+		return this._successMessage;
+	}
+
+	// Clear auth error and success message
 	clearAuthError(): void {
 		this._authError = null;
+	}
+
+	clearSuccessMessage(): void {
+		this._successMessage = null;
+	}
+
+	clearMessages(): void {
+		this._authError = null;
+		this._successMessage = null;
 	}
 
 	// Sign up with email and password
 	async signUp(email: string, password: string, displayName?: string): Promise<User> {
 		try {
 			this._authError = null;
+			this._successMessage = null;
 			this._loading = true;
 
 			const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -65,6 +93,13 @@ class AuthState {
 			if (displayName && userCredential.user) {
 				await updateProfile(userCredential.user, { displayName });
 			}
+
+			// Sign out immediately since email needs verification
+			await firebaseSignOut(auth);
+
+			// Set success message
+			this._successMessage =
+				'Account created successfully! Please contact an administrator to verify your account before signing in.';
 
 			return userCredential.user;
 		} catch (error: any) {
@@ -80,6 +115,7 @@ class AuthState {
 	async signIn(email: string, password: string): Promise<User> {
 		try {
 			this._authError = null;
+			this._successMessage = null;
 			this._loading = true;
 
 			const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -109,6 +145,7 @@ class AuthState {
 	async signInWithGoogle(): Promise<User> {
 		try {
 			this._authError = null;
+			this._successMessage = null;
 			this._loading = true;
 
 			const provider = new GoogleAuthProvider();

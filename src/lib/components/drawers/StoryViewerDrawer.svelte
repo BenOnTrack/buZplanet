@@ -256,7 +256,7 @@
 		/>
 		<Drawer.Content
 			class={clsx(
-				'story-viewer-drawer fixed right-0 bottom-0 left-0 flex h-[50vh] max-h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-white',
+				'story-viewer-drawer fixed right-0 bottom-0 left-0 flex h-[50vh] max-h-[50vh] flex-col rounded-t-[10px] border border-gray-200 bg-gray-100',
 				{
 					'keyboard-open': isKeyboardOpen
 				}
@@ -265,7 +265,7 @@
 		>
 			<div class="mx-auto flex h-full w-full max-w-full flex-col overflow-hidden">
 				<!-- Sticky Header Section -->
-				<div class="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-2">
+				<div class="flex-shrink-0 border-b border-gray-200 bg-gray-100 px-4 py-2">
 					<!-- Header -->
 					<div class="mb-2 flex items-center justify-between">
 						<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
@@ -384,10 +384,10 @@
 						<div class="pb-2">
 							<Tabs.Root
 								bind:value={activeTab}
-								class="rounded-card border-muted bg-background-alt shadow-card w-full border p-3"
+								class="rounded-card shadow-card w-full border border-gray-200 bg-gray-100 p-3"
 							>
 								<Tabs.List
-									class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background grid w-full grid-cols-2 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
+									class="rounded-9px shadow-mini-inset grid w-full grid-cols-2 gap-1 border border-blue-400 bg-gray-300 p-1 text-sm leading-[0.01em] font-semibold"
 								>
 									<Tabs.Trigger
 										value="stories"
@@ -490,7 +490,7 @@
 								class="flex h-full flex-col pt-3 data-[state=inactive]:hidden"
 							>
 								<!-- Fixed Stories Header -->
-								<div class="flex-shrink-0 border-b border-gray-100 bg-white px-4 py-2">
+								<div class="flex-shrink-0 border-b border-gray-200 bg-gray-100 px-4 py-2">
 									<p class="text-sm text-gray-600">
 										{filteredStoriesCount !== null ? filteredStoriesCount : '...'} stor{filteredStoriesCount !==
 										1

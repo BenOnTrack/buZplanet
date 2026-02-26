@@ -88,7 +88,7 @@
 
 <article class={clsx('story-viewer', className)}>
 	<!-- Fixed Story Header -->
-	<header class="story-header">
+	<header class="story-header bg-gray-100">
 		{#if story.description}
 			<p class="mb-4 text-gray-600">{story.description}</p>
 		{/if}
@@ -115,7 +115,7 @@
 
 	<!-- Scrollable Story Content Only -->
 	<div class="story-content-container">
-		<div class="story-content prose prose-gray max-w-none">
+		<div class="story-content prose prose-gray max-w-none bg-gray-100">
 			<div class="story-text">
 				{#each story.content as node, index}
 					{#if node.type === 'text'}
@@ -123,7 +123,7 @@
 					{:else if node.type === 'feature'}
 						{@const status = featureStatuses.get(node.featureId) || 'gray'}
 						<button
-							class="story-feature-button story-feature-{status} inline-flex items-center gap-1 rounded border px-2 py-1 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-1 focus:outline-none"
+							class="story-feature-button story-feature-{status} inline-flex items-center gap-1 rounded border px-2 py-px text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-1 focus:outline-none"
 							onclick={() => handleFeatureClick(node.feature)}
 							onkeydown={(e) => {
 								if (e.key === 'Enter' || e.key === ' ') {
@@ -146,7 +146,7 @@
 
 	<!-- Fixed Story Footer (if metadata is shown) -->
 	{#if showMetadata}
-		<footer class="story-footer">
+		<footer class="story-footer bg-gray-100">
 			<div class="flex flex-wrap items-center gap-4 text-sm text-gray-500">
 				<!-- Date - Clickable to show/hide full date -->
 				<button
@@ -237,7 +237,6 @@
 		z-index: 1;
 		flex-shrink: 0;
 		padding: 1rem;
-		background: white;
 		border-bottom: 1px solid #e5e7eb;
 		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 	}
@@ -263,7 +262,6 @@
 		z-index: 1;
 		flex-shrink: 0;
 		padding: 1rem;
-		background: white;
 		border-top: 1px solid #e5e7eb;
 		box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
 	}
@@ -281,6 +279,11 @@
 		margin: 0 2px;
 		vertical-align: baseline;
 		display: inline-flex;
+		/* Force smaller height */
+		height: auto;
+		min-height: unset;
+		padding-top: 1px !important;
+		padding-bottom: 1px !important;
 	}
 
 	/* Gray - Default (not saved or not bookmarked) */

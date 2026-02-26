@@ -344,6 +344,37 @@
 		if (content.length === 0) {
 			content = [featureNode, { type: 'text', text: ' ' }];
 			console.log('Inserted into empty content');
+
+			// Reset state for empty content insertion
+			selectedFeature = null;
+			customDisplayText = '';
+			showFeatureDialog = false;
+			cursorPosition = null;
+
+			// Handle focus based on device type - dismiss keyboard on mobile
+			setTimeout(() => {
+				if (editorElement) {
+					const isMobile = window.innerWidth <= 768 || 'ontouchstart' in window;
+
+					if (isMobile) {
+						// On mobile: blur to dismiss keyboard
+						editorElement.blur();
+						console.log('📱 Feature inserted into empty content - keyboard dismissed on mobile');
+					} else {
+						// On desktop: focus and position cursor at the end
+						editorElement.focus();
+						const selection = window.getSelection();
+						if (selection) {
+							const range = document.createRange();
+							range.selectNodeContents(editorElement);
+							range.collapse(false);
+							selection.removeAllRanges();
+							selection.addRange(range);
+						}
+						console.log('💻 Feature inserted into empty content - focus maintained on desktop');
+					}
+				}
+			}, 50);
 			return;
 		}
 
