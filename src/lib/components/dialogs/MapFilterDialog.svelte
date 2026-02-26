@@ -99,47 +99,52 @@
 			</Dialog.Title>
 
 			<div class="pt-6">
-				<Tabs.Root bind:value={activeTab}>
-					<Tabs.List class="bg-muted grid w-full grid-cols-5 rounded-md p-1">
+				<Tabs.Root
+					bind:value={activeTab}
+					class="rounded-card border-muted bg-background-alt shadow-card w-full border p-3"
+				>
+					<Tabs.List
+						class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background grid w-full grid-cols-5 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
+					>
 						<Tabs.Trigger
 							value="map"
-							class="data-[state=active]:bg-background data-[state=active]:text-foreground ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center rounded-sm px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm"
+							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
 						>
-							<PropertyIcon key={'description'} value={'map-pin'} size={16} class="mr-1" />
+							<PropertyIcon key={'description'} value={'map-pin'} size={14} />
 							Map
 						</Tabs.Trigger>
 						<Tabs.Trigger
 							value="heat"
-							class="data-[state=active]:bg-background data-[state=active]:text-foreground ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center rounded-sm px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm"
+							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
 						>
-							<PropertyIcon key={'description'} value={'thermometer'} size={16} class="mr-1" />
+							<PropertyIcon key={'description'} value={'thermometer'} size={14} />
 							Heat
 						</Tabs.Trigger>
 						<Tabs.Trigger
 							value="bookmark"
-							class="data-[state=active]:bg-background data-[state=active]:text-foreground ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center rounded-sm px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm"
+							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
 						>
-							<PropertyIcon key={'description'} value={'bookmark'} size={16} class="mr-1" />
-							Bookmark
+							<PropertyIcon key={'description'} value={'bookmark'} size={14} />
+							Book
 						</Tabs.Trigger>
 						<Tabs.Trigger
 							value="todo"
-							class="data-[state=active]:bg-background data-[state=active]:text-foreground ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center rounded-sm px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm"
+							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
 						>
-							<PropertyIcon key={'description'} value={'circle'} size={16} class="mr-1" />
+							<PropertyIcon key={'description'} value={'circle'} size={14} />
 							Todo
 						</Tabs.Trigger>
 						<Tabs.Trigger
 							value="visited"
-							class="data-[state=active]:bg-background data-[state=active]:text-foreground ring-offset-background focus-visible:ring-ring inline-flex items-center justify-center rounded-sm px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm"
+							class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
 						>
-							<PropertyIcon key={'description'} value={'check'} size={16} class="mr-1" />
-							Visited
+							<PropertyIcon key={'description'} value={'check'} size={14} />
+							Visit
 						</Tabs.Trigger>
 					</Tabs.List>
 
 					<div class="mt-4">
-						<Tabs.Content value="map" class="space-y-4">
+						<Tabs.Content value="map" class="space-y-4 pt-3">
 							<div class="space-y-2">
 								<h3 class="text-sm font-medium">Map Category Filters</h3>
 								<p class="text-sm text-gray-600">
@@ -174,7 +179,7 @@
 							</div>
 						</Tabs.Content>
 
-						<Tabs.Content value="heat" class="space-y-4">
+						<Tabs.Content value="heat" class="space-y-4 pt-3">
 							<div class="space-y-2">
 								<h3 class="text-sm font-medium">Heat Map Category Filters</h3>
 								<p class="text-sm text-gray-600">
@@ -209,7 +214,7 @@
 							</div>
 						</Tabs.Content>
 
-						<Tabs.Content value="bookmark" class="space-y-4">
+						<Tabs.Content value="bookmark" class="space-y-4 pt-3">
 							<div class="space-y-2">
 								<h3 class="text-sm font-medium">Bookmark Category Filters</h3>
 								<p class="text-sm text-gray-600">
@@ -244,7 +249,7 @@
 							</div>
 						</Tabs.Content>
 
-						<Tabs.Content value="todo" class="space-y-4">
+						<Tabs.Content value="todo" class="space-y-4 pt-3">
 							<div class="space-y-2">
 								<h3 class="text-sm font-medium">Todo Category Filters</h3>
 								<p class="text-sm text-gray-600">
@@ -279,7 +284,7 @@
 							</div>
 						</Tabs.Content>
 
-						<Tabs.Content value="visited" class="space-y-4">
+						<Tabs.Content value="visited" class="space-y-4 pt-3">
 							<div class="space-y-2">
 								<h3 class="text-sm font-medium">Visited Location Category Filters</h3>
 								<p class="text-sm text-gray-600">

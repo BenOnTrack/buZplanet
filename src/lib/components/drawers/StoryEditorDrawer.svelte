@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Drawer } from 'vaul-svelte';
+	import { Tabs } from 'bits-ui';
 	import { clsx } from 'clsx';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
@@ -282,11 +283,6 @@
 			categories = [...categories, categoryId];
 		}
 	}
-
-	// Switch tabs
-	function switchTab(tab: 'metadata' | 'content') {
-		activeTab = tab;
-	}
 </script>
 
 <!-- Story Editor Drawer -->
@@ -389,155 +385,124 @@
 					{/if}
 				</div>
 
-				<!-- Tab Navigation -->
-				<div class="flex-shrink-0 border-b border-gray-200 bg-white">
-					<div class="flex">
-						<button
-							class={clsx(
-								'border-b-2 px-4 py-3 text-sm font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none',
-								{
-									'border-blue-600 bg-blue-50 text-blue-600': activeTab === 'content',
-									'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700':
-										activeTab !== 'content'
-								}
-							)}
-							onclick={() => switchTab('content')}
-							onkeydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') {
-									e.preventDefault();
-									switchTab('content');
-								}
-							}}
-							role="tab"
-							aria-selected={activeTab === 'content'}
+				<!-- Tab Navigation and Content using bits-ui Tabs -->
+				<div class="flex-1 overflow-hidden px-3 pb-3">
+					<Tabs.Root
+						bind:value={activeTab}
+						class="rounded-card border-muted bg-background-alt shadow-card flex h-full w-full flex-col border p-3"
+					>
+						<Tabs.List
+							class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background mb-3 grid w-full grid-cols-2 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
 						>
-							<div class="flex items-center gap-2">
-								<PropertyIcon key="description" value="edit" size={16} />
+							<Tabs.Trigger
+								value="content"
+								class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+							>
+								<PropertyIcon key="description" value="edit" size={14} />
 								Content
 								{#if content.length > 0}
 									<span
-										class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-xs text-white"
+										class="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-xs text-white"
 									>
 										{content.length}
 									</span>
 								{/if}
-							</div>
-						</button>
-
-						<button
-							class={clsx(
-								'border-b-2 px-4 py-3 text-sm font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none',
-								{
-									'border-blue-600 bg-blue-50 text-blue-600': activeTab === 'metadata',
-									'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700':
-										activeTab !== 'metadata'
-								}
-							)}
-							onclick={() => switchTab('metadata')}
-							onkeydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') {
-									e.preventDefault();
-									switchTab('metadata');
-								}
-							}}
-							role="tab"
-							aria-selected={activeTab === 'metadata'}
-						>
-							<div class="flex items-center gap-2">
-								<PropertyIcon key="description" value="settings" size={16} />
+							</Tabs.Trigger>
+							<Tabs.Trigger
+								value="metadata"
+								class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+							>
+								<PropertyIcon key="description" value="settings" size={14} />
 								Details
 								{#if title || description || categories.length > 0}
 									<span
-										class="inline-flex h-2 w-2 items-center justify-center rounded-full bg-blue-600"
-									>
-									</span>
+										class="ml-1 inline-flex h-2 w-2 items-center justify-center rounded-full bg-blue-600"
+									></span>
 								{/if}
-							</div>
-						</button>
-					</div>
-				</div>
+							</Tabs.Trigger>
+						</Tabs.List>
 
-				<!-- Tab Content -->
-				<div class="flex flex-1 flex-col overflow-hidden">
-					{#if activeTab === 'content'}
-						<!-- Story Content Editor with sticky toolbar -->
+						<!-- Tab Content -->
 						<div class="flex flex-1 flex-col overflow-hidden">
-							<StoryEditor
-								bind:content
-								placeholder="Write your story here. Click 'Insert Feature' to add map features to your story..."
-								class="story-editor-with-sticky-toolbar"
-							/>
-						</div>
-					{:else}
-						<!-- Metadata Tab -->
-						<div class="flex-1 overflow-auto px-4 py-4">
-							<div class="space-y-6">
-								<!-- Title Input -->
-								<div>
-									<label for="story-title" class="mb-2 block text-sm font-medium text-gray-700">
-										Story Title *
-									</label>
-									<input
-										id="story-title"
-										bind:value={title}
-										placeholder="Enter your story title..."
-										class="block w-full rounded-md border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-										required
-									/>
-								</div>
-								<!-- Description -->
-								<div>
-									<label
-										for="story-description"
-										class="mb-2 block text-sm font-medium text-gray-700"
-									>
-										Description (Optional)
-									</label>
-									<textarea
-										id="story-description"
-										bind:value={description}
-										placeholder="Brief description of your story..."
-										rows="3"
-										class="block w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-									></textarea>
-								</div>
+							<Tabs.Content value="content" class="flex flex-1 flex-col overflow-hidden">
+								<!-- Story Content Editor with sticky toolbar -->
+								<StoryEditor
+									bind:content
+									placeholder="Write your story here. Click 'Insert Feature' to add map features to your story..."
+									class="story-editor-with-sticky-toolbar"
+								/>
+							</Tabs.Content>
 
-								<!-- Categories -->
-								<fieldset>
-									<legend class="mb-3 block text-sm font-medium text-gray-700">Categories</legend>
-									<StoryCategoryManager
-										bind:availableCategories
-										bind:selectedCategories={categories}
-										bind:error={categoryManagerError}
-										onCategoriesChange={handleCategoriesChange}
-										showSelection={true}
-										allowDelete={false}
-										class="w-full"
-									/>
-								</fieldset>
-
-								<!-- Privacy Settings -->
-								<div>
-									<label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+							<Tabs.Content value="metadata" class="flex-1 overflow-auto">
+								<!-- Metadata Tab -->
+								<div class="space-y-6 px-1 py-3">
+									<!-- Title Input -->
+									<div>
+										<label for="story-title" class="mb-2 block text-sm font-medium text-gray-700">
+											Story Title *
+										</label>
 										<input
-											type="checkbox"
-											bind:checked={isPublic}
-											class="rounded border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+											id="story-title"
+											bind:value={title}
+											placeholder="Enter your story title..."
+											class="block w-full rounded-md border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+											required
 										/>
-										Make this story public
-										<PropertyIcon
-											key="description"
-											value={isPublic ? 'public' : 'private'}
-											size={14}
+									</div>
+									<!-- Description -->
+									<div>
+										<label
+											for="story-description"
+											class="mb-2 block text-sm font-medium text-gray-700"
+										>
+											Description (Optional)
+										</label>
+										<textarea
+											id="story-description"
+											bind:value={description}
+											placeholder="Brief description of your story..."
+											rows="3"
+											class="block w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+										></textarea>
+									</div>
+
+									<!-- Categories -->
+									<fieldset>
+										<legend class="mb-3 block text-sm font-medium text-gray-700">Categories</legend>
+										<StoryCategoryManager
+											bind:availableCategories
+											bind:selectedCategories={categories}
+											bind:error={categoryManagerError}
+											onCategoriesChange={handleCategoriesChange}
+											showSelection={true}
+											allowDelete={false}
+											class="w-full"
 										/>
-									</label>
-									<p class="mt-1 text-xs text-gray-500">
-										Public stories can be shared with other users in the future.
-									</p>
+									</fieldset>
+
+									<!-- Privacy Settings -->
+									<div>
+										<label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+											<input
+												type="checkbox"
+												bind:checked={isPublic}
+												class="rounded border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+											/>
+											Make this story public
+											<PropertyIcon
+												key="description"
+												value={isPublic ? 'public' : 'private'}
+												size={14}
+											/>
+										</label>
+										<p class="mt-1 text-xs text-gray-500">
+											Public stories can be shared with other users in the future.
+										</p>
+									</div>
 								</div>
-							</div>
+							</Tabs.Content>
 						</div>
-					{/if}
+					</Tabs.Root>
 				</div>
 			</div>
 		</Drawer.Content>

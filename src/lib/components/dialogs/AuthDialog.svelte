@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Dialog } from 'bits-ui';
+	import { Dialog, Tabs } from 'bits-ui';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import { authState } from '$lib/stores/auth.svelte';
@@ -16,16 +16,6 @@
 
 	let activeTab = $state('auth');
 	let showNotifications = $state(false);
-
-	const tabs = [
-		{ id: 'auth', label: 'Account', icon: 'lock' },
-		{ id: 'feed', label: 'Feed', icon: 'home' },
-		{ id: 'search', label: 'People', icon: 'search' }
-	];
-
-	function switchTab(tabId: string) {
-		activeTab = tabId;
-	}
 
 	function toggleNotifications() {
 		showNotifications = !showNotifications;
@@ -128,49 +118,64 @@
 			{:else}
 				<!-- Authenticated - show tabs and content -->
 				<div class="flex h-full flex-col">
-					<!-- Tab navigation -->
-					<div class="flex border-b border-gray-200">
-						{#each tabs as tab}
-							<button
-								onclick={() => switchTab(tab.id)}
-								onkeydown={(e) => e.key === 'Enter' && switchTab(tab.id)}
-								class="flex flex-1 items-center justify-center space-x-2 px-4 py-3 text-sm font-medium transition-colors
-									{activeTab === tab.id
-									? 'border-b-2 border-blue-600 bg-blue-50 text-blue-600'
-									: 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'}"
-								tabindex="0"
-								role="tab"
-								aria-selected={activeTab === tab.id}
-								aria-label="Switch to {tab.label} tab"
+					<!-- Tab navigation and content using bits-ui Tabs -->
+					<div class="p-3">
+						<Tabs.Root
+							bind:value={activeTab}
+							class="rounded-card border-muted bg-background-alt shadow-card w-full border p-3"
+						>
+							<Tabs.List
+								class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background grid w-full grid-cols-3 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
 							>
-								<PropertyIcon key={'description'} value={tab.icon} size={16} />
-								<span>{tab.label}</span>
-							</button>
-						{/each}
-					</div>
+								<Tabs.Trigger
+									value="auth"
+									class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+								>
+									<PropertyIcon key={'description'} value={'lock'} size={14} />
+									Account
+								</Tabs.Trigger>
+								<Tabs.Trigger
+									value="feed"
+									class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+								>
+									<PropertyIcon key={'description'} value={'home'} size={14} />
+									Feed
+								</Tabs.Trigger>
+								<Tabs.Trigger
+									value="search"
+									class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+								>
+									<PropertyIcon key={'description'} value={'search'} size={14} />
+									People
+								</Tabs.Trigger>
+							</Tabs.List>
 
-					<!-- Tab content -->
-					<div class="flex-1 overflow-y-auto">
-						{#if activeTab === 'auth'}
-							<div class="p-5">
-								<UserProfile />
-							</div>
-						{:else if activeTab === 'feed'}
-							<div class="p-4">
-								<ActivityFeed />
-							</div>
-						{:else if activeTab === 'search'}
-							<div class="space-y-4 p-4">
-								<!-- Profile Editor -->
-								<ProfileEditor />
-
-								<!-- User Search -->
-								<div>
-									<h3 class="mb-3 text-lg font-semibold text-gray-900">Find People</h3>
-									<UserSearch />
+							<!-- Tab content with proper spacing -->
+							<Tabs.Content value="auth" class="pt-3">
+								<div class="max-h-[60vh] overflow-y-auto">
+									<UserProfile />
 								</div>
-							</div>
-						{/if}
+							</Tabs.Content>
+
+							<Tabs.Content value="feed" class="pt-3">
+								<div class="max-h-[60vh] overflow-y-auto">
+									<ActivityFeed />
+								</div>
+							</Tabs.Content>
+
+							<Tabs.Content value="search" class="pt-3">
+								<div class="max-h-[60vh] space-y-4 overflow-y-auto">
+									<!-- Profile Editor -->
+									<ProfileEditor />
+
+									<!-- User Search -->
+									<div>
+										<h3 class="mb-3 text-lg font-semibold text-gray-900">Find People</h3>
+										<UserSearch />
+									</div>
+								</div>
+							</Tabs.Content>
+						</Tabs.Root>
 					</div>
 				</div>
 			{/if}

@@ -26,7 +26,7 @@
 
 	// State for download functionality
 	let r2Files: R2File[] = $state([]);
-	let opfsFiles: string[] = $state([]);
+	let opfsFiles: OPFSFileInfo[] = $state([]);
 	let fileComparison: FileComparisonResult[] = $state([]);
 	let isLoadingFiles = $state(false);
 	let downloadError = $state('');
@@ -200,8 +200,8 @@
 		}
 	};
 
-	// Get files from OPFS via worker
-	const fetchOPFSFiles = async (): Promise<string[]> => {
+	// Get files from OPFS via worker with metadata
+	const fetchOPFSFiles = async (): Promise<OPFSFileInfo[]> => {
 		try {
 			const worker = await getWorker();
 			return await worker.listOPFSFiles();
@@ -211,7 +211,7 @@
 		}
 	};
 
-	// Compare R2 and OPFS files
+	// Compare R2 and OPFS files with modification date checking
 	const compareFiles = async () => {
 		isLoadingFiles = true;
 		downloadError = '';
@@ -223,14 +223,40 @@
 			r2Files = r2FilesList;
 			opfsFiles = opfsFilesList;
 
-			// Create comparison result
+			// Create comparison result with status checking
 			fileComparison = r2Files.map((r2File) => {
 				const filename = r2File.key;
-				const isInOPFS = opfsFiles.includes(filename);
+				const opfsFile = opfsFiles.find((f) => f.filename === filename);
+				const isInOPFS = !!opfsFile;
+
+				let status: 'not-downloaded' | 'up-to-date' | 'needs-update' = 'not-downloaded';
+
+				if (isInOPFS && opfsFile) {
+					// Convert R2 lastModified string to timestamp for comparison
+					const r2LastModified = new Date(r2File.lastModified).getTime();
+					const opfsLastModified = opfsFile.lastModified;
+
+					// Allow for small timestamp differences (1 second) due to precision
+					const timeDifference = Math.abs(r2LastModified - opfsLastModified);
+
+					if (timeDifference <= 1000) {
+						// Files are the same (within 1 second tolerance)
+						status = 'up-to-date';
+					} else if (r2LastModified > opfsLastModified) {
+						// R2 file is newer - needs update
+						status = 'needs-update';
+					} else {
+						// OPFS file is newer (shouldn't happen normally, but treat as up-to-date)
+						status = 'up-to-date';
+					}
+				}
+
 				return {
 					filename,
 					isInOPFS,
-					r2File
+					r2File,
+					status,
+					opfsFile
 				};
 			});
 
@@ -342,9 +368,9 @@
 			for (const [countryName, country] of Object.entries(continent.children)) {
 				for (const [regionName, region] of Object.entries(country.children)) {
 					for (const [typeName, typeNode] of Object.entries(region.children)) {
-						// Calculate type totals
+						// Calculate type totals based on status
 						typeNode.totalFiles = typeNode.files.length;
-						typeNode.missingFiles = typeNode.files.filter((f) => !f.isInOPFS).length;
+						typeNode.missingFiles = typeNode.files.filter((f) => f.status !== 'up-to-date').length;
 						typeNode.allFilesDownloaded = typeNode.missingFiles === 0;
 					}
 
@@ -396,7 +422,7 @@
 				for (const region of Object.values(country.children)) {
 					for (const typeNode of Object.values(region.children)) {
 						const selectedCount = typeNode.files.filter(
-							(f) => selectedFilesForDownload.has(f.filename) || f.isInOPFS
+							(f) => selectedFilesForDownload.has(f.filename) || f.status === 'up-to-date'
 						).length;
 						typeNode.fullySelected =
 							selectedCount === typeNode.files.length && typeNode.files.length > 0;
@@ -449,11 +475,11 @@
 				fileHierarchy[continent]?.children[country]?.children[region]?.children[type];
 			if (typeNode) {
 				for (const file of typeNode.files) {
-					if (selectAll && !file.isInOPFS) {
-						// Only add to selection if not already downloaded
+					if (selectAll && file.status !== 'up-to-date') {
+						// Only add to selection if file needs downloading or updating
 						selectedFilesForDownload.add(file.filename);
 					} else {
-						// Remove from selection (downloaded files stay visually checked)
+						// Remove from selection (up-to-date files stay visually checked)
 						selectedFilesForDownload.delete(file.filename);
 					}
 				}
@@ -464,7 +490,7 @@
 			if (regionNode) {
 				for (const typeNode of Object.values(regionNode.children)) {
 					for (const file of typeNode.files) {
-						if (selectAll && !file.isInOPFS) {
+						if (selectAll && file.status !== 'up-to-date') {
 							selectedFilesForDownload.add(file.filename);
 						} else {
 							selectedFilesForDownload.delete(file.filename);
@@ -479,7 +505,7 @@
 				for (const regionNode of Object.values(countryNode.children)) {
 					for (const typeNode of Object.values(regionNode.children)) {
 						for (const file of typeNode.files) {
-							if (selectAll && !file.isInOPFS) {
+							if (selectAll && file.status !== 'up-to-date') {
 								selectedFilesForDownload.add(file.filename);
 							} else {
 								selectedFilesForDownload.delete(file.filename);
@@ -496,7 +522,7 @@
 					for (const regionNode of Object.values(countryNode.children)) {
 						for (const typeNode of Object.values(regionNode.children)) {
 							for (const file of typeNode.files) {
-								if (selectAll && !file.isInOPFS) {
+								if (selectAll && file.status !== 'up-to-date') {
 									selectedFilesForDownload.add(file.filename);
 								} else {
 									selectedFilesForDownload.delete(file.filename);
@@ -585,12 +611,14 @@
 				type: 'application/x-sqlite3'
 			});
 
-			// Save to OPFS via worker
+			// Save to OPFS via worker with R2 metadata
 			downloadProgress = 95; // Almost done
 			const worker = await getWorker();
 			await worker.saveFileToOPFS(
 				file.filename,
-				combined.buffer.slice(combined.byteOffset, combined.byteOffset + combined.byteLength)
+				combined.buffer.slice(combined.byteOffset, combined.byteOffset + combined.byteLength),
+				undefined,
+				{ lastModified: file.r2File.lastModified, size: file.r2File.size }
 			);
 			downloadProgress = 100;
 
@@ -602,9 +630,9 @@
 				refreshApp();
 			}, 1000);
 
-			// Update comparison state
+			// Update comparison state to mark as up-to-date
 			fileComparison = fileComparison.map((f) =>
-				f.filename === file.filename ? { ...f, isInOPFS: true } : f
+				f.filename === file.filename ? { ...f, isInOPFS: true, status: 'up-to-date' } : f
 			);
 
 			downloadSuccess = `Successfully downloaded ${file.filename}`;
@@ -622,9 +650,9 @@
 		}
 	};
 
-	// Download all missing files with overall progress tracking
+	// Download all files that need updating or are missing
 	const downloadAllMissing = async () => {
-		const missingFiles = fileComparison.filter((f) => !f.isInOPFS);
+		const missingFiles = fileComparison.filter((f) => f.status !== 'up-to-date');
 		if (missingFiles.length === 0) return;
 
 		downloadError = '';
@@ -659,14 +687,17 @@
 					type: 'application/x-sqlite3'
 				});
 
-				// Save to OPFS via worker
+				// Save to OPFS via worker with R2 metadata
 				const worker = await getWorker();
 				const arrayBuffer = await blob.arrayBuffer();
-				await worker.saveFileToOPFS(file.filename, arrayBuffer);
+				await worker.saveFileToOPFS(file.filename, arrayBuffer, undefined, {
+					lastModified: file.r2File.lastModified,
+					size: file.r2File.size
+				});
 
-				// Update comparison state
+				// Update comparison state to mark as up-to-date
 				fileComparison = fileComparison.map((f) =>
-					f.filename === file.filename ? { ...f, isInOPFS: true } : f
+					f.filename === file.filename ? { ...f, isInOPFS: true, status: 'up-to-date' } : f
 				);
 
 				successful++;
@@ -706,11 +737,11 @@
 		}, 3000);
 	};
 
-	// Download selected files
+	// Download selected files that need updating or are missing
 	const downloadSelectedFiles = async () => {
 		const selectedFilesList = Array.from(selectedFilesForDownload)
 			.map((filename) => fileComparison.find((f) => f.filename === filename))
-			.filter((f) => f && !f.isInOPFS) as FileComparisonResult[];
+			.filter((f) => f && f.status !== 'up-to-date') as FileComparisonResult[];
 
 		if (selectedFilesList.length === 0) {
 			downloadError = 'No files selected for download';
@@ -745,14 +776,17 @@
 				// Convert response to blob
 				const blob = await response.blob();
 
-				// Save to OPFS via worker
+				// Save to OPFS via worker with R2 metadata
 				const worker = await getWorker();
 				const arrayBuffer = await blob.arrayBuffer();
-				await worker.saveFileToOPFS(file.filename, arrayBuffer);
+				await worker.saveFileToOPFS(file.filename, arrayBuffer, undefined, {
+					lastModified: file.r2File.lastModified,
+					size: file.r2File.size
+				});
 
-				// Update comparison state
+				// Update comparison state to mark as up-to-date
 				fileComparison = fileComparison.map((f) =>
-					f.filename === file.filename ? { ...f, isInOPFS: true } : f
+					f.filename === file.filename ? { ...f, isInOPFS: true, status: 'up-to-date' } : f
 				);
 
 				// Remove from selected files
@@ -990,7 +1024,8 @@
 						<div class="max-h-[60vh] overflow-y-auto px-1">
 							<Dialog.Description class="text-foreground-alt mb-6 text-sm">
 								Download .mbtiles files from your cloud storage (Cloudflare R2) to local storage.
-								Files already stored locally are marked with a checkmark.
+								Files are automatically compared by modification date to show their status: ✓ Up to
+								date (green), ↻ Needs update (yellow), ⚬ Not downloaded (gray).
 							</Dialog.Description>
 
 							<!-- Loading State -->
@@ -1095,19 +1130,33 @@
 								{/if}
 
 								<!-- Download All Missing Button -->
-								{@const missingFiles = fileComparison.filter((f) => !f.isInOPFS)}
+								{@const missingFiles = fileComparison.filter((f) => f.status !== 'up-to-date')}
 								{#if missingFiles.length > 0}
+									{@const notDownloaded = missingFiles.filter(
+										(f) => f.status === 'not-downloaded'
+									).length}
+									{@const needsUpdate = missingFiles.filter(
+										(f) => f.status === 'needs-update'
+									).length}
 									<div class="space-y-3">
 										<div
 											class="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3"
 										>
 											<div>
 												<p class="text-sm font-medium text-blue-900">
-													{missingFiles.length} file{missingFiles.length > 1 ? 's' : ''} not downloaded
-													yet
+													{#if notDownloaded > 0 && needsUpdate > 0}
+														{notDownloaded} file{notDownloaded > 1 ? 's' : ''} not downloaded, {needsUpdate}
+														need{needsUpdate > 1 ? '' : 's'} update
+													{:else if notDownloaded > 0}
+														{notDownloaded} file{notDownloaded > 1 ? 's' : ''} not downloaded yet
+													{:else}
+														{needsUpdate} file{needsUpdate > 1 ? 's' : ''} need{needsUpdate > 1
+															? ''
+															: 's'} update
+													{/if}
 												</p>
 												<p class="text-xs text-blue-700">
-													Download all missing files to local storage
+													Download all missing/outdated files to local storage
 												</p>
 											</div>
 											<button

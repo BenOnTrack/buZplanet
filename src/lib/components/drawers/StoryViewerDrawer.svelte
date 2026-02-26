@@ -381,38 +381,45 @@
 
 					<!-- Tabs -->
 					{#if viewMode === 'list'}
-						<Tabs.Root bind:value={activeTab} class="w-full">
-							<Tabs.List class="grid w-full grid-cols-2">
-								<Tabs.Trigger
-									value="stories"
-									class="flex items-center justify-center gap-2 rounded-tl-md border-b-2 border-transparent bg-white px-3 py-2 text-sm font-medium transition-all hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none data-[state=active]:border-blue-600 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600"
+						<div class="pb-2">
+							<Tabs.Root
+								bind:value={activeTab}
+								class="rounded-card border-muted bg-background-alt shadow-card w-full border p-3"
+							>
+								<Tabs.List
+									class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background grid w-full grid-cols-2 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
 								>
-									<PropertyIcon key="description" value="stories" size={16} />
-									Stories
-									{#if filteredStoriesCount !== null && filteredStoriesCount > 0}
-										<span
-											class="ml-1 rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700 data-[state=active]:bg-blue-200 data-[state=active]:text-blue-800"
-										>
-											{filteredStoriesCount}
-										</span>
-									{/if}
-								</Tabs.Trigger>
-								<Tabs.Trigger
-									value="categories"
-									class="flex items-center justify-center gap-2 rounded-tr-md border-b-2 border-transparent bg-white px-3 py-2 text-sm font-medium transition-all hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none data-[state=active]:border-blue-600 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600"
-								>
-									<PropertyIcon key="description" value="category" size={16} />
-									Categories
-									{#if availableCategories.length > 0}
-										<span
-											class="ml-1 rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700 data-[state=active]:bg-blue-200 data-[state=active]:text-blue-800"
-										>
-											{availableCategories.length}
-										</span>
-									{/if}
-								</Tabs.Trigger>
-							</Tabs.List>
-						</Tabs.Root>
+									<Tabs.Trigger
+										value="stories"
+										class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+									>
+										<PropertyIcon key="description" value="stories" size={14} />
+										Stories
+										{#if filteredStoriesCount !== null && filteredStoriesCount > 0}
+											<span
+												class="ml-1 rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700"
+											>
+												{filteredStoriesCount}
+											</span>
+										{/if}
+									</Tabs.Trigger>
+									<Tabs.Trigger
+										value="categories"
+										class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted flex h-8 items-center justify-center gap-1 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+									>
+										<PropertyIcon key="description" value="category" size={14} />
+										Categories
+										{#if availableCategories.length > 0}
+											<span
+												class="ml-1 rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700"
+											>
+												{availableCategories.length}
+											</span>
+										{/if}
+									</Tabs.Trigger>
+								</Tabs.List>
+							</Tabs.Root>
+						</div>
 					{/if}
 
 					<!-- Search and Filters (only in stories tab) -->
@@ -480,7 +487,7 @@
 						<Tabs.Root bind:value={activeTab} class="flex h-full flex-col">
 							<Tabs.Content
 								value="stories"
-								class="flex h-full flex-col data-[state=inactive]:hidden"
+								class="flex h-full flex-col pt-3 data-[state=inactive]:hidden"
 							>
 								<!-- Fixed Stories Header -->
 								<div class="flex-shrink-0 border-b border-gray-100 bg-white px-4 py-2">
@@ -508,7 +515,7 @@
 
 							<Tabs.Content
 								value="categories"
-								class="flex h-full flex-col data-[state=inactive]:hidden"
+								class="flex h-full flex-col pt-3 data-[state=inactive]:hidden"
 							>
 								<!-- Categories Management Content -->
 								<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">

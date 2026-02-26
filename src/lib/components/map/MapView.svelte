@@ -40,6 +40,10 @@
 	// Map instance reference
 	let mapInstance = $state<MapStore | undefined>();
 
+	// Zoom restriction for category filter
+	let categoryFilterZoomRestriction = $derived(categoryFilterStore.isActive);
+	let minZoomLevel = $derived(categoryFilterZoomRestriction ? 14 : 0);
+
 	// Selected feature drawer state - use MapControl store
 	let selectedFeature = $derived(mapControl.selectedFeature);
 	const selectedFeatureGeoJSON = $derived.by(() => {
@@ -496,6 +500,23 @@
 					console.debug('Could not configure advanced MapLibre cache settings:', error);
 				}
 
+				// Add zoom restriction handler for category filter
+				const handleZoomRestriction = () => {
+					if (!mapInstance || !categoryFilterStore.isActive) return;
+
+					const currentZoom = mapInstance.getZoom();
+					const minRequired = 14;
+					if (currentZoom < minRequired) {
+						console.log(
+							`🚫 CategoryFilter: Preventing zoom below ${minRequired} (current: ${currentZoom.toFixed(1)})`
+						);
+						mapInstance.setZoom(minRequired);
+					}
+				};
+
+				// Add zoom restriction listener
+				mapInstance.on('zoom', handleZoomRestriction);
+
 				// Add event handlers to update map state (but not save immediately)
 				mapInstance.on('moveend', updateMapState);
 				mapInstance.on('zoomend', updateMapState);
@@ -743,7 +764,7 @@
 			bearing={currentView.bearing}
 			pitch={currentView.pitch}
 			class="map-instance"
-			minZoom={0}
+			minZoom={minZoomLevel}
 			maxZoom={19}
 			pitchWithRotate={true}
 			bearingSnap={7}

@@ -14,6 +14,19 @@ declare global {
 		filename: string;
 		isInOPFS: boolean;
 		r2File: R2File;
+		status: 'not-downloaded' | 'up-to-date' | 'needs-update';
+		opfsFile?: OPFSFileInfo;
+	}
+
+	interface OPFSFileInfo {
+		filename: string;
+		size: number;
+		lastModified: number; // timestamp
+	}
+
+	interface R2FileMetadata {
+		lastModified: string;
+		size: number;
 	}
 
 	// File hierarchy for categorized display

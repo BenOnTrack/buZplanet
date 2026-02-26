@@ -199,6 +199,18 @@ class CategoryFilterStore {
 			return;
 		}
 
+		// Check zoom level - require at least zoom 14 to prevent performance issues
+		const currentZoom = this._map.getZoom();
+		const minRequiredZoom = 14;
+		if (currentZoom < minRequiredZoom) {
+			console.log(
+				`⚠️ CategoryFilter: Zoom level ${currentZoom.toFixed(1)} is below minimum required ${minRequiredZoom}. Clearing results.`
+			);
+			this._results.features = [];
+			this._results.error = `Zoom to level ${minRequiredZoom} or higher to see category filter results`;
+			return;
+		}
+
 		// Get current map bounds
 		const bounds = this._map.getBounds();
 		const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
@@ -218,7 +230,8 @@ class CategoryFilterStore {
 			console.log(
 				'🎯 CategoryFilter: Looking for',
 				categoryMatchers.length,
-				'category combinations'
+				'category combinations at zoom',
+				currentZoom.toFixed(1)
 			);
 
 			// POI source layers to query
@@ -244,7 +257,8 @@ class CategoryFilterStore {
 				try {
 					const sourceFeatures = this._map.querySourceFeatures('poi', {
 						validate: false,
-						sourceLayer: sourceLayer
+						sourceLayer: sourceLayer,
+						zoom: Math.floor(currentZoom) // Specify zoom level for vector tiles
 					});
 
 					if (sourceFeatures && sourceFeatures.length > 0) {
@@ -288,8 +302,17 @@ class CategoryFilterStore {
 
 			// Filter by selected categories
 			const matchingFeatures = [];
+			const maxResults = 500; // Limit results to prevent performance issues
 
 			for (const feature of uniqueFeatures) {
+				// Stop processing if we've reached the limit
+				if (matchingFeatures.length >= maxResults) {
+					console.log(
+						`⚠️ CategoryFilter: Reached maximum results limit (${maxResults}), stopping processing`
+					);
+					break;
+				}
+
 				const props = feature.properties || {};
 
 				// Get the feature's classification
@@ -325,7 +348,11 @@ class CategoryFilterStore {
 				matchingFeatures.push(feature);
 			}
 
-			console.log(`✅ CategoryFilter: Found ${matchingFeatures.length} matching features`);
+			const resultMessage =
+				matchingFeatures.length >= maxResults
+					? `✅ CategoryFilter: Found ${matchingFeatures.length} matching features (limited to ${maxResults})`
+					: `✅ CategoryFilter: Found ${matchingFeatures.length} matching features`;
+			console.log(resultMessage);
 
 			// Transform to GeoJSON format
 			const features = matchingFeatures.map((feature, index) => {
@@ -348,7 +375,9 @@ class CategoryFilterStore {
 						...props,
 						// Mark as category filtered
 						isCategoryFiltered: true,
-						filterCategories: this._state.selectedCategories
+						filterCategories: this._state.selectedCategories,
+						// Add performance info
+						_limitReached: matchingFeatures.length >= maxResults
 					}
 				};
 			});
@@ -358,6 +387,11 @@ class CategoryFilterStore {
 			this._results.lastFetchBounds = [...bbox];
 			this._results.lastFetchCategories = [...this._state.selectedCategories];
 			this._results.error = null;
+
+			// Add warning if results were limited
+			if (matchingFeatures.length >= maxResults) {
+				this._results.error = `Showing first ${maxResults} results. Zoom in further or refine your category selection to see more specific results.`;
+			}
 
 			console.log(`🎯 CategoryFilter: Updated with ${features.length} filtered features`);
 		} catch (error) {

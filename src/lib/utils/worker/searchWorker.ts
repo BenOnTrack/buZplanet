@@ -113,12 +113,13 @@ self.addEventListener('message', async (event: MessageEvent) => {
 				break;
 
 			case 'opfs-save-file':
-				// Save file to OPFS (implement a basic version)
+				// Save file to OPFS with optional R2 metadata preservation
 				try {
 					const savedPath = await saveFileToOPFS(
 						data.filename,
 						data.fileData,
-						data.directory || ''
+						data.directory || '',
+						data.r2Metadata
 					);
 					postMessage({
 						type: 'opfs-file-saved',
@@ -136,7 +137,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
 				break;
 
 			case 'opfs-list-files':
-				// List files in OPFS
+				// List files in OPFS with metadata
 				try {
 					const fileList = await listOPFSFiles(data.directory || '');
 					postMessage({
@@ -1260,11 +1261,12 @@ function getDatabaseList(): Array<{ filename: string; metadata: any }> {
 	return databases;
 }
 
-// Basic OPFS file operations
+// Enhanced OPFS file operations with R2 metadata preservation
 async function saveFileToOPFS(
 	filename: string,
 	data: ArrayBuffer,
-	directory: string = ''
+	directory: string = '',
+	r2Metadata?: { lastModified: string; size: number }
 ): Promise<string> {
 	if (!opfsRoot) {
 		throw new Error('OPFS not initialized');
@@ -1275,17 +1277,10 @@ async function saveFileToOPFS(
 			? await opfsRoot.getDirectoryHandle(directory, { create: true })
 			: opfsRoot;
 
-		// Generate unique filename if file already exists
-		let finalFilename = filename;
-		let counter = 1;
+		// Always use the original filename - OVERWRITE if it exists
+		const finalFilename = filename;
 
-		while (await fileExists(dirHandle, finalFilename)) {
-			const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
-			const ext = filename.match(/\.[^/.]+$/)?.[0] || '';
-			finalFilename = `${nameWithoutExt}_${counter}${ext}`;
-			counter++;
-		}
-
+		// Save the main file (overwrite if exists)
 		const fileHandle = await dirHandle.getFileHandle(finalFilename, { create: true });
 
 		if ('createWritable' in fileHandle) {
@@ -1295,7 +1290,7 @@ async function saveFileToOPFS(
 		} else if ('createSyncAccessHandle' in fileHandle) {
 			const accessHandle = await (fileHandle as any).createSyncAccessHandle();
 			try {
-				accessHandle.truncate(0);
+				accessHandle.truncate(0); // Clear existing content
 				accessHandle.write(new Uint8Array(data), { at: 0 });
 				accessHandle.flush();
 			} finally {
@@ -1305,24 +1300,93 @@ async function saveFileToOPFS(
 			throw new Error('OPFS write operations not supported in this browser version');
 		}
 
+		// Save/update R2 metadata if provided (overwrite if exists)
+		if (r2Metadata) {
+			const metadataFilename = finalFilename + '.r2meta';
+			const metadataContent = JSON.stringify({
+				lastModified: r2Metadata.lastModified,
+				size: r2Metadata.size,
+				savedAt: new Date().toISOString(),
+				originalFilename: filename
+			});
+
+			try {
+				const metadataHandle = await dirHandle.getFileHandle(metadataFilename, { create: true });
+
+				if ('createWritable' in metadataHandle) {
+					const writable = await (metadataHandle as any).createWritable();
+					await writable.write(metadataContent);
+					await writable.close();
+				} else if ('createSyncAccessHandle' in metadataHandle) {
+					const accessHandle = await (metadataHandle as any).createSyncAccessHandle();
+					try {
+						accessHandle.truncate(0); // Clear existing content
+						accessHandle.write(new TextEncoder().encode(metadataContent), { at: 0 });
+						accessHandle.flush();
+					} finally {
+						accessHandle.close();
+					}
+				}
+				console.log(`📝 Updated R2 metadata for ${finalFilename}`);
+			} catch (metaError) {
+				console.warn(`Failed to save metadata for ${finalFilename}:`, metaError);
+				// Continue even if metadata save fails
+			}
+		}
+
 		return directory ? `${directory}/${finalFilename}` : finalFilename;
 	} catch (error) {
 		throw new Error(`Failed to save file: ${error}`);
 	}
 }
 
-async function listOPFSFiles(directory: string = ''): Promise<string[]> {
+async function listOPFSFiles(directory: string = ''): Promise<OPFSFileInfo[]> {
 	if (!opfsRoot) {
 		throw new Error('OPFS not initialized');
 	}
 
 	try {
 		const dirHandle = directory ? await opfsRoot.getDirectoryHandle(directory) : opfsRoot;
-		const files: string[] = [];
+		const files: OPFSFileInfo[] = [];
 
 		for await (const [name, handle] of (dirHandle as any).entries()) {
-			if (handle.kind === 'file') {
-				files.push(name);
+			// Only process .mbtiles files, ignore .r2meta files
+			if (handle.kind === 'file' && name.endsWith('.mbtiles') && !name.endsWith('.r2meta')) {
+				try {
+					const fileHandle = handle as FileSystemFileHandle;
+					const file = await fileHandle.getFile();
+
+					// Try to read R2 metadata if it exists
+					let r2LastModified: number | undefined;
+					try {
+						const metadataHandle = await dirHandle.getFileHandle(name + '.r2meta');
+						const metadataFile = await metadataHandle.getFile();
+						const metadataText = await metadataFile.text();
+						const metadata = JSON.parse(metadataText);
+
+						// Use R2's original lastModified instead of OPFS file timestamp
+						r2LastModified = new Date(metadata.lastModified).getTime();
+						console.log(`💾 Found R2 metadata for ${name}: ${metadata.lastModified}`);
+					} catch (metaError) {
+						// No metadata file or failed to read it - use OPFS file timestamp
+						r2LastModified = undefined;
+					}
+
+					files.push({
+						filename: name,
+						size: file.size,
+						// Use R2 metadata timestamp if available, otherwise use OPFS timestamp
+						lastModified: r2LastModified ?? file.lastModified
+					});
+				} catch (fileError) {
+					console.warn(`Failed to get metadata for ${name}:`, fileError);
+					// Fallback - include file with unknown metadata
+					files.push({
+						filename: name,
+						size: 0,
+						lastModified: 0
+					});
+				}
 			}
 		}
 

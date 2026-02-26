@@ -307,16 +307,21 @@ export class DualWorkerManager {
 		return this.sendSearchMessage('list-databases');
 	}
 
-	// OPFS operations through search worker
+	// Enhanced save file function that preserves R2 metadata
 	async saveFileToOPFS(
 		filename: string,
 		fileData: ArrayBuffer,
-		directory?: string
+		directory?: string,
+		r2Metadata?: { lastModified: string; size: number }
 	): Promise<string> {
-		return this.sendSearchMessage('opfs-save-file', { filename, fileData, directory });
+		const message = r2Metadata
+			? { filename, fileData, directory, r2Metadata }
+			: { filename, fileData, directory };
+
+		return this.sendSearchMessage('opfs-save-file', message);
 	}
 
-	async listOPFSFiles(directory?: string): Promise<string[]> {
+	async listOPFSFiles(directory?: string): Promise<OPFSFileInfo[]> {
 		const result = await this.sendSearchMessage('opfs-list-files', { directory });
 		return result.files;
 	}

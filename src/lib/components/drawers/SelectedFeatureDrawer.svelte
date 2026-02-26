@@ -510,7 +510,7 @@
 						{/if}
 					</Drawer.Title>
 					<!-- Custom close button instead of Drawer.Close -->
-					<button
+					<!-- <button
 						class="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:bg-gray-100 focus:text-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 						onclick={() => {
 							open = false;
@@ -525,7 +525,7 @@
 						aria-label="Close feature details drawer"
 					>
 						<PropertyIcon key={'description'} value={'x'} size={20} class="text-current" />
-					</button>
+					</button> -->
 				</div>
 
 				<!-- Fixed height container for feature name to maintain consistent spacing -->
@@ -709,125 +709,132 @@
 							</div>
 
 							<!-- Feature details -->
-							<Tabs.Root bind:value={activeTab} class="w-full">
-								<Tabs.List class="grid w-full grid-cols-2 gap-1 rounded-md bg-gray-100 p-1">
-									<Tabs.Trigger
-										value="info"
-										class="rounded-sm py-2 text-sm font-medium transition-colors data-[state=active]:bg-white data-[state=active]:shadow-sm"
+							<div class="pt-3">
+								<Tabs.Root
+									bind:value={activeTab}
+									class="rounded-card border-muted bg-background-alt shadow-card w-full border p-3"
+								>
+									<Tabs.List
+										class="rounded-9px bg-dark-10 shadow-mini-inset dark:bg-background grid w-full grid-cols-2 gap-1 p-1 text-sm leading-[0.01em] font-semibold dark:border dark:border-neutral-600/30"
 									>
-										Info
-									</Tabs.Trigger>
-									<Tabs.Trigger
-										value="visits"
-										class="rounded-sm py-2 text-sm font-medium transition-colors data-[state=active]:bg-white data-[state=active]:shadow-sm"
-									>
-										Visits
-									</Tabs.Trigger>
-								</Tabs.List>
+										<Tabs.Trigger
+											value="info"
+											class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+										>
+											Info
+										</Tabs.Trigger>
+										<Tabs.Trigger
+											value="visits"
+											class="data-[state=active]:shadow-mini dark:data-[state=active]:bg-muted h-8 rounded-[7px] bg-transparent py-2 data-[state=active]:bg-white"
+										>
+											Visits
+										</Tabs.Trigger>
+									</Tabs.List>
 
-								<Tabs.Content value="info" class="mt-4">
-									{#if feature}
-										<div class="max-h-80 space-y-2 overflow-y-auto text-sm">
-											{#if feature.properties?.opening_hours}
-												<OpeningHoursDisplay
-													openingHours={feature.properties.opening_hours}
-													showCurrentStatus={true}
-												/>
-											{/if}
-											{#if feature.properties?.website}
-												{@const formattedUrl = formatWebsiteUrl(feature.properties.website)}
-												<p class="text-gray-600">
-													<strong>Website:</strong>
-													<a
-														href={formattedUrl}
-														target="_blank"
-														rel="noopener noreferrer"
-														class="ml-1 text-blue-600 underline hover:text-blue-800"
-													>
-														{feature.properties.website}
-													</a>
-													<span class="ml-1 text-xs">🔗</span>
-												</p>
-											{/if}
-											{#if feature.properties?.phone}
-												<p class="text-gray-600">
-													<strong>Phone:</strong>
-													<a
-														href="tel:{feature.properties.phone}"
-														class="ml-1 text-blue-600 hover:text-blue-800"
-													>
-														{formatPhoneNumber(feature.properties.phone)}
-													</a>
-													<span class="ml-1 text-xs">📞</span>
-												</p>
-											{/if}
-											{#if feature.properties?.internet_access}
-												{@const wifiInfo = formatWifiStatus(feature.properties.internet_access)}
-												<p class="text-gray-600">
-													<strong>WiFi:</strong>
-													<span class={wifiInfo.hasWifi ? 'text-green-600' : 'text-gray-500'}>
-														{wifiInfo.description}
-													</span>
-													<span class="ml-1 text-xs">{wifiInfo.hasWifi ? '📶' : '📵'}</span>
-												</p>
-											{/if}
-											{#if feature.properties?.type}
-												<p class="text-gray-600">
-													<strong>Type:</strong>
-													{feature.properties.type}
-												</p>
-											{/if}
-										</div>
-									{/if}
-								</Tabs.Content>
-
-								<Tabs.Content value="visits" class="mt-4">
-									<div class="space-y-3">
-										<!-- Visit history -->
-										{#if featureStatus.visitedDates.length > 0}
-											<div class="space-y-2">
-												<h4 class="text-sm font-medium text-gray-700">
-													Visit History ({featureStatus.visitedDates.length}):
-												</h4>
-												<div class="max-h-48 space-y-2 overflow-y-auto">
-													{#each getSortedVisits(featureStatus.visitedDates) as visitTimestamp}
-														<div
-															class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm"
+									<Tabs.Content value="info" class="pt-3">
+										{#if feature}
+											<div class="max-h-80 space-y-2 overflow-y-auto text-sm">
+												{#if feature.properties?.opening_hours}
+													<OpeningHoursDisplay
+														openingHours={feature.properties.opening_hours}
+														showCurrentStatus={true}
+													/>
+												{/if}
+												{#if feature.properties?.website}
+													{@const formattedUrl = formatWebsiteUrl(feature.properties.website)}
+													<p class="text-gray-600">
+														<strong>Website:</strong>
+														<a
+															href={formattedUrl}
+															target="_blank"
+															rel="noopener noreferrer"
+															class="ml-1 text-blue-600 underline hover:text-blue-800"
 														>
-															<span class="text-gray-700">
-																{formatVisitDateTime(visitTimestamp)}
-															</span>
-															<button
-																class="rounded px-2 py-1 text-red-500 hover:bg-red-50 hover:text-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
-																onclick={() => handleRemoveVisit(feature, visitTimestamp)}
-																onkeydown={(e) => {
-																	if (e.key === 'Enter' || e.key === ' ') {
-																		e.preventDefault();
-																		handleRemoveVisit(feature, visitTimestamp);
-																	}
-																}}
-																disabled={featureStatus.loading}
-																title="Remove this visit"
-																aria-label={`Remove visit from ${formatVisitDateTime(visitTimestamp)}`}
-															>
-																🗑️
-															</button>
-														</div>
-													{/each}
-												</div>
-											</div>
-										{:else if featureStatus.bookmarked}
-											<div class="py-4 text-center text-sm text-gray-500">
-												No visits recorded yet. Add your first visit above!
-											</div>
-										{:else}
-											<div class="py-4 text-center text-sm text-gray-500">
-												Bookmark this feature to start tracking visits.
+															{feature.properties.website}
+														</a>
+														<span class="ml-1 text-xs">🔗</span>
+													</p>
+												{/if}
+												{#if feature.properties?.phone}
+													<p class="text-gray-600">
+														<strong>Phone:</strong>
+														<a
+															href="tel:{feature.properties.phone}"
+															class="ml-1 text-blue-600 hover:text-blue-800"
+														>
+															{formatPhoneNumber(feature.properties.phone)}
+														</a>
+														<span class="ml-1 text-xs">📞</span>
+													</p>
+												{/if}
+												{#if feature.properties?.internet_access}
+													{@const wifiInfo = formatWifiStatus(feature.properties.internet_access)}
+													<p class="text-gray-600">
+														<strong>WiFi:</strong>
+														<span class={wifiInfo.hasWifi ? 'text-green-600' : 'text-gray-500'}>
+															{wifiInfo.description}
+														</span>
+														<span class="ml-1 text-xs">{wifiInfo.hasWifi ? '📶' : '📵'}</span>
+													</p>
+												{/if}
+												{#if feature.properties?.type}
+													<p class="text-gray-600">
+														<strong>Type:</strong>
+														{feature.properties.type}
+													</p>
+												{/if}
 											</div>
 										{/if}
-									</div>
-								</Tabs.Content>
-							</Tabs.Root>
+									</Tabs.Content>
+
+									<Tabs.Content value="visits" class="pt-3">
+										<div class="space-y-3">
+											<!-- Visit history -->
+											{#if featureStatus.visitedDates.length > 0}
+												<div class="space-y-2">
+													<h4 class="text-sm font-medium text-gray-700">
+														Visit History ({featureStatus.visitedDates.length}):
+													</h4>
+													<div class="max-h-48 space-y-2 overflow-y-auto">
+														{#each getSortedVisits(featureStatus.visitedDates) as visitTimestamp}
+															<div
+																class="flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm"
+															>
+																<span class="text-gray-700">
+																	{formatVisitDateTime(visitTimestamp)}
+																</span>
+																<button
+																	class="rounded px-2 py-1 text-red-500 hover:bg-red-50 hover:text-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
+																	onclick={() => handleRemoveVisit(feature, visitTimestamp)}
+																	onkeydown={(e) => {
+																		if (e.key === 'Enter' || e.key === ' ') {
+																			e.preventDefault();
+																			handleRemoveVisit(feature, visitTimestamp);
+																		}
+																	}}
+																	disabled={featureStatus.loading}
+																	title="Remove this visit"
+																	aria-label={`Remove visit from ${formatVisitDateTime(visitTimestamp)}`}
+																>
+																	🗑️
+																</button>
+															</div>
+														{/each}
+													</div>
+												</div>
+											{:else if featureStatus.bookmarked}
+												<div class="py-4 text-center text-sm text-gray-500">
+													No visits recorded yet. Add your first visit above!
+												</div>
+											{:else}
+												<div class="py-4 text-center text-sm text-gray-500">
+													Bookmark this feature to start tracking visits.
+												</div>
+											{/if}
+										</div>
+									</Tabs.Content>
+								</Tabs.Root>
+							</div>
 						</div>
 					{:else}
 						<div class="py-8 text-center">

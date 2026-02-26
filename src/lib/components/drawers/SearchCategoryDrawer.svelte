@@ -21,6 +21,7 @@
 	let categoryResults = $derived(categoryFilterStore.features);
 	let isLoading = $derived(categoryFilterStore.isLoading);
 	let activeCategories = $derived(categoryFilterStore.selectedCategories);
+	let filterError = $derived(categoryFilterStore.error);
 
 	// Local filter state (similar to SearchResultsDrawer)
 	let allStoredFeatures = $state<StoredFeature[]>([]);
@@ -90,7 +91,10 @@
 				subclass: props.subclass || '',
 				category: props.category || '',
 				database: 'category-filter',
-				score: 1,
+				layer: 'poi',
+				zoom: 14,
+				tileX: 0,
+				tileY: 0,
 				names: names // All name properties preserved in original format
 			};
 
@@ -327,6 +331,31 @@
 								class="mb-2 h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
 							></div>
 							<p>Loading category filter results...</p>
+						</div>
+					{:else if filterError && activeCategories.length > 0}
+						<!-- Show zoom level or results limit error -->
+						<div class="flex flex-col items-center justify-center py-8 text-gray-600">
+							{#if filterError.includes('Zoom')}
+								<span class="mb-3 text-3xl">🔍</span>
+								<h3 class="mb-2 text-lg font-medium text-gray-800">Zoom In Required</h3>
+								<p class="text-center text-sm">{filterError}</p>
+								<div class="mt-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+									📝 <strong>Why?</strong> Category filtering queries thousands of features. Higher zoom
+									levels help limit results for better performance.
+								</div>
+							{:else if filterError.includes('first')}
+								<span class="mb-3 text-3xl">⚠️</span>
+								<h3 class="mb-2 text-lg font-medium text-gray-800">Results Limited</h3>
+								<p class="text-center text-sm">{filterError}</p>
+								<div class="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+									💡 <strong>Tip:</strong> Zoom in further or refine your category selection to see more
+									specific results.
+								</div>
+							{:else}
+								<span class="mb-3 text-3xl">❌</span>
+								<h3 class="mb-2 text-lg font-medium text-gray-800">Filter Error</h3>
+								<p class="text-center text-sm text-red-600">{filterError}</p>
+							{/if}
 						</div>
 					{:else if finalFilteredResults.length === 0 && categoryResults.length > 0 && hasActiveFilters}
 						<div class="flex flex-col items-center justify-center py-8 text-gray-500">

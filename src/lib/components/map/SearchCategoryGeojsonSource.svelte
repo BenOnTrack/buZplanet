@@ -30,7 +30,7 @@
 			'-',
 			['to-string', ['get', 'category']],
 			'-bright-',
-			colorMappings.map || 'purple'
+			colorMappings.attraction || 'purple'
 		];
 	});
 

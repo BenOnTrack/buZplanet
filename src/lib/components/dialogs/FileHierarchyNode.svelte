@@ -191,17 +191,17 @@
 					<button
 						type="button"
 						class="flex h-5 w-5 items-center justify-center rounded hover:bg-gray-100"
-						onclick={() => handleFileSelection(file.filename, file.isInOPFS)}
+						onclick={() => handleFileSelection(file.filename, file.status)}
 						onkeydown={(e) => {
 							if (e.key === 'Enter' || e.key === ' ') {
 								e.preventDefault();
 								e.currentTarget.click();
 							}
 						}}
-						disabled={file.isInOPFS}
+						disabled={file.status === 'up-to-date'}
 						aria-label={`Select ${file.filename}`}
 					>
-						{#if file.isInOPFS}
+						{#if file.status === 'up-to-date'}
 							<CheckSquare class="h-4 w-4 text-green-600" />
 						{:else if selectedFiles.has(file.filename)}
 							<CheckSquare class="h-4 w-4 text-blue-600" />
@@ -214,11 +214,23 @@
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-2">
 							<span class="truncate text-sm text-gray-900">{file.filename}</span>
-							{#if file.isInOPFS}
+							{#if file.status === 'up-to-date'}
 								<span
 									class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800"
 								>
-									✓ Local
+									✓ Up to date
+								</span>
+							{:else if file.status === 'needs-update'}
+								<span
+									class="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800"
+								>
+									↻ Needs update
+								</span>
+							{:else}
+								<span
+									class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800"
+								>
+									⚬ Not downloaded
 								</span>
 							{/if}
 						</div>
@@ -228,7 +240,7 @@
 					</div>
 
 					<!-- Download button for individual files -->
-					{#if !file.isInOPFS && onDownloadFile}
+					{#if file.status !== 'up-to-date' && onDownloadFile}
 						<div class="flex min-w-[90px] flex-col items-end gap-1">
 							<button
 								type="button"
