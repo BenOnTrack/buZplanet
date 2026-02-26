@@ -2,6 +2,7 @@
 	import { Dialog } from 'bits-ui';
 	import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass';
 	import CategoryManager from '$lib/components/categories/CategoryManager.svelte';
+	import FilteredCategoryManager from '$lib/components/categories/FilteredCategoryManager.svelte';
 	import SearchCategoryDrawer from '$lib/components/drawers/SearchCategoryDrawer.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 	import { _CATEGORY } from '$lib/assets/class_subclass_category';
@@ -13,9 +14,42 @@
 	// Drawer state
 	let drawerOpen = $state(false);
 
+	// Search state
+	let searchQuery = $state('');
+
 	// Get reactive state from the centralized store
 	let selectedCategories = $derived(categoryFilterStore.selectedCategories);
 	let isFilterActive = $derived(categoryFilterStore.isActive);
+
+	// Filter categories based on search query
+	let filteredCategories = $derived.by(() => {
+		if (!searchQuery.trim()) {
+			return _CATEGORY;
+		}
+
+		const query = searchQuery.toLowerCase().trim();
+		return _CATEGORY.filter((category) => {
+			// Get the category display name (final part)
+			const categoryName =
+				category.split('-')[2] || category.split('-')[category.split('-').length - 1];
+			const displayName = categoryName.replace(/_/g, ' ').toLowerCase();
+
+			// Also check the full category string and individual parts
+			const fullCategory = category.toLowerCase();
+			const parts = category.split('-').map((part) => part.replace(/_/g, ' ').toLowerCase());
+
+			return (
+				displayName.includes(query) ||
+				fullCategory.includes(query) ||
+				parts.some((part) => part.includes(query))
+			);
+		});
+	});
+
+	// Filter selected categories to only show those that match the search
+	let filteredSelectedCategories = $derived.by(() => {
+		return selectedCategories.filter((category) => filteredCategories.includes(category));
+	});
 
 	// Handle category selection changes
 	function handleCategoryChange(categories: string[]) {
@@ -34,6 +68,10 @@
 	// Reset state when dialog closes without applying
 	function handleOpenChange(open: boolean) {
 		dialogOpen = open;
+		if (open) {
+			// Clear search when dialog opens
+			searchQuery = '';
+		}
 		// No need to load state - using reactive derivations
 	}
 
@@ -44,6 +82,25 @@
 
 	function selectNoCategories() {
 		categoryFilterStore.selectNoCategories();
+	}
+
+	// Select all filtered categories
+	function selectAllFilteredCategories() {
+		const newCategories = [...selectedCategories];
+		filteredCategories.forEach((category) => {
+			if (!newCategories.includes(category)) {
+				newCategories.push(category);
+			}
+		});
+		categoryFilterStore.setCategories(newCategories);
+	}
+
+	// Clear all filtered categories
+	function clearAllFilteredCategories() {
+		const newCategories = selectedCategories.filter(
+			(category) => !filteredCategories.includes(category)
+		);
+		categoryFilterStore.setCategories(newCategories);
 	}
 </script>
 
@@ -94,10 +151,14 @@
 						<h3 class="text-sm font-medium">Category Filters</h3>
 						<p class="text-sm text-gray-600">
 							{selectedCategories.length} of {_CATEGORY.length} categories selected
+							{#if searchQuery.trim()}
+								({filteredSelectedCategories.length} of {filteredCategories.length} shown)
+							{/if}
 						</p>
 					</div>
 
-					<div class="mb-4 flex gap-2">
+					<div class="mb-4 flex flex-wrap gap-2">
+						<!-- Always show Select All and Clear All -->
 						<button
 							type="button"
 							class="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
@@ -108,6 +169,7 @@
 									selectAllCategories();
 								}
 							}}
+							title="Select all {_CATEGORY.length} categories"
 						>
 							Select All
 						</button>
@@ -121,9 +183,42 @@
 									selectNoCategories();
 								}
 							}}
+							title="Clear all selected categories"
 						>
 							Clear All
 						</button>
+
+						<!-- Show filtered buttons when search is active -->
+						{#if searchQuery.trim()}
+							<button
+								type="button"
+								class="rounded-md border border-blue-300 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+								onclick={selectAllFilteredCategories}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										selectAllFilteredCategories();
+									}
+								}}
+								title="Select all {filteredCategories.length} filtered categories"
+							>
+								Select Filtered ({filteredCategories.length})
+							</button>
+							<button
+								type="button"
+								class="rounded-md border border-orange-300 bg-orange-50 px-3 py-1 text-sm font-medium text-orange-700 hover:bg-orange-100 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:outline-none"
+								onclick={clearAllFilteredCategories}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										clearAllFilteredCategories();
+									}
+								}}
+								title="Clear {filteredSelectedCategories.length} filtered selected categories"
+							>
+								Clear Filtered ({filteredSelectedCategories.length})
+							</button>
+						{/if}
 						{#if isFilterActive}
 							<button
 								type="button"
@@ -145,14 +240,80 @@
 						{/if}
 					</div>
 
+					<!-- Search bar -->
+					<div class="mb-4">
+						<div class="relative">
+							<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+								<MagnifyingGlass size={16} class="text-gray-400" />
+							</div>
+							<input
+								type="text"
+								bind:value={searchQuery}
+								class="block w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-10 text-sm placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+								placeholder="Search categories... (e.g., cas, castle, casino)"
+								aria-label="Search categories"
+							/>
+							{#if searchQuery.trim()}
+								<button
+									type="button"
+									class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+									onclick={() => (searchQuery = '')}
+									onkeydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') {
+											e.preventDefault();
+											searchQuery = '';
+										}
+									}}
+									aria-label="Clear search"
+									title="Clear search"
+								>
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M6 18L18 6M6 6l12 12"
+										/>
+									</svg>
+								</button>
+							{/if}
+						</div>
+						{#if searchQuery.trim() && filteredCategories.length === 0}
+							<p class="mt-2 text-center text-sm text-gray-500">
+								No categories match "{searchQuery}"
+							</p>
+						{:else if searchQuery.trim()}
+							<p class="mt-2 text-center text-sm text-gray-500">
+								Showing {filteredCategories.length} of {_CATEGORY.length} categories
+							</p>
+						{/if}
+					</div>
+
 					<!-- Scrollable categories using CategoryManager -->
 					<div class="max-h-80 overflow-y-auto">
-						<CategoryManager
-							{selectedCategories}
-							onChange={handleCategoryChange}
-							title=""
-							showGroups={true}
-						/>
+						{#if filteredCategories.length > 0}
+							<FilteredCategoryManager
+								categories={filteredCategories}
+								{selectedCategories}
+								onChange={handleCategoryChange}
+								showGroups={true}
+							/>
+						{:else if searchQuery.trim()}
+							<div class="flex items-center justify-center py-8 text-gray-500">
+								<div class="text-center">
+									<MagnifyingGlass size={32} class="mx-auto mb-2 text-gray-300" />
+									<p class="text-sm">No categories found</p>
+									<p class="text-xs text-gray-400">Try a different search term</p>
+								</div>
+							</div>
+						{:else}
+							<CategoryManager
+								{selectedCategories}
+								onChange={handleCategoryChange}
+								title=""
+								showGroups={true}
+							/>
+						{/if}
 					</div>
 				</div>
 			</div>
