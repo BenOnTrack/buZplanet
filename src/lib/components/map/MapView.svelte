@@ -19,6 +19,9 @@
 	import BuildingVectorTileSource from '$lib/components/map/BuildingVectorTileSource.svelte';
 	import TransportationVectorTileSource from '$lib/components/map/TransportationVectorTileSource.svelte';
 	import PoiVectorTileSource from '$lib/components/map/PoiVectorTileSource.svelte';
+	import PoiRouteVectorTileSource from '$lib/components/map/PoiRouteVectorTileSource.svelte';
+
+	import RouteVectorTileSource from '$lib/components/map/RouteVectorTileSource.svelte';
 	import SelectedFeatureGeojsonSource from '$lib/components/map/SelectedFeatureGeojsonSource.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import BookmarksGeojsonSource from '$lib/components/map/BookmarksGeojsonSource.svelte';
@@ -798,6 +801,7 @@
 			<BuildingVectorTileSource {nameExpression} />
 			<SelectedFeatureGeojsonSource {nameExpression} {selectedFeatureGeoJSON} />
 			<PoiVectorTileSource {nameExpression} />
+			<PoiRouteVectorTileSource {nameExpression} />
 			<BookmarksGeojsonSource {nameExpression} {bookmarksFeaturesGeoJSON} />
 			<VisitedGeojsonSource {nameExpression} {visitedFeaturesGeoJSON} />
 			<TodoGeojsonSource {nameExpression} {todoFeaturesGeoJSON} />
@@ -807,6 +811,7 @@
 				visible={categoryFilterVisible}
 				map={mapInstance}
 			/>
+			<RouteVectorTileSource {nameExpression} />
 			<StoryConnectionGeojsonSource {storyConnectionGeoJSON} visible={showStoryConnections} />
 		</MapLibre>
 	{:else}

@@ -308,6 +308,27 @@ class FeaturesDB {
 	}
 
 	/**
+	 * Extract relation data from a map feature
+	 */
+	private extractRelationData(mapFeature: any): FeatureRelation | undefined {
+		if (!mapFeature?.properties) return undefined;
+
+		const props = mapFeature.properties;
+
+		// Check if the feature has relation properties
+		if (props.relationType && props.relationChildId) {
+			return {
+				type: props.relationType,
+				childId: props.relationChildId,
+				parentId: props.relationParentId || undefined,
+				bbox: props.bbox || undefined
+			};
+		}
+
+		return undefined;
+	}
+
+	/**
 	 * Generate searchable text from feature properties
 	 */
 	private generateSearchText(feature: {
@@ -407,6 +428,10 @@ class FeaturesDB {
 			todoStatus = existingFeature?.todo || false; // Preserve existing todo status
 		}
 
+		// If existing feature doesn't have relation data but the new feature does, preserve it
+		const relationData = this.extractRelationData(mapFeature);
+		const finalRelationData = existingFeature?.relation || relationData;
+
 		const storedFeature: StoredFeature = {
 			userId, // Add userId to stored feature
 			id: featureId,
@@ -418,6 +443,9 @@ class FeaturesDB {
 			source: mapFeature.source || 'unknown',
 			sourceLayer: mapFeature.sourceLayer,
 			layer: mapFeature.layer ? { id: mapFeature.layer.id } : undefined,
+
+			// Always store relation data if available from either source
+			relation: finalRelationData,
 
 			// Update user actions based on existing state
 			bookmarked: willBeBookmarked,
@@ -598,6 +626,10 @@ class FeaturesDB {
 		feature.searchText = this.generateSearchText(feature);
 		feature.dateModified = Date.now();
 		feature.lastSyncTimestamp = Date.now(); // Track for sync
+
+		// Preserve relation data - never remove it once stored
+		// If feature doesn't have relation data but should, this doesn't add it
+		// Relation data is only added during initial storage from map features
 
 		// Mark for upload if offline
 		if (!this.isOnline || !this.currentUser) {

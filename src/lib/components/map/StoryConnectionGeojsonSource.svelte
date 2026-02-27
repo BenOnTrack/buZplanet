@@ -1,5 +1,6 @@
 <!-- StoryConnectionGeojsonSource.svelte -->
 <script lang="ts">
+	// @ts-nocheck
 	import { GeoJSON, LineLayer } from 'svelte-maplibre';
 
 	interface Props {

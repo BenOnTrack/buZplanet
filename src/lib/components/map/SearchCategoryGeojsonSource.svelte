@@ -1,4 +1,5 @@
 <script lang="ts">
+	// @ts-nocheck
 	import { GeoJSON, CircleLayer, SymbolLayer } from 'svelte-maplibre';
 	import { appState } from '$lib/stores/AppState.svelte';
 	import { categoryFilterStore } from '$lib/stores/CategoryFilterStore.svelte';

@@ -3,6 +3,10 @@ import { authState } from '$lib/stores/auth.svelte';
 import { _CATEGORY } from '$lib/assets/class_subclass_category';
 import type { User } from 'firebase/auth';
 
+const DEFAULT_RELATION_SETTINGS: RelationSettings = {
+	childRoute: []
+};
+
 const DEFAULT_FILTER_SETTINGS: AppFilterSettings = {
 	map: {
 		categories: new Set(_CATEGORY)
@@ -53,7 +57,8 @@ const DEFAULT_CONFIG: AppConfig = {
 	},
 	colorMappings: DEFAULT_COLOR_MAPPINGS,
 	language: 'name', // Default to local names
-	filterSettings: DEFAULT_FILTER_SETTINGS
+	filterSettings: DEFAULT_FILTER_SETTINGS,
+	relationSettings: DEFAULT_RELATION_SETTINGS
 };
 
 /**
@@ -67,6 +72,7 @@ class AppState {
 	private _colorMappings = $state<ColorMappings>(DEFAULT_CONFIG.colorMappings);
 	private _language = $state<LanguageCode>(DEFAULT_CONFIG.language);
 	private _filterSettings = $state<AppFilterSettings>(DEFAULT_CONFIG.filterSettings);
+	private _relationSettings = $state<RelationSettings>(DEFAULT_CONFIG.relationSettings);
 
 	// Storage configuration - user-based local storage
 	private readonly DB_NAME = 'AppStateDB';
@@ -134,7 +140,8 @@ class AppState {
 			mapView: this._mapView,
 			colorMappings: this._colorMappings,
 			language: this._language,
-			filterSettings: this._filterSettings
+			filterSettings: this._filterSettings,
+			relationSettings: this._relationSettings
 		};
 	}
 
@@ -161,6 +168,11 @@ class AppState {
 	// Getter for color mappings
 	get colorMappings(): ColorMappings {
 		return this._colorMappings;
+	}
+
+	// Getter for relation settings
+	get relationSettings(): RelationSettings {
+		return this._relationSettings;
 	}
 
 	// Getter for initialization status
@@ -312,6 +324,17 @@ class AppState {
 				console.log('🎨 Loaded and cleaned color mappings:', this._colorMappings);
 				this._language = result.value.language || DEFAULT_CONFIG.language;
 
+				// Load relation settings
+				if (result.value.relationSettings) {
+					this._relationSettings = {
+						childRoute: Array.isArray(result.value.relationSettings.childRoute)
+							? result.value.relationSettings.childRoute
+							: []
+					};
+				} else {
+					this._relationSettings = { ...DEFAULT_RELATION_SETTINGS };
+				}
+
 				// IMPORTANT: Always ensure filterSettings exist, even for old configs
 				if (result.value.filterSettings) {
 					// Existing config has filterSettings, load them with conversion from arrays to Sets
@@ -408,6 +431,12 @@ class AppState {
 					if (!this._filterSettings) {
 						this._filterSettings = { ...DEFAULT_FILTER_SETTINGS };
 					}
+					if (!this._relationSettings) {
+						this._relationSettings = { ...DEFAULT_RELATION_SETTINGS };
+					}
+
+					// Save the updated config with new fields
+					this.saveConfig();
 				}
 			}
 		} catch (error) {
@@ -467,6 +496,9 @@ class AppState {
 					visited: {
 						categories: Array.from(this._filterSettings.visited.categories)
 					}
+				},
+				relationSettings: {
+					childRoute: [...this._relationSettings.childRoute]
 				}
 			};
 
@@ -604,7 +636,80 @@ class AppState {
 	}
 
 	/**
-	 * Get color for a specific category
+	 * Update relation settings
+	 */
+	updateRelationSettings(relationSettings: Partial<RelationSettings>): void {
+		this._relationSettings = {
+			...this._relationSettings,
+			...relationSettings
+		};
+		this.saveConfig(); // Auto-save changes
+	}
+
+	/**
+	 * Add childId to route (parsing X-Y-Z format)
+	 */
+	addChildIdToRoute(childId: string): void {
+		// Parse childId: split by "-" into individual parts
+		const parts = childId.split('-').filter((part) => part.length > 0);
+
+		console.log(`Adding childId "${childId}" parsed as:`, parts);
+
+		// Add all parts to the route
+		const newRoute = [...this._relationSettings.childRoute, ...parts];
+
+		this._relationSettings = {
+			...this._relationSettings,
+			childRoute: newRoute
+		};
+
+		console.log('Updated childRoute:', newRoute);
+		this.saveConfig();
+	}
+
+	/**
+	 * Toggle childId in route - if exists, remove ALL parts, if not exists, add it
+	 */
+	toggleChildIdInRoute(childId: string): void {
+		// Parse childId: split by "-" into individual parts
+		const parts = childId.split('-').filter((part) => part.length > 0);
+		const currentRoute = this._relationSettings.childRoute;
+
+		console.log(`Toggling childId "${childId}" parsed as:`, parts);
+		console.log('Current route:', currentRoute);
+
+		// Check if ALL parts of the childId exist anywhere in the current route
+		const allPartsExist = parts.every((part) => currentRoute.includes(part));
+
+		let newRoute: string[];
+
+		if (allPartsExist) {
+			// Remove ALL parts of the childId from the route
+			newRoute = currentRoute.filter((routePart) => !parts.includes(routePart));
+			console.log('All parts exist - removing ALL parts:', parts);
+			console.log('Filtered route:', newRoute);
+		} else {
+			// Add the parts to the route (only if they don't already exist)
+			newRoute = [...currentRoute];
+			parts.forEach((part) => {
+				if (!newRoute.includes(part)) {
+					newRoute.push(part);
+				}
+			});
+			console.log('Some/all parts missing - adding missing parts:', newRoute);
+		}
+
+		this._relationSettings = {
+			...this._relationSettings,
+			childRoute: newRoute
+		};
+
+		console.log('Updated childRoute:', newRoute);
+		this.saveConfig();
+	}
+
+	/**
+	 * Get color mapping for a specific category
 	 */
 	getCategoryColor(categoryKey: string): string {
 		return this._colorMappings[categoryKey as keyof ColorMappings] || 'neutral';
@@ -634,6 +739,7 @@ class AppState {
 		this._colorMappings = { ...DEFAULT_CONFIG.colorMappings };
 		this._language = DEFAULT_CONFIG.language;
 		this._filterSettings = { ...DEFAULT_FILTER_SETTINGS };
+		this._relationSettings = { ...DEFAULT_RELATION_SETTINGS };
 		await this.saveConfig();
 	}
 
@@ -680,6 +786,17 @@ class AppState {
 			};
 		} else {
 			this._filterSettings = { ...DEFAULT_FILTER_SETTINGS };
+		}
+
+		// Handle relation settings import
+		if (config.relationSettings) {
+			this._relationSettings = {
+				childRoute: Array.isArray(config.relationSettings.childRoute)
+					? config.relationSettings.childRoute
+					: []
+			};
+		} else {
+			this._relationSettings = { ...DEFAULT_RELATION_SETTINGS };
 		}
 
 		await this.saveConfig();

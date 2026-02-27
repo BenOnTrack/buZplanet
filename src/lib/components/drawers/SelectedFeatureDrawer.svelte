@@ -41,6 +41,7 @@
 		listIds: string[];
 		visitedDates: number[];
 		todo: boolean;
+		relation?: FeatureRelation;
 		loading: boolean;
 	}>({ bookmarked: false, listIds: [], visitedDates: [], todo: false, loading: false });
 
@@ -81,6 +82,7 @@
 		featureStatus.listIds = [];
 		featureStatus.visitedDates = [];
 		featureStatus.todo = false;
+		featureStatus.relation = undefined;
 		featureStatus.loading = false;
 		visitHistoryExpanded = false;
 	}
@@ -109,8 +111,12 @@
 				featureStatus.listIds = storedFeature.listIds || [];
 				featureStatus.visitedDates = storedFeature.visitedDates || [];
 				featureStatus.todo = storedFeature.todo;
+				featureStatus.relation = storedFeature.relation;
 			} else {
+				// Always extract relation data from the clicked feature, regardless of bookmark status
+				const relationData = extractRelationData(targetFeature);
 				resetFeatureStatus();
+				featureStatus.relation = relationData;
 			}
 		} catch (error) {
 			console.error('Failed to update feature status:', error);
@@ -119,6 +125,45 @@
 		} finally {
 			featureStatus.loading = false;
 		}
+	}
+
+	// Helper function to extract relation data from a feature
+	function extractRelationData(feature: MapGeoJSONFeature): FeatureRelation | undefined {
+		if (!feature?.properties) return undefined;
+
+		const props = feature.properties;
+
+		// Check if the feature has relation properties
+		if (props.relationType && props.relationChildId) {
+			return {
+				type: props.relationType,
+				childId: props.relationChildId,
+				parentId: props.relationParentId || undefined,
+				bbox: props.bbox || undefined
+			};
+		}
+
+		return undefined;
+	}
+
+	// Helper function to check if feature has relation data (always show button if relation exists)
+	function hasRelationData(feature: MapGeoJSONFeature | null): boolean {
+		if (!feature) return !!featureStatus.relation;
+		return !!extractRelationData(feature) || !!featureStatus.relation;
+	}
+
+	// Helper function to check if current feature's childId is in the route
+	function isChildIdInRoute(feature: MapGeoJSONFeature | null): boolean {
+		const relationData = (feature ? extractRelationData(feature) : null) || featureStatus.relation;
+		if (!relationData || !relationData.childId) return false;
+
+		// Parse childId: split by "-" into individual parts
+		const parts = relationData.childId.split('-').filter((part) => part.length > 0);
+		const currentRoute = appState.relationSettings.childRoute;
+
+		// Check if ALL parts of the childId exist anywhere in the current route
+		// (not necessarily at the end, but anywhere in the route)
+		return parts.every((part) => currentRoute.includes(part));
 	}
 
 	// Get feature ID (features always have unique IDs)
@@ -365,6 +410,22 @@
 		}
 	}
 
+	async function handleRelation(feature: MapGeoJSONFeature | null) {
+		if (!feature) return;
+
+		// Get the relation data from the feature
+		const relationData = extractRelationData(feature);
+		if (!relationData || !relationData.childId) {
+			console.warn('No relation data or childId found in feature');
+			return;
+		}
+
+		console.log('Relation button clicked - toggling childId:', relationData.childId);
+
+		// Toggle the childId in the route using AppState
+		appState.toggleChildIdInRoute(relationData.childId);
+	}
+
 	function handleUpdate(feature: MapGeoJSONFeature | null) {
 		if (!feature) return;
 
@@ -607,7 +668,12 @@
 							{/if}
 
 							<!-- Action buttons grid -->
-							<div class="grid grid-cols-5 gap-2">
+							<div
+								class={clsx('grid gap-2', {
+									'grid-cols-6': hasRelationData(feature),
+									'grid-cols-5': !hasRelationData(feature)
+								})}
+							>
 								<button
 									class={clsx(
 										'flex flex-col items-center justify-center gap-1 rounded-md px-2 py-3 text-xs font-medium transition-colors focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none',
@@ -682,6 +748,35 @@
 										</span>
 									{/if}
 								</button>
+								{#if hasRelationData(feature)}
+									<button
+										class={clsx(
+											'flex flex-col items-center justify-center gap-1 rounded-md px-2 py-3 text-xs font-medium transition-colors focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none',
+											{
+												// Show as active (purple) when childId is in the current route
+												'border border-purple-300 bg-purple-100 text-purple-800':
+													isChildIdInRoute(feature),
+												'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50':
+													!isChildIdInRoute(feature),
+												'cursor-not-allowed opacity-50': featureStatus.loading
+											}
+										)}
+										onclick={() => handleRelation(feature)}
+										disabled={featureStatus.loading}
+										title={isChildIdInRoute(feature)
+											? 'Remove all parts from route'
+											: 'Add to route path'}
+									>
+										<PropertyIcon
+											key={'description'}
+											value={isChildIdInRoute(feature)
+												? 'relation_route_true'
+												: 'relation_route_false'}
+											size={20}
+											color={isChildIdInRoute(feature) ? 'border-purple-300' : 'black'}
+										/>
+									</button>
+								{/if}
 								<button
 									class={clsx(
 										'flex flex-col items-center justify-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-3 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none',

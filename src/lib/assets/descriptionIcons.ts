@@ -33,6 +33,8 @@ export const descriptionIcons = {
 	todo_true: 'material-symbols:check-circle',
 	visited_false: 'mdi:eye-off-outline',
 	visited_true: 'mdi:eye',
+	relation_route_false: 'tabler:route-off',
+	relation_route_true: 'tabler:route',
 	update: 'lucide:file-pen',
 
 	add_remove: 'lucide:diff',
@@ -40,8 +42,7 @@ export const descriptionIcons = {
 	bookmark_check: 'lucide:bookmark-check',
 	button_area: 'lucide:land-plot',
 	button_area_filled: 'lucide:land-plot',
-	button_route: 'tabler:route-off',
-	button_route_filled: 'tabler:route',
+
 	button_trip: 'lucide:calendar',
 	button_trip_filled: 'lucide:calendar-check',
 	cleanliness: 'lucide:sparkles',

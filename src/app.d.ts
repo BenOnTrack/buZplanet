@@ -152,6 +152,16 @@ declare global {
 	}
 
 	/**
+	 * Feature relation information for route connections
+	 */
+	interface FeatureRelation {
+		type: string; // relationType from the feature
+		childId: string; // relationChildId from the feature
+		parentId?: string; // relationParentId from the feature
+		bbox?: [number, number, number, number]; // bbox from the feature
+	}
+
+	/**
 	 * Stored feature in the local database
 	 */
 	interface StoredFeature {
@@ -171,6 +181,9 @@ declare global {
 		listIds: string[]; // Array of bookmark list IDs this feature belongs to
 		visitedDates: number[]; // Array of timestamps when visited
 		todo: boolean;
+
+		// Relation information
+		relation?: FeatureRelation; // Route relation data if applicable
 
 		// Metadata
 		dateCreated: number;
@@ -249,6 +262,13 @@ declare global {
 		categories: string[];
 	}
 
+	/**
+	 * Relation settings for route tracking
+	 */
+	interface RelationSettings {
+		childRoute: string[];
+	}
+
 	interface AppFilterSettings {
 		map: CategoryFilterSettings;
 		heat: CategoryFilterSettings;
@@ -262,6 +282,7 @@ declare global {
 		colorMappings: ColorMappings;
 		language: LanguageCode;
 		filterSettings: AppFilterSettings;
+		relationSettings: RelationSettings;
 		// Future config properties can be added here
 		// theme?: string;
 		// selectedLayers?: string[];
