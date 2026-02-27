@@ -263,7 +263,7 @@ declare global {
 	}
 
 	/**
-	 * Route object with ID, names, and classification
+	 * Route object with ID, names, classification, and optional bounding box
 	 */
 	interface RouteInfo {
 		id: string;
@@ -271,6 +271,7 @@ declare global {
 		class?: string; // Route class (e.g., 'route')
 		subclass?: string; // Route subclass (e.g., 'ferry', 'train', 'bus')
 		category?: string; // Route category (e.g., 'transportation')
+		bbox?: [number, number, number, number]; // Bounding box [minX, minY, maxX, maxY] for viewport navigation
 	}
 
 	/**

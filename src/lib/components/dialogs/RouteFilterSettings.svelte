@@ -2,14 +2,17 @@
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
 	import MagnifyingGlass from 'phosphor-svelte/lib/MagnifyingGlass';
 	import { appState } from '$lib/stores/AppState.svelte';
+	import { mapControl } from '$lib/stores/MapControl.svelte';
 
 	// Props
 	let {
 		searchQuery = $bindable(''),
-		filteredRoutes = []
+		filteredRoutes = [],
+		onRouteNavigated
 	}: {
 		searchQuery?: string;
 		filteredRoutes: RouteInfo[];
+		onRouteNavigated?: () => void;
 	} = $props();
 
 	// Helper function to get display name for a route
@@ -142,6 +145,34 @@
 		console.log('Clearing all routes');
 		appState.updateRelationSettings({ childRoute: [] });
 	}
+
+	// Navigation function for route bbox
+	function handleNavigateToRoute(route: RouteInfo, event?: MouseEvent | KeyboardEvent) {
+		// Prevent default click behavior if this is a click event
+		if (event) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+
+		console.log('Navigating to route:', route.id);
+
+		// Try to navigate using AppState navigation method
+		const mapInstance = mapControl.getMapInstance();
+		const success = appState.navigateToRoute(route.id, mapInstance);
+
+		if (success) {
+			console.log(`✅ Successfully navigated to route ${route.id}`);
+		} else {
+			console.warn(
+				`⚠️ Could not navigate to route ${route.id} - no bbox available or map not ready`
+			);
+		}
+
+		// Close the parent dialog after navigation
+		if (onRouteNavigated) {
+			onRouteNavigated();
+		}
+	}
 </script>
 
 <div class="space-y-2">
@@ -158,6 +189,46 @@
 	<!-- Action buttons -->
 	{#if appState.relationSettings.childRoute.length > 0}
 		<div class="mb-4 flex flex-wrap gap-2">
+			<button
+				type="button"
+				class="rounded-md border border-blue-300 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+				onclick={() => {
+					const mapInstance = mapControl.getMapInstance();
+					const success = appState.navigateToAllRoutes(mapInstance);
+					if (success) {
+						console.log('✅ Successfully navigated to all route bounds');
+					} else {
+						console.warn(
+							'⚠️ Could not navigate to all routes - no bbox data available or map not ready'
+						);
+					}
+					// Close the parent dialog after navigation
+					if (onRouteNavigated) {
+						onRouteNavigated();
+					}
+				}}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						const mapInstance = mapControl.getMapInstance();
+						const success = appState.navigateToAllRoutes(mapInstance);
+						if (success) {
+							console.log('✅ Successfully navigated to all route bounds');
+						} else {
+							console.warn(
+								'⚠️ Could not navigate to all routes - no bbox data available or map not ready'
+							);
+						}
+						// Close the parent dialog after navigation
+						if (onRouteNavigated) {
+							onRouteNavigated();
+						}
+					}
+				}}
+				title="Navigate map to show all route segments"
+			>
+				View All Routes on Map
+			</button>
 			<button
 				type="button"
 				class="rounded-md border border-red-300 bg-red-50 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-100 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
@@ -258,50 +329,88 @@
 						<!-- Routes in this group -->
 						<div class="ml-2 space-y-1">
 							{#each routes as route (route.id)}
-								<div
-									class="flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 shadow-sm hover:bg-gray-50"
-								>
-									<div class="flex min-w-0 flex-1 items-center space-x-3">
-										<PropertyIcon
-											key="description"
-											value={getRouteTypeIcon(route)}
-											size={16}
-											class={`${getRouteTypeColor(route)} flex-shrink-0`}
-										/>
-										<div class="min-w-0 flex-1">
-											<div class="truncate text-sm font-medium text-gray-900">
-												{getRouteDisplayName(route)}
-											</div>
-											{#if route.id !== getRouteDisplayName(route)}
-												<div class="truncate text-xs text-gray-500" title="Route ID: {route.id}">
-													ID: {route.id}
-												</div>
-											{/if}
-											{#if getRouteClassification(route)}
-												<div
-													class="truncate text-xs text-gray-400"
-													title="Classification: {getRouteClassification(route)}"
-												>
-													{getRouteClassification(route)}
-												</div>
-											{/if}
-										</div>
-									</div>
-									<button
-										type="button"
-										class="ml-2 flex-shrink-0 rounded-md border border-red-200 bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100 hover:text-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
-										onclick={() => handleRemoveRoute(route)}
+								<div class="group relative">
+									<div
+										class="flex cursor-pointer items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50"
+										onclick={(e) => handleNavigateToRoute(route, e)}
 										onkeydown={(e) => {
 											if (e.key === 'Enter' || e.key === ' ') {
 												e.preventDefault();
-												handleRemoveRoute(route);
+												handleNavigateToRoute(route, e);
 											}
 										}}
-										title="Remove route: {getRouteDisplayName(route)}"
-										aria-label="Remove route {getRouteDisplayName(route)}"
+										tabindex="0"
+										role="button"
+										aria-label="Navigate to route {getRouteDisplayName(route)} {route.bbox
+											? '(click to navigate to location)'
+											: '(no location data)'}"
+										title={route.bbox
+											? 'Click to navigate to this route on the map'
+											: 'This route has no location data for navigation'}
 									>
-										<PropertyIcon key="description" value="trash" size={16} />
-									</button>
+										<div class="flex min-w-0 flex-1 items-center space-x-3">
+											<div class="flex items-center space-x-2">
+												<PropertyIcon
+													key="description"
+													value={getRouteTypeIcon(route)}
+													size={16}
+													class={`${getRouteTypeColor(route)} flex-shrink-0`}
+												/>
+												{#if route.bbox}
+													<PropertyIcon
+														key="description"
+														value="map-pin"
+														size={12}
+														class="text-blue-500 opacity-70"
+													/>
+												{:else}
+													<PropertyIcon
+														key="description"
+														value="map-pin-off"
+														size={12}
+														class="text-gray-400 opacity-50"
+													/>
+												{/if}
+											</div>
+											<div class="min-w-0 flex-1">
+												<div class="truncate text-sm font-medium text-gray-900">
+													{getRouteDisplayName(route)}
+												</div>
+												{#if route.id !== getRouteDisplayName(route)}
+													<div class="truncate text-xs text-gray-500" title="Route ID: {route.id}">
+														ID: {route.id}
+													</div>
+												{/if}
+												{#if getRouteClassification(route)}
+													<div
+														class="truncate text-xs text-gray-400"
+														title="Classification: {getRouteClassification(route)}"
+													>
+														{getRouteClassification(route)}
+													</div>
+												{/if}
+											</div>
+										</div>
+										<button
+											type="button"
+											class="ml-2 flex-shrink-0 rounded-md border border-red-200 bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100 hover:text-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
+											onclick={(e) => {
+												e.stopPropagation(); // Prevent triggering the navigation
+												handleRemoveRoute(route);
+											}}
+											onkeydown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault();
+													e.stopPropagation(); // Prevent triggering the navigation
+													handleRemoveRoute(route);
+												}
+											}}
+											title="Remove route: {getRouteDisplayName(route)}"
+											aria-label="Remove route {getRouteDisplayName(route)}"
+										>
+											<PropertyIcon key="description" value="trash" size={16} />
+										</button>
+									</div>
 								</div>
 							{/each}
 						</div>

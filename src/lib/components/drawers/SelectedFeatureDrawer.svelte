@@ -136,11 +136,35 @@
 
 		// Check if the feature has relation properties
 		if (props.relationType && props.relationChildId) {
+			// Parse bbox if it's a string
+			let bbox: [number, number, number, number] | undefined = undefined;
+			if (props.bbox) {
+				try {
+					if (typeof props.bbox === 'string') {
+						// Parse string format: "[139.6554587,35.2064163,139.6685535,35.2205124]"
+						const parsed = JSON.parse(props.bbox);
+						if (Array.isArray(parsed) && parsed.length === 4) {
+							bbox = [Number(parsed[0]), Number(parsed[1]), Number(parsed[2]), Number(parsed[3])];
+						}
+					} else if (Array.isArray(props.bbox) && props.bbox.length === 4) {
+						// Already an array
+						bbox = [
+							Number(props.bbox[0]),
+							Number(props.bbox[1]),
+							Number(props.bbox[2]),
+							Number(props.bbox[3])
+						];
+					}
+				} catch (error) {
+					console.warn('Failed to parse bbox from feature properties:', props.bbox, error);
+				}
+			}
+
 			return {
 				type: props.relationType,
 				childId: props.relationChildId,
 				parentId: props.relationParentId || undefined,
-				bbox: props.bbox || undefined
+				bbox: bbox
 			};
 		}
 
@@ -451,6 +475,38 @@
 			// We pass the compound ID, and the method will split and add only missing segments
 			try {
 				await appState.toggleRouteInRelation(relationData.childId, mapInstance);
+
+				// After adding segments, navigate to bbox
+				// Priority 1: Use relation data bbox if available
+				if (relationData.bbox && mapInstance) {
+					console.log('🗺️ Navigating to relation bbox:', relationData.bbox);
+					try {
+						const [minX, minY, maxX, maxY] = relationData.bbox;
+						mapInstance.fitBounds(
+							[
+								[minX, minY],
+								[maxX, maxY]
+							], // LngLatBoundsLike format
+							{
+								padding: 50, // Add some padding around the bounds
+								duration: 1000, // Smooth animation
+								essential: true // This animation is essential and cannot be interrupted
+							}
+						);
+						console.log('✅ Successfully navigated to relation bbox');
+					} catch (navError) {
+						console.error('Failed to navigate to relation bbox:', navError);
+					}
+				} else {
+					// Priority 2: Navigate to combined bbox of all active routes
+					console.log('🗺️ No relation bbox available, trying to navigate to all route segments');
+					const success = appState.navigateToAllRoutes(mapInstance);
+					if (success) {
+						console.log('✅ Successfully navigated to all route segments');
+					} else {
+						console.log('ℹ️ No bbox data available for route segments');
+					}
+				}
 			} catch (error) {
 				console.error('Error adding route segments to relation:', error);
 				// Show user-friendly error message if needed

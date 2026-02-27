@@ -465,7 +465,8 @@ class AppState {
 						names: JSON.parse(JSON.stringify(route.names)), // Deep clone names object
 						class: route.class ? String(route.class) : undefined, // Ensure string or undefined
 						subclass: route.subclass ? String(route.subclass) : undefined,
-						category: route.category ? String(route.category) : undefined
+						category: route.category ? String(route.category) : undefined,
+						bbox: route.bbox ? ([...route.bbox] as [number, number, number, number]) : undefined // Copy bbox array if exists
 					}))
 				}
 			};
@@ -665,7 +666,8 @@ class AppState {
 							names: this.cleanNamesObject(routeInfo.names || { name: segmentId }), // Clean the names object
 							class: routeInfo.class, // Store classification
 							subclass: routeInfo.subclass,
-							category: routeInfo.category
+							category: routeInfo.category,
+							bbox: routeInfo.bbox // Store bounding box if available
 						};
 
 						newRoutes.push(newRoute);
@@ -675,7 +677,8 @@ class AppState {
 								class: routeInfo.class,
 								subclass: routeInfo.subclass,
 								category: routeInfo.category
-							}
+							},
+							bbox: routeInfo.bbox
 						});
 					} catch (error) {
 						console.warn(
@@ -687,7 +690,7 @@ class AppState {
 						const fallbackRoute: RouteInfo = {
 							id: String(segmentId), // Ensure string type
 							names: { name: String(segmentId) } // Ensure simple object
-							// Classification data will be undefined (optional)
+							// Classification data and bbox will be undefined (optional)
 						};
 
 						newRoutes.push(fallbackRoute);
@@ -744,12 +747,219 @@ class AppState {
 	}
 
 	/**
+	 * Extract bounding box from a route feature if available
+	 */
+	private extractBboxFromFeature(feature: any): [number, number, number, number] | undefined {
+		if (!feature) return undefined;
+
+		// Try to get bbox from properties first
+		if (feature.properties && feature.properties.bbox) {
+			try {
+				if (typeof feature.properties.bbox === 'string') {
+					// Parse string format: "[139.6554587,35.2064163,139.6685535,35.2205124]"
+					const parsed = JSON.parse(feature.properties.bbox);
+					if (Array.isArray(parsed) && parsed.length === 4) {
+						return [Number(parsed[0]), Number(parsed[1]), Number(parsed[2]), Number(parsed[3])];
+					}
+				} else if (Array.isArray(feature.properties.bbox) && feature.properties.bbox.length === 4) {
+					// Already an array
+					return [
+						Number(feature.properties.bbox[0]),
+						Number(feature.properties.bbox[1]),
+						Number(feature.properties.bbox[2]),
+						Number(feature.properties.bbox[3])
+					];
+				}
+			} catch (error) {
+				console.warn(
+					'Failed to parse bbox from feature properties:',
+					feature.properties.bbox,
+					error
+				);
+			}
+		}
+
+		// Try to calculate bbox from geometry
+		if (feature.geometry) {
+			try {
+				return this.calculateGeometryBounds(feature.geometry);
+			} catch (error) {
+				console.warn('Failed to calculate bbox from geometry:', error);
+			}
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Calculate bounding box from geometry
+	 */
+	private calculateGeometryBounds(geometry: any): [number, number, number, number] | undefined {
+		if (!geometry || !geometry.type) return undefined;
+
+		let coordinates: number[][] = [];
+
+		// Extract coordinates based on geometry type
+		switch (geometry.type) {
+			case 'Point':
+				coordinates = [geometry.coordinates];
+				break;
+			case 'LineString':
+				coordinates = geometry.coordinates;
+				break;
+			case 'Polygon':
+				// Use outer ring
+				coordinates = geometry.coordinates[0];
+				break;
+			case 'MultiPoint':
+				coordinates = geometry.coordinates;
+				break;
+			case 'MultiLineString':
+				coordinates = geometry.coordinates.flat();
+				break;
+			case 'MultiPolygon':
+				// Use all outer rings
+				coordinates = geometry.coordinates.map((polygon: number[][][]) => polygon[0]).flat();
+				break;
+			default:
+				return undefined;
+		}
+
+		if (coordinates.length === 0) return undefined;
+
+		// Calculate bounds
+		let minX = Infinity,
+			minY = Infinity,
+			maxX = -Infinity,
+			maxY = -Infinity;
+
+		for (const [x, y] of coordinates) {
+			if (x < minX) minX = x;
+			if (x > maxX) maxX = x;
+			if (y < minY) minY = y;
+			if (y > maxY) maxY = y;
+		}
+
+		// Return as [minX, minY, maxX, maxY]
+		return [minX, minY, maxX, maxY];
+	}
+
+	/**
+	 * Navigate map to route bbox if available
+	 */
+	navigateToRoute(routeId: string, mapInstance?: any): boolean {
+		const route = this.getRouteInfo(routeId);
+		if (!route || !route.bbox) {
+			console.warn(`Route ${routeId} has no bbox information available`);
+			return false;
+		}
+
+		if (!mapInstance) {
+			console.warn('Map instance not available for navigation');
+			return false;
+		}
+
+		try {
+			const [minX, minY, maxX, maxY] = route.bbox;
+			console.log(`🗺️ Navigating to route ${routeId} bbox:`, route.bbox);
+
+			// Use fitBounds to navigate to the bbox
+			mapInstance.fitBounds(
+				[
+					[minX, minY],
+					[maxX, maxY]
+				], // LngLatBoundsLike format
+				{
+					padding: 50, // Add some padding around the bounds
+					duration: 1000, // Smooth animation
+					essential: true // This animation is essential and cannot be interrupted
+				}
+			);
+
+			return true;
+		} catch (error) {
+			console.error(`Failed to navigate to route ${routeId}:`, error);
+			return false;
+		}
+	}
+
+	/**
+	 * Navigate map to combined bbox of all route segments if available
+	 */
+	navigateToAllRoutes(mapInstance?: any): boolean {
+		if (this._relationSettings.childRoute.length === 0) {
+			console.warn('No route segments to navigate to');
+			return false;
+		}
+
+		// Collect all bboxes
+		const bboxes = this._relationSettings.childRoute
+			.map((route) => route.bbox)
+			.filter((bbox) => bbox !== undefined) as [number, number, number, number][];
+
+		if (bboxes.length === 0) {
+			console.warn('No route segments have bbox information available');
+			return false;
+		}
+
+		if (!mapInstance) {
+			console.warn('Map instance not available for navigation');
+			return false;
+		}
+
+		try {
+			// Calculate combined bounds
+			let minX = Infinity,
+				minY = Infinity,
+				maxX = -Infinity,
+				maxY = -Infinity;
+
+			for (const [bMinX, bMinY, bMaxX, bMaxY] of bboxes) {
+				if (bMinX < minX) minX = bMinX;
+				if (bMinY < minY) minY = bMinY;
+				if (bMaxX > maxX) maxX = bMaxX;
+				if (bMaxY > maxY) maxY = bMaxY;
+			}
+
+			const combinedBbox: [number, number, number, number] = [minX, minY, maxX, maxY];
+			console.log(
+				`🗺️ Navigating to combined route bbox (${bboxes.length} segments):`,
+				combinedBbox
+			);
+
+			// Use fitBounds to navigate to the combined bbox
+			mapInstance.fitBounds(
+				[
+					[minX, minY],
+					[maxX, maxY]
+				], // LngLatBoundsLike format
+				{
+					padding: 50, // Add some padding around the bounds
+					duration: 1000, // Smooth animation
+					essential: true // This animation is essential and cannot be interrupted
+				}
+			);
+
+			return true;
+		} catch (error) {
+			console.error('Failed to navigate to combined route bounds:', error);
+			return false;
+		}
+	}
+
+	/**
 	 * Query route information from map vector tiles for a single segment ID
 	 */
 	private async queryRouteInformation(
 		segmentId: string,
 		mapInstance?: any
-	): Promise<{ names: FeatureNames; class?: string; subclass?: string; category?: string }> {
+	): Promise<{
+		names: FeatureNames;
+		class?: string;
+		subclass?: string;
+		category?: string;
+		bbox?: [number, number, number, number];
+	}> {
 		if (!mapInstance) {
 			throw new Error('Map instance not available for route querying');
 		}
@@ -806,7 +1016,7 @@ class AppState {
 							names.name = segmentId; // Fallback to segment ID
 						}
 
-						// Extract classification data
+						// Extract classification data and bbox
 						const classificationData = {
 							class:
 								typeof targetSegment.properties.class === 'string'
@@ -819,12 +1029,14 @@ class AppState {
 							category:
 								typeof targetSegment.properties.category === 'string'
 									? targetSegment.properties.category
-									: undefined
+									: undefined,
+							bbox: this.extractBboxFromFeature(targetSegment) // Extract bbox if available
 						};
 
 						console.log(`📝   Extracted data for segment ${segmentId} from ${sourceLayer}:`);
 						console.log(`     Names:`, names);
 						console.log(`     Classification:`, classificationData);
+						console.log(`     Bbox:`, classificationData.bbox);
 
 						return { names, ...classificationData };
 					}

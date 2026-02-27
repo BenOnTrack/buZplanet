@@ -10,6 +10,7 @@
 	import { _CATEGORY } from '$lib/assets/class_subclass_category';
 
 	let activeTab = $state('map');
+	let dialogOpen = $state(false); // Control dialog open state
 
 	// Search states for each tab
 	let mapSearchQuery = $state('');
@@ -161,7 +162,7 @@
 	}
 </script>
 
-<Dialog.Root>
+<Dialog.Root bind:open={dialogOpen}>
 	<Dialog.Trigger
 		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-46 left-4 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
 		style="z-index: {Z_INDEX.DIALOG_TRIGGER}"
@@ -750,7 +751,14 @@
 						</Tabs.Content>
 
 						<Tabs.Content value="route" class="space-y-4 pt-3">
-							<RouteFilterSettings bind:searchQuery={routeSearchQuery} {filteredRoutes} />
+							<RouteFilterSettings
+								bind:searchQuery={routeSearchQuery}
+								{filteredRoutes}
+								onRouteNavigated={() => {
+									// Close dialog when user navigates to a route
+									dialogOpen = false;
+								}}
+							/>
 						</Tabs.Content>
 					</div>
 				</Tabs.Root>
