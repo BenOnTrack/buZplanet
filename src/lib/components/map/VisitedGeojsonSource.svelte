@@ -13,12 +13,12 @@
 
 	// AppState is initialized by default in constructor
 
-	// Derived filter based on AppState visited filter settings
+	// Derived filter based on AppState stored filter settings
 	let featuresVisitedFilter = $derived.by(() => {
-		const visitedFilterSettings = appState.filterSettings.visited;
-		const selectedCategories = Array.from(visitedFilterSettings.categories);
+		const storedFilterSettings = appState.filterSettings.stored;
+		const selectedCategories = Array.from(storedFilterSettings.categories);
 
-		console.log('Visited filter applied:', {
+		console.log('Visited filter applied (using stored settings):', {
 			categories: selectedCategories.length
 		});
 

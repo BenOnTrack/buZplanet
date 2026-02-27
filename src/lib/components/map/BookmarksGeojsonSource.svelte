@@ -13,12 +13,12 @@
 
 	// AppState is initialized by default in constructor
 
-	// Derived filter based on AppState bookmark filter settings
+	// Derived filter based on AppState stored filter settings
 	let featuresBookmarkFilter = $derived.by(() => {
-		const bookmarkFilterSettings = appState.filterSettings.bookmark;
-		const selectedCategories = Array.from(bookmarkFilterSettings.categories);
+		const storedFilterSettings = appState.filterSettings.stored;
+		const selectedCategories = Array.from(storedFilterSettings.categories);
 
-		console.log('Bookmark filter applied:', {
+		console.log('Bookmark filter applied (using stored settings):', {
 			categories: selectedCategories.length
 		});
 

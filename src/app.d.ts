@@ -263,18 +263,27 @@ declare global {
 	}
 
 	/**
+	 * Route object with ID, names, and classification
+	 */
+	interface RouteInfo {
+		id: string;
+		names: FeatureNames; // All name properties (name, name:en, etc.)
+		class?: string; // Route class (e.g., 'route')
+		subclass?: string; // Route subclass (e.g., 'ferry', 'train', 'bus')
+		category?: string; // Route category (e.g., 'transportation')
+	}
+
+	/**
 	 * Relation settings for route tracking
 	 */
 	interface RelationSettings {
-		childRoute: string[];
+		childRoute: RouteInfo[];
 	}
 
 	interface AppFilterSettings {
 		map: CategoryFilterSettings;
 		heat: CategoryFilterSettings;
-		bookmark: CategoryFilterSettings;
-		todo: CategoryFilterSettings;
-		visited: CategoryFilterSettings;
+		stored: CategoryFilterSettings;
 	}
 
 	interface AppConfig {

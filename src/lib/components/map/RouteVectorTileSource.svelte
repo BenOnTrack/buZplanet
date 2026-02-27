@@ -9,8 +9,10 @@
 	}
 	let { nameExpression }: Props = $props();
 
-	// Get child route IDs from appState
-	let childRouteIds = $derived.by(() => appState.relationSettings.childRoute);
+	// Get child route IDs from appState - extract IDs from RouteInfo objects
+	let childRouteIds = $derived.by(() =>
+		appState.relationSettings.childRoute.map((route) => route.id)
+	);
 </script>
 
 <VectorTileSource

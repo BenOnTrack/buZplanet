@@ -13,12 +13,12 @@
 
 	// AppState is initialized by default in constructor
 
-	// Derived filter based on AppState todo filter settings
+	// Derived filter based on AppState stored filter settings
 	let featuresTodoFilter = $derived.by(() => {
-		const todoFilterSettings = appState.filterSettings.todo;
-		const selectedCategories = Array.from(todoFilterSettings.categories);
+		const storedFilterSettings = appState.filterSettings.stored;
+		const selectedCategories = Array.from(storedFilterSettings.categories);
 
-		console.log('Todo filter applied:', {
+		console.log('Todo filter applied (using stored settings):', {
 			categories: selectedCategories.length
 		});
 

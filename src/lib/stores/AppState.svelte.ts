@@ -14,13 +14,7 @@ const DEFAULT_FILTER_SETTINGS: AppFilterSettings = {
 	heat: {
 		categories: new Set<string>() // Empty by default
 	},
-	bookmark: {
-		categories: new Set(_CATEGORY)
-	},
-	todo: {
-		categories: new Set(_CATEGORY)
-	},
-	visited: {
+	stored: {
 		categories: new Set(_CATEGORY)
 	}
 };
@@ -325,11 +319,12 @@ class AppState {
 				this._language = result.value.language || DEFAULT_CONFIG.language;
 
 				// Load relation settings
-				if (result.value.relationSettings) {
+				if (
+					result.value.relationSettings &&
+					Array.isArray(result.value.relationSettings.childRoute)
+				) {
 					this._relationSettings = {
-						childRoute: Array.isArray(result.value.relationSettings.childRoute)
-							? result.value.relationSettings.childRoute
-							: []
+						childRoute: result.value.relationSettings.childRoute
 					};
 				} else {
 					this._relationSettings = { ...DEFAULT_RELATION_SETTINGS };
@@ -340,52 +335,18 @@ class AppState {
 					// Existing config has filterSettings, load them with conversion from arrays to Sets
 					console.log('📂 Loading existing filterSettings from storage');
 
-					// Check if this is an old format with classes/subclasses or new format with just categories
-					if (
-						result.value.filterSettings.map?.classes ||
-						result.value.filterSettings.map?.subclasses
-					) {
-						// Old format - migrate to new format (categories only)
-						console.log('🔄 Migrating old filter format to new categories-only format');
-						this._filterSettings = {
-							map: {
-								categories: new Set(result.value.filterSettings.map?.categories || _CATEGORY)
-							},
-							heat: {
-								categories: new Set(result.value.filterSettings.heat?.categories || [])
-							},
-							bookmark: {
-								categories: new Set(result.value.filterSettings.bookmark?.categories || _CATEGORY)
-							},
-							todo: {
-								categories: new Set(result.value.filterSettings.todo?.categories || _CATEGORY)
-							},
-							visited: {
-								categories: new Set(result.value.filterSettings.visited?.categories || _CATEGORY)
-							}
-						};
-						// Save the migrated config
-						this.saveConfig();
-					} else {
-						// New format - load categories directly
-						this._filterSettings = {
-							map: {
-								categories: new Set(result.value.filterSettings.map?.categories || _CATEGORY)
-							},
-							heat: {
-								categories: new Set(result.value.filterSettings.heat?.categories || [])
-							},
-							bookmark: {
-								categories: new Set(result.value.filterSettings.bookmark?.categories || _CATEGORY)
-							},
-							todo: {
-								categories: new Set(result.value.filterSettings.todo?.categories || _CATEGORY)
-							},
-							visited: {
-								categories: new Set(result.value.filterSettings.visited?.categories || _CATEGORY)
-							}
-						};
-					}
+					// Load filterSettings in new format
+					this._filterSettings = {
+						map: {
+							categories: new Set(result.value.filterSettings.map?.categories || _CATEGORY)
+						},
+						heat: {
+							categories: new Set(result.value.filterSettings.heat?.categories || [])
+						},
+						stored: {
+							categories: new Set(result.value.filterSettings.stored?.categories || _CATEGORY)
+						}
+					};
 				} else {
 					// Old config without filterSettings - initialize with defaults (all selected)
 					console.log(
@@ -403,6 +364,12 @@ class AppState {
 				console.log('🔍 Loaded filter settings:', {
 					map: {
 						categories: this._filterSettings.map.categories.size
+					},
+					heat: {
+						categories: this._filterSettings.heat.categories.size
+					},
+					stored: {
+						categories: this._filterSettings.stored.categories.size
 					}
 				});
 			} else {
@@ -487,18 +454,19 @@ class AppState {
 					heat: {
 						categories: Array.from(this._filterSettings.heat.categories)
 					},
-					bookmark: {
-						categories: Array.from(this._filterSettings.bookmark.categories)
-					},
-					todo: {
-						categories: Array.from(this._filterSettings.todo.categories)
-					},
-					visited: {
-						categories: Array.from(this._filterSettings.visited.categories)
+					stored: {
+						categories: Array.from(this._filterSettings.stored.categories)
 					}
 				},
 				relationSettings: {
-					childRoute: [...this._relationSettings.childRoute]
+					// Ensure route objects are plain and cloneable
+					childRoute: this._relationSettings.childRoute.map((route) => ({
+						id: String(route.id), // Ensure string
+						names: JSON.parse(JSON.stringify(route.names)), // Deep clone names object
+						class: route.class ? String(route.class) : undefined, // Ensure string or undefined
+						subclass: route.subclass ? String(route.subclass) : undefined,
+						category: route.category ? String(route.category) : undefined
+					}))
 				}
 			};
 
@@ -647,72 +615,270 @@ class AppState {
 	}
 
 	/**
-	 * Add childId to route (parsing X-Y-Z format)
+	 * Add or toggle a route in the relation settings
+	 * If compound ID (e.g., "33046520-314104655"), splits into individual route segments
+	 * If the route exists (by ID), remove it; if not, add it with route information
 	 */
-	addChildIdToRoute(childId: string): void {
-		// Parse childId: split by "-" into individual parts
-		const parts = childId.split('-').filter((part) => part.length > 0);
+	async toggleRouteInRelation(routeId: string, mapInstance?: any): Promise<void> {
+		console.log(`🔄 Toggling route in relation: ${routeId}`);
 
-		console.log(`Adding childId "${childId}" parsed as:`, parts);
+		// Split compound route ID into individual segment IDs
+		const segmentIds = routeId.split('-').filter((id) => id.trim().length > 0);
+		console.log(`🔍 Split into ${segmentIds.length} segments:`, segmentIds);
 
-		// Add all parts to the route
-		const newRoute = [...this._relationSettings.childRoute, ...parts];
+		const currentRoutes = this._relationSettings.childRoute;
 
-		this._relationSettings = {
-			...this._relationSettings,
-			childRoute: newRoute
-		};
+		// Check if ALL segments exist in current routes
+		const allSegmentsExist = segmentIds.every((segmentId) =>
+			currentRoutes.some((route) => route.id === segmentId)
+		);
 
-		console.log('Updated childRoute:', newRoute);
-		this.saveConfig();
-	}
+		if (allSegmentsExist) {
+			// Remove ALL segments from the route
+			console.log(`❌ Removing all segments from relation:`, segmentIds);
+			const newRoutes = currentRoutes.filter((route) => !segmentIds.includes(route.id));
 
-	/**
-	 * Toggle childId in route - if exists, remove ALL parts, if not exists, add it
-	 */
-	toggleChildIdInRoute(childId: string): void {
-		// Parse childId: split by "-" into individual parts
-		const parts = childId.split('-').filter((part) => part.length > 0);
-		const currentRoute = this._relationSettings.childRoute;
-
-		console.log(`Toggling childId "${childId}" parsed as:`, parts);
-		console.log('Current route:', currentRoute);
-
-		// Check if ALL parts of the childId exist anywhere in the current route
-		const allPartsExist = parts.every((part) => currentRoute.includes(part));
-
-		let newRoute: string[];
-
-		if (allPartsExist) {
-			// Remove ALL parts of the childId from the route
-			newRoute = currentRoute.filter((routePart) => !parts.includes(routePart));
-			console.log('All parts exist - removing ALL parts:', parts);
-			console.log('Filtered route:', newRoute);
+			this._relationSettings = {
+				...this._relationSettings,
+				childRoute: newRoutes
+			};
 		} else {
-			// Add the parts to the route (only if they don't already exist)
-			newRoute = [...currentRoute];
-			parts.forEach((part) => {
-				if (!newRoute.includes(part)) {
-					newRoute.push(part);
+			// Add missing segments to the route
+			console.log(`➕ Adding missing segments to relation`);
+
+			const newRoutes = [...currentRoutes];
+
+			// Process each segment individually
+			for (const segmentId of segmentIds) {
+				// Check if this segment already exists
+				const segmentExists = newRoutes.some((route) => route.id === segmentId);
+
+				if (!segmentExists) {
+					console.log(`🔍 Querying segment: ${segmentId}`);
+
+					try {
+						// Query the map to get route information for this segment
+						const routeInfo = await this.queryRouteInformation(segmentId, mapInstance);
+
+						const newRoute: RouteInfo = {
+							id: String(segmentId), // Ensure string type
+							names: this.cleanNamesObject(routeInfo.names || { name: segmentId }), // Clean the names object
+							class: routeInfo.class, // Store classification
+							subclass: routeInfo.subclass,
+							category: routeInfo.category
+						};
+
+						newRoutes.push(newRoute);
+						console.log(`✅ Added segment ${segmentId} with full data:`, {
+							names: routeInfo.names,
+							classification: {
+								class: routeInfo.class,
+								subclass: routeInfo.subclass,
+								category: routeInfo.category
+							}
+						});
+					} catch (error) {
+						console.warn(
+							`⚠️ Could not query route information for segment ${segmentId}, using fallback data:`,
+							error
+						);
+
+						// Fallback: add segment with minimal data
+						const fallbackRoute: RouteInfo = {
+							id: String(segmentId), // Ensure string type
+							names: { name: String(segmentId) } // Ensure simple object
+							// Classification data will be undefined (optional)
+						};
+
+						newRoutes.push(fallbackRoute);
+						console.log(`⚠️ Added fallback segment ${segmentId}`);
+					}
+				} else {
+					console.log(`ℹ️ Segment ${segmentId} already exists in routes`);
 				}
-			});
-			console.log('Some/all parts missing - adding missing parts:', newRoute);
+			}
+
+			this._relationSettings = {
+				...this._relationSettings,
+				childRoute: newRoutes
+			};
 		}
 
-		this._relationSettings = {
-			...this._relationSettings,
-			childRoute: newRoute
-		};
-
-		console.log('Updated childRoute:', newRoute);
+		console.log(`📋 Updated childRoute (${this._relationSettings.childRoute.length} segments):`);
+		this._relationSettings.childRoute.forEach((route, index) => {
+			const classification = [route.class, route.subclass, route.category]
+				.filter(Boolean)
+				.join(' → ');
+			console.log(
+				`  ${index + 1}. ${route.id}: ${route.names.name || 'unnamed'}${classification ? ` (${classification})` : ''}`
+			);
+		});
 		this.saveConfig();
 	}
 
 	/**
-	 * Get color mapping for a specific category
+	 * Clean names object to ensure it's IndexedDB-compatible
 	 */
-	getCategoryColor(categoryKey: string): string {
-		return this._colorMappings[categoryKey as keyof ColorMappings] || 'neutral';
+	private cleanNamesObject(names: any): FeatureNames {
+		const cleanNames: FeatureNames = {};
+
+		if (names && typeof names === 'object') {
+			for (const [key, value] of Object.entries(names)) {
+				// Only keep string values and name-like keys
+				if (
+					(key === 'name' || key.startsWith('name:')) &&
+					typeof value === 'string' &&
+					value.trim()
+				) {
+					cleanNames[key] = String(value).trim();
+				}
+			}
+		}
+
+		// Ensure we have at least one name
+		if (Object.keys(cleanNames).length === 0) {
+			cleanNames.name = 'Unnamed Route';
+		}
+
+		return cleanNames;
+	}
+
+	/**
+	 * Query route information from map vector tiles for a single segment ID
+	 */
+	private async queryRouteInformation(
+		segmentId: string,
+		mapInstance?: any
+	): Promise<{ names: FeatureNames; class?: string; subclass?: string; category?: string }> {
+		if (!mapInstance) {
+			throw new Error('Map instance not available for route querying');
+		}
+
+		try {
+			console.log(`🔍 Querying route information for segment ID: ${segmentId}`);
+
+			// Define all possible route source layers
+			const routeSourceLayers = [
+				'route_transportation',
+				'route_foot',
+				'route_bicycle',
+				'route_water'
+			];
+
+			// Try each source layer until we find the segment
+			for (const sourceLayer of routeSourceLayers) {
+				try {
+					console.log(`🔍   Searching in source layer: ${sourceLayer}`);
+
+					// Query the route source at zoom level 14 where route features are available
+					const queryOptions = {
+						zoom: 14,
+						sourceLayer: sourceLayer
+					};
+
+					const routeFeatures = mapInstance.querySourceFeatures('route', queryOptions);
+					console.log(`📊   Found ${routeFeatures.length} features in ${sourceLayer}`);
+
+					// Find the specific segment by ID
+					const targetSegment = routeFeatures.find(
+						(feature: any) => String(feature.id) === String(segmentId)
+					);
+
+					if (targetSegment && targetSegment.properties) {
+						console.log(
+							`✅   Found segment ${segmentId} in ${sourceLayer}:`,
+							targetSegment.properties
+						);
+
+						// Extract all name properties (name, name:en, name:fr, etc.)
+						const names: FeatureNames = {};
+
+						for (const [key, value] of Object.entries(targetSegment.properties)) {
+							if (key === 'name' || key.startsWith('name:')) {
+								if (typeof value === 'string' && value.trim()) {
+									names[key] = value.trim();
+								}
+							}
+						}
+
+						// Ensure we have at least one name
+						if (Object.keys(names).length === 0) {
+							names.name = segmentId; // Fallback to segment ID
+						}
+
+						// Extract classification data
+						const classificationData = {
+							class:
+								typeof targetSegment.properties.class === 'string'
+									? targetSegment.properties.class
+									: undefined,
+							subclass:
+								typeof targetSegment.properties.subclass === 'string'
+									? targetSegment.properties.subclass
+									: undefined,
+							category:
+								typeof targetSegment.properties.category === 'string'
+									? targetSegment.properties.category
+									: undefined
+						};
+
+						console.log(`📝   Extracted data for segment ${segmentId} from ${sourceLayer}:`);
+						console.log(`     Names:`, names);
+						console.log(`     Classification:`, classificationData);
+
+						return { names, ...classificationData };
+					}
+
+					console.log(
+						`❌   Segment ${segmentId} not found in ${sourceLayer} (${routeFeatures.length} features checked)`
+					);
+				} catch (layerError) {
+					console.warn(
+						`⚠️   Error querying segment ${segmentId} in layer ${sourceLayer}:`,
+						layerError
+					);
+					// Continue to next layer
+				}
+			}
+
+			// If we get here, the segment wasn't found in any source layer
+			console.warn(`❌ Segment ${segmentId} not found in any source layer`);
+			throw new Error(`Segment ${segmentId} not found in any source layer`);
+		} catch (error) {
+			console.error('❌ Error querying route information:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Check if a route ID is currently in the relation settings
+	 */
+	isRouteInRelation(routeId: string): boolean {
+		return this._relationSettings.childRoute.some((route) => route.id === routeId);
+	}
+
+	/**
+	 * Get route information by ID
+	 */
+	getRouteInfo(routeId: string): RouteInfo | undefined {
+		return this._relationSettings.childRoute.find((route) => route.id === routeId);
+	}
+
+	/**
+	 * Remove a route from relation settings by ID
+	 */
+	removeRouteFromRelation(routeId: string): void {
+		const currentRoutes = this._relationSettings.childRoute;
+		const newRoutes = currentRoutes.filter((route) => route.id !== routeId);
+
+		if (newRoutes.length !== currentRoutes.length) {
+			this._relationSettings = {
+				...this._relationSettings,
+				childRoute: newRoutes
+			};
+			console.log(`Route ${routeId} removed from relation settings`);
+			this.saveConfig();
+		}
 	}
 
 	/**
@@ -774,14 +940,8 @@ class AppState {
 				heat: {
 					categories: new Set(config.filterSettings.heat?.categories || [])
 				},
-				bookmark: {
-					categories: new Set(config.filterSettings.bookmark?.categories || _CATEGORY)
-				},
-				todo: {
-					categories: new Set(config.filterSettings.todo?.categories || _CATEGORY)
-				},
-				visited: {
-					categories: new Set(config.filterSettings.visited?.categories || _CATEGORY)
+				stored: {
+					categories: new Set(config.filterSettings.stored?.categories || _CATEGORY)
 				}
 			};
 		} else {
@@ -789,11 +949,9 @@ class AppState {
 		}
 
 		// Handle relation settings import
-		if (config.relationSettings) {
+		if (config.relationSettings && Array.isArray(config.relationSettings.childRoute)) {
 			this._relationSettings = {
-				childRoute: Array.isArray(config.relationSettings.childRoute)
-					? config.relationSettings.childRoute
-					: []
+				childRoute: config.relationSettings.childRoute as RouteInfo[]
 			};
 		} else {
 			this._relationSettings = { ...DEFAULT_RELATION_SETTINGS };
@@ -807,6 +965,13 @@ class AppState {
 	 */
 	destroy(): void {
 		// Effects clean up automatically in Svelte 5
+	}
+
+	/**
+	 * Get color mapping for a specific category
+	 */
+	getCategoryColor(categoryKey: string): string {
+		return this._colorMappings[categoryKey as keyof ColorMappings] || 'neutral';
 	}
 }
 

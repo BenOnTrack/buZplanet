@@ -157,13 +157,11 @@
 		const relationData = (feature ? extractRelationData(feature) : null) || featureStatus.relation;
 		if (!relationData || !relationData.childId) return false;
 
-		// Parse childId: split by "-" into individual parts
-		const parts = relationData.childId.split('-').filter((part) => part.length > 0);
-		const currentRoute = appState.relationSettings.childRoute;
+		// Split the compound childId into individual segment IDs
+		const segmentIds = relationData.childId.split('-').filter((id) => id.trim().length > 0);
 
-		// Check if ALL parts of the childId exist anywhere in the current route
-		// (not necessarily at the end, but anywhere in the route)
-		return parts.every((part) => currentRoute.includes(part));
+		// Check if AT LEAST ONE segment exists in our relation settings
+		return segmentIds.some((segmentId) => appState.isRouteInRelation(segmentId));
 	}
 
 	// Get feature ID (features always have unique IDs)
@@ -420,10 +418,45 @@
 			return;
 		}
 
-		console.log('Relation button clicked - toggling childId:', relationData.childId);
+		console.log('Relation button clicked - managing segments for childId:', relationData.childId);
 
-		// Toggle the childId in the route using AppState
-		appState.toggleChildIdInRoute(relationData.childId);
+		// Split the compound childId into individual segment IDs
+		const segmentIds = relationData.childId.split('-').filter((id) => id.trim().length > 0);
+		console.log('Compound ID split into segments:', segmentIds);
+
+		// Check current state: is at least one segment in the relation?
+		const hasAnySegments = segmentIds.some((segmentId) => appState.isRouteInRelation(segmentId));
+
+		if (hasAnySegments) {
+			// Current state is TRUE → Remove ALL segments from this compound route
+			console.log('🗑️ Removing ALL segments from relation:', segmentIds);
+
+			for (const segmentId of segmentIds) {
+				if (appState.isRouteInRelation(segmentId)) {
+					console.log(`  Removing segment: ${segmentId}`);
+					appState.removeRouteFromRelation(segmentId);
+				} else {
+					console.log(`  Segment ${segmentId} not in relation (already removed)`);
+				}
+			}
+		} else {
+			// Current state is FALSE → Add ALL segments from this compound route
+			console.log('➕ Adding ALL segments to relation:', segmentIds);
+
+			// Get the map instance from MapControl
+			const mapInstance = (
+				await import('$lib/stores/MapControl.svelte')
+			).mapControl.getMapInstance();
+
+			// Use the existing toggleRouteInRelation method which will add missing segments
+			// We pass the compound ID, and the method will split and add only missing segments
+			try {
+				await appState.toggleRouteInRelation(relationData.childId, mapInstance);
+			} catch (error) {
+				console.error('Error adding route segments to relation:', error);
+				// Show user-friendly error message if needed
+			}
+		}
 	}
 
 	function handleUpdate(feature: MapGeoJSONFeature | null) {
@@ -571,7 +604,7 @@
 						{/if}
 					</Drawer.Title>
 					<!-- Custom close button instead of Drawer.Close -->
-					<!-- <button
+					<button
 						class="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:bg-gray-100 focus:text-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 						onclick={() => {
 							open = false;
@@ -586,7 +619,7 @@
 						aria-label="Close feature details drawer"
 					>
 						<PropertyIcon key={'description'} value={'x'} size={20} class="text-current" />
-					</button> -->
+					</button>
 				</div>
 
 				<!-- Fixed height container for feature name to maintain consistent spacing -->
