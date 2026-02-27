@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '$lib/firebase';
 import { authState } from '$lib/stores/auth.svelte';
+import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 
 /**
  * Service for managing user profiles and social features
@@ -541,8 +542,7 @@ export class UserService {
 
 		if ((type === 'story_created' || type === 'story_updated') && data.storyId) {
 			try {
-				// Import storiesDB dynamically to avoid circular imports
-				const { storiesDB } = await import('$lib/stores/StoriesDB.svelte');
+				// Use static import since storiesDB is already imported
 				const story = await storiesDB.getStoryById(data.storyId);
 				if (story) {
 					// Activity is public only if the story is public

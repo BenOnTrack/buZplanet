@@ -6,6 +6,7 @@
 	import { formatFeatureProperty } from '$lib/utils/text-formatting.js';
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { appState } from '$lib/stores/AppState.svelte';
+	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import BookmarkDialog from '$lib/components/dialogs/BookmarkDialog.svelte';
 	import OpeningHoursDisplay from '$lib/components/ui/OpeningHoursDisplay.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
@@ -444,9 +445,7 @@
 			console.log('➕ Adding ALL segments to relation:', segmentIds);
 
 			// Get the map instance from MapControl
-			const mapInstance = (
-				await import('$lib/stores/MapControl.svelte')
-			).mapControl.getMapInstance();
+			const mapInstance = mapControl.getMapInstance();
 
 			// Use the existing toggleRouteInRelation method which will add missing segments
 			// We pass the compound ID, and the method will split and add only missing segments

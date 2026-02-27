@@ -4,8 +4,6 @@ import {
 	initializeFirestore,
 	type Firestore,
 	connectFirestoreEmulator,
-	enableNetwork,
-	disableNetwork,
 	persistentLocalCache,
 	persistentMultipleTabManager
 } from 'firebase/firestore';

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Dialog, Label, Separator } from 'bits-ui';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
+	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 
 	let {
@@ -70,9 +71,6 @@
 
 		try {
 			isSubmitting = true;
-
-			// Import featuresDB here to avoid circular imports
-			const { featuresDB } = await import('$lib/stores/FeaturesDB.svelte');
 
 			// Ensure database is initialized with better error handling
 			if (!featuresDB.initialized) {

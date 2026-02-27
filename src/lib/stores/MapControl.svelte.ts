@@ -1,4 +1,5 @@
 import type { Map as MapStore, MapGeoJSONFeature, LngLatBoundsLike } from 'svelte-maplibre';
+import { searchControl } from '$lib/stores/SearchControl.svelte';
 
 /**
  * Map Control store for managing map interactions and selected features
@@ -482,19 +483,15 @@ class MapControl {
 	 * Auto-abort search when user selects a result (performance optimization)
 	 * This runs in the background and doesn't block the UI
 	 */
-	private autoAbortSearchOnSelection() {
-		// Import SearchControl dynamically to avoid circular dependencies
-		import('$lib/stores/SearchControl.svelte')
-			.then(({ searchControl }) => {
-				return searchControl.autoAbortSearchOnSelection();
-			})
-			.then(() => {
-				console.log('🎯 Search auto-cancelled after user selection - performance optimized!');
-			})
-			.catch((error) => {
-				// Silently handle errors - this is just an optimization
-				console.debug('Search auto-cancel completed (or no search was running):', error);
-			});
+	private async autoAbortSearchOnSelection() {
+		try {
+			// Use static import since searchControl is already imported
+			await searchControl.autoAbortSearchOnSelection();
+			console.log('🎯 Search auto-cancelled after user selection - performance optimized!');
+		} catch (error) {
+			// Silently handle errors - this is just an optimization
+			console.debug('Search auto-cancel completed (or no search was running):', error);
+		}
 	}
 
 	/**

@@ -1,5 +1,6 @@
 import { userService } from '$lib/services/userService';
 import { authState } from '$lib/stores/auth.svelte';
+import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 import type { Unsubscribe } from 'firebase/firestore';
 
 class UserStore {
@@ -187,9 +188,8 @@ class UserStore {
 
 			if (followingChanged) {
 				console.log('🔄 Following list changed, refreshing followed stories sync');
-				// Import storiesDB dynamically to avoid circular imports
+				// Use static import since storiesDB is already imported
 				try {
-					const { storiesDB } = await import('$lib/stores/StoriesDB.svelte');
 					await storiesDB.refreshFollowedStoriesSync();
 				} catch (syncError) {
 					console.error('Error refreshing followed stories sync:', syncError);

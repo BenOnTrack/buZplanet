@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import { authState } from '$lib/stores/auth.svelte';
 import { db } from '$lib/firebase';
 import { userStore } from '$lib/stores/UserStore.svelte';
+import { userService } from '$lib/services/userService';
 import type { User } from 'firebase/auth';
 import {
 	collection,
@@ -2803,7 +2804,7 @@ class StoriesDB {
 			if (!followedUser) {
 				// If not in following list yet, fetch the profile directly
 				console.log('🔍 User not in following list yet, fetching profile directly...');
-				const { userService } = await import('$lib/services/userService');
+				// Use static import since userService is already imported
 				const profile = await userService.getProfile(followedUserId);
 				if (!profile) {
 					console.error('Failed to get profile for newly followed user');
