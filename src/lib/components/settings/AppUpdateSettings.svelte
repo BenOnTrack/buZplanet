@@ -34,6 +34,90 @@
 	async function handleCheckForUpdates() {
 		await swManager.checkForUpdates();
 	}
+
+	// Cache management functions
+	let isCleaningCaches = $state(false);
+	let cacheActionResult = $state<string>('');
+
+	async function handleCleanupOldCaches() {
+		isCleaningCaches = true;
+		cacheActionResult = '';
+		try {
+			const deletedCount = await swManager.cleanupOldCaches();
+			cacheActionResult = `Cleaned up ${deletedCount} old caches`;
+		} catch (error) {
+			console.error('Failed to cleanup caches:', error);
+			cacheActionResult = `Error: ${error.message}`;
+		} finally {
+			isCleaningCaches = false;
+		}
+	}
+
+	async function handleDeleteAllCaches() {
+		if (
+			!confirm(
+				'Are you sure you want to delete ALL caches? This will force a complete app reload and re-download all assets.'
+			)
+		) {
+			return;
+		}
+
+		isCleaningCaches = true;
+		cacheActionResult = '';
+		try {
+			if (!('caches' in window)) {
+				throw new Error('Cache API not supported');
+			}
+
+			const cacheNames = await caches.keys();
+			const deletePromises = cacheNames.map((name) => caches.delete(name));
+			await Promise.all(deletePromises);
+
+			cacheActionResult = `Deleted ${cacheNames.length} caches. Reloading app...`;
+
+			// Force reload after a short delay to show the message
+			setTimeout(() => {
+				window.location.reload();
+			}, 1500);
+		} catch (error) {
+			console.error('Failed to delete all caches:', error);
+			cacheActionResult = `Error: ${error.message}`;
+		} finally {
+			isCleaningCaches = false;
+		}
+	}
+
+	async function handleForceReload() {
+		if (
+			!confirm('This will unregister the service worker and force a complete reload. Continue?')
+		) {
+			return;
+		}
+
+		isCleaningCaches = true;
+		try {
+			// Unregister all service workers
+			if ('serviceWorker' in navigator) {
+				const registrations = await navigator.serviceWorker.getRegistrations();
+				for (const registration of registrations) {
+					await registration.unregister();
+				}
+			}
+
+			// Clear all caches
+			if ('caches' in window) {
+				const cacheNames = await caches.keys();
+				await Promise.all(cacheNames.map((name) => caches.delete(name)));
+			}
+
+			// Force reload
+			window.location.reload();
+		} catch (error) {
+			console.error('Force reload failed:', error);
+			cacheActionResult = `Error: ${error.message}`;
+			isCleaningCaches = false;
+		}
+	}
 </script>
 
 <div class="space-y-6">
@@ -209,6 +293,108 @@
 				</div>
 			</div>
 		{/if}
+
+		<!-- Cache Management -->
+		<div class="rounded-lg border-l-4 border-l-orange-500 bg-orange-50 p-3 dark:bg-orange-900/20">
+			<h5 class="mb-2 text-sm font-semibold text-orange-900 dark:text-orange-100">
+				Cache Management
+			</h5>
+			<p class="mb-3 text-xs text-orange-800 dark:text-orange-200">
+				Use these tools if you're experiencing app loading issues or need to force a fresh start.
+			</p>
+
+			<!-- Cache Action Result -->
+			{#if cacheActionResult}
+				<div
+					class="mb-3 rounded bg-white/50 p-2 text-xs text-orange-800 dark:bg-black/20 dark:text-orange-200"
+				>
+					{cacheActionResult}
+				</div>
+			{/if}
+
+			<div class="flex flex-wrap gap-2">
+				<!-- Cleanup Old Caches -->
+				<button
+					onclick={handleCleanupOldCaches}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							handleCleanupOldCaches();
+						}
+					}}
+					disabled={isCleaningCaches}
+					class="rounded-md bg-yellow-500 px-3 py-1.5 text-xs text-white transition-colors hover:bg-yellow-600 focus-visible:ring-2 focus-visible:ring-yellow-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+					title="Remove old cached versions while keeping the current one"
+				>
+					{#if isCleaningCaches}
+						<PropertyIcon
+							key={'description'}
+							value={'loading'}
+							size={12}
+							class="mr-1 inline animate-spin"
+						/>
+						Cleaning...
+					{:else}
+						<PropertyIcon key={'description'} value={'trash'} size={12} class="mr-1 inline" />
+						Cleanup Old
+					{/if}
+				</button>
+
+				<!-- Delete All Caches -->
+				<button
+					onclick={handleDeleteAllCaches}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							handleDeleteAllCaches();
+						}
+					}}
+					disabled={isCleaningCaches}
+					class="rounded-md bg-red-500 px-3 py-1.5 text-xs text-white transition-colors hover:bg-red-600 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+					title="Delete ALL caches and force app reload (use if app won't load)"
+				>
+					{#if isCleaningCaches}
+						<PropertyIcon
+							key={'description'}
+							value={'loading'}
+							size={12}
+							class="mr-1 inline animate-spin"
+						/>
+						Deleting...
+					{:else}
+						<PropertyIcon key={'description'} value={'x'} size={12} class="mr-1 inline" />
+						Delete All
+					{/if}
+				</button>
+
+				<!-- Force Reload -->
+				<button
+					onclick={handleForceReload}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							handleForceReload();
+						}
+					}}
+					disabled={isCleaningCaches}
+					class="rounded-md bg-purple-500 px-3 py-1.5 text-xs text-white transition-colors hover:bg-purple-600 focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+					title="Unregister service worker and force complete reload"
+				>
+					{#if isCleaningCaches}
+						<PropertyIcon
+							key={'description'}
+							value={'loading'}
+							size={12}
+							class="mr-1 inline animate-spin"
+						/>
+						Reloading...
+					{:else}
+						<PropertyIcon key={'description'} value={'refresh'} size={12} class="mr-1 inline" />
+						Force Reload
+					{/if}
+				</button>
+			</div>
+		</div>
 
 		<!-- Version Info -->
 		<div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">

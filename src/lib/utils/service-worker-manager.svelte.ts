@@ -72,6 +72,12 @@ export class ServiceWorkerManager {
 			// Get current version from service worker
 			await this.getCurrentVersion();
 
+			// Clean up old caches to prevent conflicts
+			const cleanedCaches = await this.cleanupOldCaches();
+			if (cleanedCaches > 0) {
+				console.log(`Cleaned up ${cleanedCaches} old caches during initialization`);
+			}
+
 			// Check for updates only on app startup
 			await this.checkForUpdates();
 
@@ -331,6 +337,64 @@ export class ServiceWorkerManager {
 		} catch (error) {
 			console.warn('Failed to check cache status:', error);
 			return false;
+		}
+	}
+
+	/**
+	 * Manually clean up old service worker caches
+	 * This can help resolve issues with multiple cache instances
+	 */
+	async cleanupOldCaches(): Promise<number> {
+		if (!browser) return 0;
+
+		try {
+			const cacheNames = await caches.keys();
+			console.log('Found caches before cleanup:', cacheNames);
+
+			// Get current version to preserve the right cache
+			let currentCacheName = null;
+			if (this.registration?.active) {
+				// Try to get current cache name from service worker
+				const messageChannel = new MessageChannel();
+				const promise = new Promise<string>((resolve) => {
+					messageChannel.port1.onmessage = (event) => {
+						if (event.data.type === 'VERSION_INFO') {
+							resolve(`cache-${event.data.version}`);
+						}
+					};
+					setTimeout(() => resolve(''), 2000);
+				});
+
+				this.registration.active.postMessage({ type: 'GET_VERSION' }, [messageChannel.port2]);
+				currentCacheName = await promise;
+			}
+
+			// Delete all cache- prefixed caches except the current one
+			const cachesToDelete = cacheNames.filter(
+				(name) => name.startsWith('cache-') && name !== currentCacheName
+			);
+
+			console.log('Deleting caches:', cachesToDelete);
+
+			const deletePromises = cachesToDelete.map(async (cacheName) => {
+				try {
+					const deleted = await caches.delete(cacheName);
+					console.log(`Cache ${cacheName} deleted:`, deleted);
+					return deleted;
+				} catch (error) {
+					console.error(`Failed to delete cache ${cacheName}:`, error);
+					return false;
+				}
+			});
+
+			const results = await Promise.all(deletePromises);
+			const deletedCount = results.filter(Boolean).length;
+
+			console.log(`Cleaned up ${deletedCount} old caches`);
+			return deletedCount;
+		} catch (error) {
+			console.error('Cache cleanup failed:', error);
+			return 0;
 		}
 	}
 
