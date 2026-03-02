@@ -104,7 +104,7 @@
 			description = '';
 			content = [];
 			categories = [];
-			isPublic = false;
+			isPublic = true;
 			activeTab = 'content';
 		}
 		// Note: hasUnsavedChanges is now derived, no need to reset

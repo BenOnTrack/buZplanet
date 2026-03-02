@@ -15,6 +15,7 @@
 	import { page } from '$app/state';
 	import { createMapStyle } from '$lib/utils/map/mapStyle.js';
 	import { appState } from '$lib/stores/AppState.svelte';
+	import { POI_SOURCE_LAYERS, POIROUTE_SOURCE_LAYERS } from '$lib/constants';
 	import BasemapVectorTileSource from '$lib/components/map/BasemapVectorTileSource.svelte';
 	import BuildingVectorTileSource from '$lib/components/map/BuildingVectorTileSource.svelte';
 	import TransportationVectorTileSource from '$lib/components/map/TransportationVectorTileSource.svelte';
@@ -550,14 +551,51 @@
 					if (!mapInstance) return;
 					const features = mapInstance.queryRenderedFeatures(e.point);
 
-					// Get only the top feature (first in array)
-					const topFeature = features.length > 0 ? features[0] : null;
+					// Filter features to only include POI layers and user data sources
+					const clickableFeatures = features.filter((feature) => {
+						// Allow clicking on user data sources (bookmarks, visited, todo)
+						const userDataSources = ['bookmarksSource', 'visitedSource', 'todoSource'];
+						if (userDataSources.includes(feature.source)) {
+							return true;
+						}
+
+						// Allow clicking only on POI source layers
+						if (feature.source === 'poi' && feature.sourceLayer) {
+							return POI_SOURCE_LAYERS.includes(feature.sourceLayer);
+						}
+
+						if (feature.source === 'poiRoute' && feature.sourceLayer) {
+							return POIROUTE_SOURCE_LAYERS.includes(feature.sourceLayer);
+						}
+
+						// Allow search results and category filter results
+						if (
+							feature.source === 'searchResultsSource' ||
+							feature.source === 'categoryFilterSource'
+						) {
+							return true;
+						}
+
+						// Deny all other sources (basemap, transportation, buildings, etc.)
+						return false;
+					});
+
+					console.log(
+						`🖱️ Click: Found ${features.length} total features, ${clickableFeatures.length} clickable POI features`
+					);
+
+					// Get only the top clickable feature (first in filtered array)
+					const topFeature = clickableFeatures.length > 0 ? clickableFeatures[0] : null;
 
 					// Update selected feature using MapControl
 					if (topFeature) {
+						console.log(
+							`✅ Clicking on POI feature: ${topFeature.source}${topFeature.sourceLayer ? '/' + topFeature.sourceLayer : ''}`
+						);
 						await handleFeatureClick(topFeature);
 					} else {
-						// Close drawer when clicking on empty area
+						// Close drawer when clicking on empty area or non-POI features
+						console.log('📍 Click on non-POI area - closing drawer');
 						mapControl.clearSelection();
 					}
 				});

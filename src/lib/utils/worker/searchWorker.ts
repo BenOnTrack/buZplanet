@@ -318,7 +318,7 @@ async function searchFeatures(
 	}
 
 	try {
-		// Define POI layers to search
+		// POI source layers to search (defined here as workers can't import from constants)
 		const POI_SOURCE_LAYERS = [
 			'poi_attraction',
 			'poi_education',

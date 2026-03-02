@@ -1,3 +1,26 @@
+export const POIROUTE_SOURCE_LAYERS = ['poi_route'];
+
+export const ROUTE_SOURCE_LAYERS = [
+	'route_transportation',
+	'route_foot',
+	'route_bicycle',
+	'route_water'
+];
+export const POI_SOURCE_LAYERS = [
+	'poi_attraction',
+	'poi_education',
+	'poi_entertainment',
+	'poi_facility',
+	'poi_food_and_drink',
+	'poi_healthcare',
+	'poi_leisure',
+	'poi_lodging',
+	'poi_natural',
+	'poi_place',
+	'poi_shop',
+	'poi_transportation'
+];
+
 export const COLORS = {
 	slate: {
 		200: 'rgba(226, 232, 240, 1)',

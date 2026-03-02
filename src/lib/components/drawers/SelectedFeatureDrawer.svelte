@@ -31,6 +31,9 @@
 		if (feature) {
 			updateFeatureStatusForFeature(feature);
 		}
+
+		// Setup tile loading event listeners
+		setupTileLoadingListeners();
 	});
 
 	// Derived values for display
@@ -46,6 +49,13 @@
 		loading: boolean;
 	}>({ bookmarked: false, listIds: [], visitedDates: [], todo: false, loading: false });
 
+	// State for tracking tile loading
+	let tileLoadingState = $state<{
+		isLoading: boolean;
+		hasError: boolean;
+		errorCount: number;
+	}>({ isLoading: false, hasError: false, errorCount: 0 }); // Start with tiles ready
+
 	// Dialog state
 	let bookmarkDialogOpen = $state(false);
 	let visitHistoryExpanded = $state(false);
@@ -53,26 +63,27 @@
 	// Derived current feature ID
 	let featureId = $derived(feature?.id ? String(feature.id) : undefined);
 
-	// Simple effect to watch feature changes (this is appropriate for side effects)
-	// Only run when drawer is actually open to avoid interference with close transition
+	// Effect to watch feature changes - separated from open state to avoid conflicts
 	$effect(() => {
-		// Only react to feature changes when drawer is open
-		// This prevents effects from running during drawer close transition
-		if (!open) {
-			// When drawer closes, just reset status without async operations
-			if (!feature) {
-				console.log('🔍 SelectedFeatureDrawer: Drawer closed, resetting status');
-				resetFeatureStatus();
-			}
-			return;
-		}
-
-		// React to feature changes only when drawer is open
+		// Only react to feature changes, regardless of drawer open state
 		if (feature && featureId) {
 			console.log('🔍 SelectedFeatureDrawer: Feature changed:', featureId);
+			// Don't automatically set loading - let the map events handle it
 			updateFeatureStatusForFeature(feature);
 		} else if (!feature) {
 			console.log('🔍 SelectedFeatureDrawer: Feature cleared');
+			resetFeatureStatus();
+			// Reset tile state when no feature
+			tileLoadingState.isLoading = false;
+			tileLoadingState.hasError = false;
+		}
+	});
+
+	// Separate effect to handle drawer close cleanup
+	$effect(() => {
+		// Only run cleanup when drawer closes
+		if (!open) {
+			console.log('🔍 SelectedFeatureDrawer: Drawer closed, resetting feature status');
 			resetFeatureStatus();
 		}
 	});
@@ -87,6 +98,109 @@
 		featureStatus.loading = false;
 		visitHistoryExpanded = false;
 	}
+
+	// Setup tile loading event listeners
+	function setupTileLoadingListeners() {
+		const mapInstance = mapControl.getMapInstance();
+		if (!mapInstance) {
+			console.warn('Map instance not available for tile loading listeners');
+			return;
+		}
+
+		// Set initial state based on map readiness
+		if (mapInstance.loaded() && mapInstance.isStyleLoaded()) {
+			tileLoadingState.isLoading = false;
+			console.log('🏁 Map already loaded and ready');
+		} else {
+			tileLoadingState.isLoading = true;
+			console.log('⏳ Map still loading');
+		}
+
+		// Simple approach: only track when map goes idle (all tiles loaded and rendered)
+		const handleIdle = () => {
+			console.log('🏁 Map is idle - tiles ready for interaction');
+			tileLoadingState.isLoading = false;
+			tileLoadingState.hasError = false; // Clear any previous errors when successful
+		};
+
+		// Track significant data loading events (like zoom changes that require new tiles)
+		const handleDataLoading = (e: any) => {
+			// Only track vector tile sources that matter for feature interaction
+			if (e.dataType === 'source' && (e.sourceId === 'poi' || e.sourceId === 'poiRoute')) {
+				console.log('📦 Loading tiles for:', e.sourceId);
+				tileLoadingState.isLoading = true;
+			}
+		};
+
+		// Track errors
+		const handleError = (e: any) => {
+			console.error('🚨 Map error:', e);
+			tileLoadingState.hasError = true;
+			tileLoadingState.errorCount++;
+			tileLoadingState.isLoading = false;
+		};
+
+		// Add timeout fallback - if loading takes too long, assume ready
+		let loadingTimeout: number;
+		const startLoadingTimeout = () => {
+			if (loadingTimeout) clearTimeout(loadingTimeout);
+			loadingTimeout = setTimeout(() => {
+				console.log('⏰ Tile loading timeout - assuming ready');
+				tileLoadingState.isLoading = false;
+			}, 5000); // 5 second timeout
+		};
+
+		// Add event listeners
+		mapInstance.on('idle', handleIdle);
+		mapInstance.on('dataloading', handleDataLoading);
+		mapInstance.on('error', handleError);
+
+		// Start timeout for initial state
+		if (tileLoadingState.isLoading) {
+			startLoadingTimeout();
+		}
+
+		// Update timeout when loading state changes
+		const updateTimeout = () => {
+			if (tileLoadingState.isLoading) {
+				startLoadingTimeout();
+			} else {
+				if (loadingTimeout) clearTimeout(loadingTimeout);
+			}
+		};
+
+		mapInstance.on('dataloading', updateTimeout);
+
+		// Clean up listeners on component destroy
+		return () => {
+			if (loadingTimeout) clearTimeout(loadingTimeout);
+			mapInstance.off('idle', handleIdle);
+			mapInstance.off('dataloading', handleDataLoading);
+			mapInstance.off('error', handleError);
+		};
+	}
+
+	// Check if tiles are ready (both loaded and no errors)
+	let tilesReady = $derived.by(() => {
+		return !tileLoadingState.isLoading && !tileLoadingState.hasError;
+	});
+
+	// Check if action buttons should be disabled
+	let actionsDisabled = $derived.by(() => {
+		return featureStatus.loading || !tilesReady;
+	});
+
+	// Debug effect to monitor tiles ready state changes
+	$effect(() => {
+		console.log(
+			'🔧 SelectedFeatureDrawer: Tiles ready:',
+			tilesReady,
+			'| Loading:',
+			tileLoadingState.isLoading,
+			'| Error:',
+			tileLoadingState.hasError
+		);
+	});
 
 	// Update feature status from database (renamed for clarity)
 	async function updateFeatureStatusForFeature(targetFeature: MapGeoJSONFeature) {
@@ -474,7 +588,32 @@
 			// Use the existing toggleRouteInRelation method which will add missing segments
 			// We pass the compound ID, and the method will split and add only missing segments
 			try {
-				await appState.toggleRouteInRelation(relationData.childId, mapInstance);
+				// Extract appropriate classification for route layer targeting based on source
+				let routeClassification: string | undefined;
+				if (feature?.source === 'poiRoute') {
+					// For poiRoute features, use subclass
+					routeClassification = feature?.properties?.subclass;
+					console.log(
+						`🎯 POI Route feature - using subclass for route targeting: ${routeClassification}`
+					);
+				} else if (feature?.source === 'poi') {
+					// For poi features, use class
+					routeClassification = feature?.properties?.class;
+					console.log(`🎯 POI feature - using class for route targeting: ${routeClassification}`);
+				} else {
+					// For other sources, try subclass first, then class as fallback
+					routeClassification = feature?.properties?.subclass || feature?.properties?.class;
+					console.log(
+						`🎯 Other source (${feature?.source}) - using classification: ${routeClassification}`
+					);
+				}
+
+				await appState.toggleRouteInRelation(
+					relationData.childId,
+					mapInstance,
+					routeClassification,
+					feature
+				);
 
 				// After adding segments, navigate to bbox
 				// Priority 1: Use relation data bbox if available
@@ -650,24 +789,37 @@
 				})}
 			>
 				<div class="mb-2 flex items-center justify-between">
-					<Drawer.Title class="flex items-center gap-2 text-lg font-medium sm:text-2xl">
+					<Drawer.Title
+						class="flex min-w-0 flex-1 items-center gap-2 text-lg font-medium sm:text-2xl"
+					>
 						<PropertyIcon key={'category'} value={feature?.properties.category} size={20} />
-						{#if hasFeature}
-							{getDisplayName(feature)}
-						{:else}
-							Selected Feature
-						{/if}
+						<span
+							class="truncate"
+							title={hasFeature ? getDisplayName(feature) : 'Selected Feature'}
+						>
+							{#if hasFeature}
+								{getDisplayName(feature)}
+							{:else}
+								Selected Feature
+							{/if}
+						</span>
 					</Drawer.Title>
 					<!-- Custom close button instead of Drawer.Close -->
 					<button
 						class="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:bg-gray-100 focus:text-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 						onclick={() => {
-							open = false;
+							// Prevent reactivity loops by using a timeout
+							setTimeout(() => {
+								open = false;
+							}, 0);
 						}}
 						onkeydown={(e) => {
 							if (e.key === 'Enter' || e.key === ' ') {
 								e.preventDefault();
-								open = false;
+								// Prevent reactivity loops by using a timeout
+								setTimeout(() => {
+									open = false;
+								}, 0);
 							}
 						}}
 						title="Close drawer"
@@ -756,6 +908,21 @@
 							{/if}
 
 							<!-- Action buttons grid -->
+							{#if !tilesReady}
+								<!-- Tile loading indicator -->
+								<div
+									class="col-span-full mb-2 flex items-center justify-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800"
+								>
+									{#if tileLoadingState.isLoading}
+										<div class="animate-spin text-blue-600">⏳</div>
+										<span>Loading map data...</span>
+									{:else if tileLoadingState.hasError}
+										<div class="text-orange-600">⚠️</div>
+										<span>Map data loading issue. Actions disabled for safety.</span>
+									{/if}
+								</div>
+							{/if}
+
 							<div
 								class={clsx('grid gap-2', {
 									'grid-cols-6': hasRelationData(feature),
@@ -769,11 +936,11 @@
 											'border border-blue-300 bg-blue-100 text-blue-800': featureStatus.bookmarked,
 											'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50':
 												!featureStatus.bookmarked,
-											'cursor-not-allowed opacity-50': featureStatus.loading
+											'cursor-not-allowed opacity-50': actionsDisabled
 										}
 									)}
 									onclick={() => handleBookmark(feature)}
-									disabled={featureStatus.loading}
+									disabled={actionsDisabled}
 								>
 									<PropertyIcon
 										key={'description'}
@@ -791,11 +958,11 @@
 												!featureStatus.todo && featureStatus.bookmarked,
 											'cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400':
 												!featureStatus.bookmarked,
-											'cursor-not-allowed opacity-50': featureStatus.loading
+											'cursor-not-allowed opacity-50': actionsDisabled
 										}
 									)}
 									onclick={() => handleTodo(feature)}
-									disabled={featureStatus.loading || !featureStatus.bookmarked}
+									disabled={actionsDisabled || !featureStatus.bookmarked}
 								>
 									<PropertyIcon
 										key={'description'}
@@ -814,11 +981,11 @@
 												featureStatus.visitedDates.length === 0 && featureStatus.bookmarked,
 											'cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-400':
 												!featureStatus.bookmarked,
-											'cursor-not-allowed opacity-50': featureStatus.loading
+											'cursor-not-allowed opacity-50': actionsDisabled
 										}
 									)}
 									onclick={() => handleVisited(feature)}
-									disabled={featureStatus.loading || !featureStatus.bookmarked}
+									disabled={actionsDisabled || !featureStatus.bookmarked}
 								>
 									<PropertyIcon
 										key={'description'}
@@ -846,11 +1013,11 @@
 													isChildIdInRoute(feature),
 												'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50':
 													!isChildIdInRoute(feature),
-												'cursor-not-allowed opacity-50': featureStatus.loading
+												'cursor-not-allowed opacity-50': actionsDisabled
 											}
 										)}
 										onclick={() => handleRelation(feature)}
-										disabled={featureStatus.loading}
+										disabled={actionsDisabled}
 										title={isChildIdInRoute(feature)
 											? 'Remove all parts from route'
 											: 'Add to route path'}
@@ -869,11 +1036,11 @@
 									class={clsx(
 										'flex flex-col items-center justify-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-3 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none',
 										{
-											'cursor-not-allowed opacity-50': featureStatus.loading
+											'cursor-not-allowed opacity-50': actionsDisabled
 										}
 									)}
 									onclick={() => handleUpdate(feature)}
-									disabled={featureStatus.loading}
+									disabled={actionsDisabled}
 								>
 									<PropertyIcon key={'description'} value={'update'} size={20} color={'black'} />
 								</button>
@@ -881,11 +1048,11 @@
 									class={clsx(
 										'flex flex-col items-center justify-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-3 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:border-transparent focus:ring-2 focus:ring-blue-500 focus:outline-none',
 										{
-											'cursor-not-allowed opacity-50': featureStatus.loading
+											'cursor-not-allowed opacity-50': actionsDisabled
 										}
 									)}
 									onclick={() => handleLocation(feature)}
-									disabled={featureStatus.loading}
+									disabled={actionsDisabled}
 								>
 									<PropertyIcon key={'description'} value={'location'} size={20} color={'black'} />
 								</button>
@@ -995,7 +1162,7 @@
 																			handleRemoveVisit(feature, visitTimestamp);
 																		}
 																	}}
-																	disabled={featureStatus.loading}
+																	disabled={actionsDisabled}
 																	title="Remove this visit"
 																	aria-label={`Remove visit from ${formatVisitDateTime(visitTimestamp)}`}
 																>

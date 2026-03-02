@@ -5,6 +5,95 @@ import type { WorkerManager } from '$lib/utils/worker';
 let lastViewportUpdate = 0;
 const VIEWPORT_UPDATE_THROTTLE = 100; // ms
 
+// Priority system for tile sources
+const SOURCE_PRIORITIES: Record<string, number> = {
+	coastline: 1,
+	basemap: 2, // Highest priority - base layers
+	transportation: 3,
+	building: 4,
+	poi: 5,
+	poiRoute: 6,
+	route: 7,
+	countries: 8,
+	area: 9,
+	boundary: 10,
+	labels: 11,
+	default: 12
+};
+
+// Priority queue for tile requests
+class TileRequestQueue {
+	private queue: Array<{ priority: number; request: () => Promise<ArrayBuffer | null> }> = [];
+	private processing = false;
+
+	add(source: string, requestFn: () => Promise<ArrayBuffer | null>): Promise<ArrayBuffer | null> {
+		const priority = this.getSourcePriority(source);
+
+		return new Promise((resolve, reject) => {
+			const request = async () => {
+				try {
+					const result = await requestFn();
+					resolve(result);
+					return result;
+				} catch (error) {
+					reject(error);
+					return null;
+				}
+			};
+
+			// Insert in priority order (lower number = higher priority)
+			const insertIndex = this.queue.findIndex((item) => item.priority > priority);
+			if (insertIndex === -1) {
+				this.queue.push({ priority, request });
+			} else {
+				this.queue.splice(insertIndex, 0, { priority, request });
+			}
+
+			this.processQueue();
+		});
+	}
+
+	private async processQueue(): Promise<void> {
+		if (this.processing || this.queue.length === 0) {
+			return;
+		}
+
+		this.processing = true;
+
+		while (this.queue.length > 0) {
+			const item = this.queue.shift()!;
+			try {
+				await item.request();
+			} catch (error) {
+				console.warn('Tile request failed in queue:', error);
+			}
+		}
+
+		this.processing = false;
+	}
+
+	private getSourcePriority(source: string): number {
+		const sourceLower = source.toLowerCase();
+
+		// Check for exact match first
+		if (SOURCE_PRIORITIES[sourceLower] !== undefined) {
+			return SOURCE_PRIORITIES[sourceLower];
+		}
+
+		// Check for partial matches
+		for (const [key, priority] of Object.entries(SOURCE_PRIORITIES)) {
+			if (key !== 'default' && sourceLower.includes(key)) {
+				return priority;
+			}
+		}
+
+		return SOURCE_PRIORITIES.default;
+	}
+}
+
+// Global priority queue instance
+const tileQueue = new TileRequestQueue();
+
 export function createProtocolHandler(workerManager: WorkerManager): AddProtocolAction {
 	return async ({ url, type }) => {
 		// Handle non-tile requests
@@ -44,13 +133,15 @@ export function createProtocolHandler(workerManager: WorkerManager): AddProtocol
 			// Update viewport information for prefetching (throttled)
 			updateViewportForPrefetching(workerManager, z, x, y);
 
-			// Request tile from worker
-			const tileData = await requestTileFromWorker(workerManager, {
-				source,
-				z,
-				x,
-				y
-			});
+			// Request tile from worker with priority queueing
+			const tileData = await tileQueue.add(source, () =>
+				requestTileFromWorker(workerManager, {
+					source,
+					z,
+					x,
+					y
+				})
+			);
 
 			// If no tile data found, return empty ArrayBuffer
 			if (!tileData) {

@@ -358,6 +358,7 @@
 	<HeatmapLayer
 		id="heat_attraction"
 		sourceLayer={'poi_attraction'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -370,6 +371,7 @@
 	<HeatmapLayer
 		id="heat_education"
 		sourceLayer={'poi_education'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -382,6 +384,7 @@
 	<HeatmapLayer
 		id="heat_entertainment"
 		sourceLayer={'poi_entertainment'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -394,6 +397,7 @@
 	<HeatmapLayer
 		id="heat_facility"
 		sourceLayer={'poi_facility'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -406,6 +410,7 @@
 	<HeatmapLayer
 		id="heat_food_and_drink"
 		sourceLayer={'poi_food_and_drink'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -418,6 +423,7 @@
 	<HeatmapLayer
 		id="heat_healthcare"
 		sourceLayer={'poi_healthcare'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -430,6 +436,7 @@
 	<HeatmapLayer
 		id="heat_leisure"
 		sourceLayer={'poi_leisure'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -442,6 +449,7 @@
 	<HeatmapLayer
 		id="heat_lodging"
 		sourceLayer={'poi_lodging'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -455,6 +463,7 @@
 		id="heat_natural"
 		sourceLayer={'poi_natural'}
 		minzoom={8}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': [
@@ -495,6 +504,7 @@
 	<HeatmapLayer
 		id="heat_place"
 		sourceLayer={'poi_place'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -507,6 +517,7 @@
 	<HeatmapLayer
 		id="heat_shop"
 		sourceLayer={'poi_shop'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -519,6 +530,7 @@
 	<HeatmapLayer
 		id="heat_transportation"
 		sourceLayer={'poi_transportation'}
+		maxzoom={17}
 		filter={featuresHeatFilter}
 		paint={{
 			'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 1, 0, 16, 3],
@@ -806,6 +818,7 @@
 	<!-- General places (non-cities) -->
 	<SymbolLayer
 		id="poi_place_minor"
+		minzoom={15}
 		sourceLayer={'poi_place'}
 		filter={placeMinorFilter}
 		layout={{

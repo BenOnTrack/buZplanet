@@ -1,5 +1,6 @@
 import type { Map as MapStore, MapGeoJSONFeature, LngLatBoundsLike } from 'svelte-maplibre';
 import { searchControl } from '$lib/stores/SearchControl.svelte';
+import { appState } from '$lib/stores/AppState.svelte';
 
 /**
  * Map Control store for managing map interactions and selected features
@@ -80,6 +81,7 @@ class MapControl {
 			console.log('✅ Map instance registered with MapControl');
 		} else {
 			console.log('🧹 Map instance cleared from MapControl');
+			// Reset AppState map readiness when map is cleared
 		}
 	}
 

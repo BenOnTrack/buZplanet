@@ -6,6 +6,7 @@
  */
 
 import { _CATEGORY } from '$lib/assets/class_subclass_category';
+import { POI_SOURCE_LAYERS } from '$lib/constants';
 
 // Types
 interface CategoryFilterState {
@@ -234,21 +235,7 @@ class CategoryFilterStore {
 				currentZoom.toFixed(1)
 			);
 
-			// POI source layers to query
-			const POI_SOURCE_LAYERS = [
-				'poi_attraction',
-				'poi_education',
-				'poi_entertainment',
-				'poi_facility',
-				'poi_food_and_drink',
-				'poi_healthcare',
-				'poi_leisure',
-				'poi_lodging',
-				'poi_natural',
-				'poi_place',
-				'poi_shop',
-				'poi_transportation'
-			];
+			// Use POI source layers from constants
 
 			let allSourceFeatures = [];
 

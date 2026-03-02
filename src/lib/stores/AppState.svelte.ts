@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import { authState } from '$lib/stores/auth.svelte';
 import { _CATEGORY } from '$lib/assets/class_subclass_category';
 import type { User } from 'firebase/auth';
+import { ROUTE_SOURCE_LAYERS } from '$lib/constants';
 
 const DEFAULT_RELATION_SETTINGS: RelationSettings = {
 	childRoute: []
@@ -623,8 +624,14 @@ class AppState {
 	 * If compound ID (e.g., "33046520-314104655"), splits into individual route segments
 	 * If the route exists (by ID), remove it; if not, add it with route information
 	 */
-	async toggleRouteInRelation(routeId: string, mapInstance?: any): Promise<void> {
+	async toggleRouteInRelation(
+		routeId: string,
+		mapInstance?: any,
+		routeClassification?: string,
+		initialFeature?: any
+	): Promise<void> {
 		console.log(`🔄 Toggling route in relation: ${routeId}`);
+		console.log(`🏷️ Route classification for targeting: ${routeClassification}`);
 
 		// Split compound route ID into individual segment IDs
 		const segmentIds = routeId.split('-').filter((id) => id.trim().length > 0);
@@ -662,42 +669,43 @@ class AppState {
 
 					try {
 						// Query the map to get route information for this segment
-						const routeInfo = await this.queryRouteInformation(segmentId, mapInstance);
-
-						const newRoute: RouteInfo = {
-							id: String(segmentId), // Ensure string type
-							names: this.cleanNamesObject(routeInfo.names || { name: segmentId }), // Clean the names object
-							class: routeInfo.class, // Store classification
-							subclass: routeInfo.subclass,
-							category: routeInfo.category,
-							bbox: routeInfo.bbox // Store bounding box if available
-						};
-
-						newRoutes.push(newRoute);
-						console.log(`✅ Added segment ${segmentId} with full data:`, {
-							names: routeInfo.names,
-							classification: {
-								class: routeInfo.class,
-								subclass: routeInfo.subclass,
-								category: routeInfo.category
-							},
-							bbox: routeInfo.bbox
-						});
-					} catch (error) {
-						console.warn(
-							`⚠️ Could not query route information for segment ${segmentId}, using fallback data:`,
-							error
+						const routeInfo = await this.queryRouteInformation(
+							segmentId,
+							mapInstance,
+							routeClassification,
+							initialFeature
 						);
 
-						// Fallback: add segment with minimal data
-						const fallbackRoute: RouteInfo = {
-							id: String(segmentId), // Ensure string type
-							names: { name: String(segmentId) } // Ensure simple object
-							// Classification data and bbox will be undefined (optional)
-						};
+						if (routeInfo) {
+							const newRoute: RouteInfo = {
+								id: String(segmentId), // Ensure string type
+								names: this.cleanNamesObject(routeInfo.names || { name: segmentId }), // Clean the names object
+								class: routeInfo.class, // Store classification
+								subclass: routeInfo.subclass,
+								category: routeInfo.category,
+								bbox: routeInfo.bbox // Store bounding box if available
+							};
 
-						newRoutes.push(fallbackRoute);
-						console.log(`⚠️ Added fallback segment ${segmentId}`);
+							newRoutes.push(newRoute);
+							console.log(`✅ Added segment ${segmentId} with full data:`, {
+								names: routeInfo.names,
+								classification: {
+									class: routeInfo.class,
+									subclass: routeInfo.subclass,
+									category: routeInfo.category
+								},
+								bbox: routeInfo.bbox
+							});
+						} else {
+							console.warn(
+								`⚠️ Could not find route information for segment ${segmentId}, skipping`
+							);
+						}
+					} catch (error) {
+						console.warn(
+							`⚠️ Could not query route information for segment ${segmentId}, skipping:`,
+							error
+						);
 					}
 				} else {
 					console.log(`ℹ️ Segment ${segmentId} already exists in routes`);
@@ -779,15 +787,6 @@ class AppState {
 					feature.properties.bbox,
 					error
 				);
-			}
-		}
-
-		// Try to calculate bbox from geometry
-		if (feature.geometry) {
-			try {
-				return this.calculateGeometryBounds(feature.geometry);
-			} catch (error) {
-				console.warn('Failed to calculate bbox from geometry:', error);
 			}
 		}
 
@@ -952,10 +951,13 @@ class AppState {
 
 	/**
 	 * Query route information from map vector tiles for a single segment ID
+	 * Uses retry logic if tiles are not immediately available
 	 */
 	private async queryRouteInformation(
 		segmentId: string,
-		mapInstance?: any
+		mapInstance?: any,
+		routeClassification?: string,
+		initialFeature?: any
 	): Promise<{
 		names: FeatureNames;
 		class?: string;
@@ -970,99 +972,189 @@ class AppState {
 		try {
 			console.log(`🔍 Querying route information for segment ID: ${segmentId}`);
 
-			// Define all possible route source layers
-			const routeSourceLayers = [
-				'route_transportation',
-				'route_foot',
-				'route_bicycle',
-				'route_water'
-			];
-
-			// Try each source layer until we find the segment
-			for (const sourceLayer of routeSourceLayers) {
+			// Simple retry logic with exponential backoff
+			const maxRetries = 3;
+			for (let attempt = 1; attempt <= maxRetries; attempt++) {
 				try {
-					console.log(`🔍   Searching in source layer: ${sourceLayer}`);
-
-					// Query the route source at zoom level 14 where route features are available
-					const queryOptions = {
-						zoom: 14,
-						sourceLayer: sourceLayer
-					};
-
-					const routeFeatures = mapInstance.querySourceFeatures('route', queryOptions);
-					console.log(`📊   Found ${routeFeatures.length} features in ${sourceLayer}`);
-
-					// Find the specific segment by ID
-					const targetSegment = routeFeatures.find(
-						(feature: any) => String(feature.id) === String(segmentId)
+					const result = await this.tryQueryRouteInformation(
+						segmentId,
+						mapInstance,
+						routeClassification,
+						initialFeature
 					);
-
-					if (targetSegment && targetSegment.properties) {
-						console.log(
-							`✅   Found segment ${segmentId} in ${sourceLayer}:`,
-							targetSegment.properties
-						);
-
-						// Extract all name properties (name, name:en, name:fr, etc.)
-						const names: FeatureNames = {};
-
-						for (const [key, value] of Object.entries(targetSegment.properties)) {
-							if (key === 'name' || key.startsWith('name:')) {
-								if (typeof value === 'string' && value.trim()) {
-									names[key] = value.trim();
-								}
-							}
-						}
-
-						// Ensure we have at least one name
-						if (Object.keys(names).length === 0) {
-							names.name = segmentId; // Fallback to segment ID
-						}
-
-						// Extract classification data and bbox
-						const classificationData = {
-							class:
-								typeof targetSegment.properties.class === 'string'
-									? targetSegment.properties.class
-									: undefined,
-							subclass:
-								typeof targetSegment.properties.subclass === 'string'
-									? targetSegment.properties.subclass
-									: undefined,
-							category:
-								typeof targetSegment.properties.category === 'string'
-									? targetSegment.properties.category
-									: undefined,
-							bbox: this.extractBboxFromFeature(targetSegment) // Extract bbox if available
-						};
-
-						console.log(`📝   Extracted data for segment ${segmentId} from ${sourceLayer}:`);
-						console.log(`     Names:`, names);
-						console.log(`     Classification:`, classificationData);
-						console.log(`     Bbox:`, classificationData.bbox);
-
-						return { names, ...classificationData };
+					if (result) {
+						return result;
 					}
-
-					console.log(
-						`❌   Segment ${segmentId} not found in ${sourceLayer} (${routeFeatures.length} features checked)`
-					);
-				} catch (layerError) {
-					console.warn(
-						`⚠️   Error querying segment ${segmentId} in layer ${sourceLayer}:`,
-						layerError
-					);
-					// Continue to next layer
+				} catch (error) {
+					console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed:`, error);
+					if (attempt === maxRetries) {
+						throw error;
+					}
+					// Wait before retrying (exponential backoff)
+					await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
 				}
 			}
 
-			// If we get here, the segment wasn't found in any source layer
-			console.warn(`❌ Segment ${segmentId} not found in any source layer`);
-			throw new Error(`Segment ${segmentId} not found in any source layer`);
+			throw new Error(`Failed to query route information after ${maxRetries} attempts`);
 		} catch (error) {
 			console.error('❌ Error querying route information:', error);
 			throw error;
 		}
+	}
+
+	/**
+	 * Try to query route information once with retries for the querySourceFeatures call
+	 * Uses targeted approach based on route classification for efficiency
+	 */
+	private async tryQueryRouteInformation(
+		segmentId: string,
+		mapInstance: any,
+		routeClassification?: string,
+		initialFeature?: any
+	): Promise<{
+		names: FeatureNames;
+		class?: string;
+		subclass?: string;
+		category?: string;
+		bbox?: [number, number, number, number];
+	} | null> {
+		// Determine target source layer based on route classification
+		let targetSourceLayers: string[] = [];
+
+		if (routeClassification) {
+			// Construct the expected route source layer name
+			const expectedRouteLayer = `route_${routeClassification}`;
+
+			// Check if this expected layer exists in our known route source layers
+			if (ROUTE_SOURCE_LAYERS.includes(expectedRouteLayer)) {
+				console.log(
+					`🎯 Target route layer determined from classification '${routeClassification}': ${expectedRouteLayer}`
+				);
+				targetSourceLayers = [expectedRouteLayer];
+			} else {
+				console.warn(
+					`⚠️ Expected route layer '${expectedRouteLayer}' not found in ROUTE_SOURCE_LAYERS`
+				);
+				console.log(`Available route layers:`, ROUTE_SOURCE_LAYERS);
+				// Fall back to searching all route layers
+				targetSourceLayers = ROUTE_SOURCE_LAYERS;
+			}
+		} else {
+			console.log(`ℹ️ No route classification provided, searching all route layers`);
+			// No classification provided, search all route layers
+			targetSourceLayers = ROUTE_SOURCE_LAYERS;
+		}
+
+		// Try each target source layer
+		for (const sourceLayer of targetSourceLayers) {
+			try {
+				console.log(`🔍   Searching in source layer: ${sourceLayer}`);
+
+				// Retry querySourceFeatures call multiple times
+				let routeFeatures: any[] = [];
+				const maxSourceRetries = 3;
+
+				for (let sourceAttempt = 1; sourceAttempt <= maxSourceRetries; sourceAttempt++) {
+					try {
+						// Query the route source at zoom level 14 where route features are available
+						const queryOptions = {
+							zoom: 14,
+							sourceLayer: sourceLayer
+						};
+
+						routeFeatures = mapInstance.querySourceFeatures('route', queryOptions);
+						console.log(
+							`📊   Found ${routeFeatures.length} features in ${sourceLayer} (attempt ${sourceAttempt}/${maxSourceRetries})`
+						);
+
+						// If we found features or this is the last attempt, break
+						if (routeFeatures.length > 0 || sourceAttempt === maxSourceRetries) {
+							break;
+						}
+
+						// Wait a bit before retrying querySourceFeatures
+						console.log(`⏳   No features found, waiting before retry ${sourceAttempt + 1}...`);
+						await new Promise((resolve) => setTimeout(resolve, 500 * sourceAttempt));
+					} catch (sourceError) {
+						console.warn(`⚠️   querySourceFeatures attempt ${sourceAttempt} failed:`, sourceError);
+						if (sourceAttempt === maxSourceRetries) {
+							throw sourceError;
+						}
+						// Wait before retrying
+						await new Promise((resolve) => setTimeout(resolve, 500 * sourceAttempt));
+					}
+				}
+
+				// Find the specific segment by ID
+				const targetSegment = routeFeatures.find(
+					(feature: any) => String(feature.id) === String(segmentId)
+				);
+
+				if (targetSegment && targetSegment.properties) {
+					console.log(
+						`✅   Found segment ${segmentId} in ${sourceLayer}:`,
+						targetSegment.properties
+					);
+
+					// Extract all name properties (name, name:en, name:fr, etc.)
+					const names: FeatureNames = {};
+
+					for (const [key, value] of Object.entries(targetSegment.properties)) {
+						if (key === 'name' || key.startsWith('name:')) {
+							if (typeof value === 'string' && value.trim()) {
+								names[key] = value.trim();
+							}
+						}
+					}
+
+					// Ensure we have at least one name
+					if (Object.keys(names).length === 0) {
+						names.name = segmentId; // Fallback to segment ID
+					}
+
+					// Extract classification data and bbox
+					const classificationData = {
+						class:
+							typeof targetSegment.properties.class === 'string'
+								? targetSegment.properties.class
+								: undefined,
+						subclass:
+							typeof targetSegment.properties.subclass === 'string'
+								? targetSegment.properties.subclass
+								: undefined,
+						category:
+							typeof targetSegment.properties.category === 'string'
+								? targetSegment.properties.category
+								: undefined,
+						bbox: this.extractBboxFromFeature(initialFeature || targetSegment) // Extract bbox from initial clicked feature, fallback to target segment
+					};
+
+					console.log(`📝   Extracted data for segment ${segmentId} from ${sourceLayer}:`);
+					console.log(`     Names:`, names);
+					console.log(`     Classification:`, classificationData);
+					console.log(`     Bbox:`, classificationData.bbox);
+
+					return { names, ...classificationData };
+				}
+
+				console.log(
+					`❌   Segment ${segmentId} not found in ${sourceLayer} (${routeFeatures.length} features checked)`
+				);
+			} catch (layerError) {
+				console.warn(
+					`⚠️   Error querying segment ${segmentId} in layer ${sourceLayer}:`,
+					layerError
+				);
+				// Continue to next layer
+			}
+		}
+
+		// If we get here, the segment wasn't found in any target source layer
+		console.warn(
+			`❌ Segment ${segmentId} not found in any target source layer:`,
+			targetSourceLayers
+		);
+		return null;
 	}
 
 	/**
