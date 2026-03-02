@@ -177,7 +177,7 @@ async function scanDatabases(): Promise<void> {
 	initializeTileCache();
 }
 
-// Handle tile requests with intelligent caching (Organic Maps style)
+// Handle tile requests with intelligent caching
 async function handleTileRequest(
 	source: string,
 	z: number,
@@ -226,15 +226,13 @@ async function handleTileRequest(
 	}
 }
 
-// Load tile from OPFS MBTiles (original logic)
+// Load tile from OPFS MBTiles
 async function loadTileFromOPFS(
 	source: string,
 	z: number,
 	x: number,
 	y: number
 ): Promise<ArrayBuffer | null> {
-	const startTime = performance.now();
-
 	// Find databases for the source
 	const sourceDbs = getDatabasesBySource(source);
 	if (sourceDbs.length === 0) {
@@ -244,21 +242,9 @@ async function loadTileFromOPFS(
 	// Convert XYZ to TMS Y coordinate (MBTiles use TMS scheme)
 	const tmsY = (1 << z) - 1 - y;
 
-	let result: ArrayBuffer | null = null;
-
-	// Special handling for basemap - merge multiple tiles
-	if (source.toLowerCase() === 'basemap' && sourceDbs.length > 1) {
-		result = await mergeVectorTiles(sourceDbs, z, x, tmsY);
-	} else {
-		// For non-basemap or single database, use existing logic
-		result = await getSingleTile(sourceDbs, z, x, tmsY);
-	}
-
-	if (result) {
-		const endTime = performance.now();
-		const duration = endTime - startTime;
-		// console.log(`💾 OPFS FETCH: ${source}-${z}-${x}-${y} (${duration.toFixed(3)}ms - OPFS disk)`);
-	}
+	// Always try to get tiles from all available databases
+	// This ensures we don't miss tiles due to different zoom coverage
+	const result = await mergeVectorTiles(sourceDbs, z, x, tmsY);
 
 	return result;
 }
@@ -267,40 +253,11 @@ function getDatabasesBySource(source: string): OpfsDatabase[] {
 	const matchingDbs: OpfsDatabase[] = [];
 	const sourceLower = source.toLowerCase();
 
-	// Special handling for basemap - merge multiple basemap databases
-	if (sourceLower === 'basemap') {
-		const basemapPatterns = [
-			'basemap',
-			'base-map',
-			'base_map',
-			'osm',
-			'planet',
-			'world',
-			'background'
-		];
-
-		for (const [filename, db] of openDatabases) {
-			const filenameLower = filename.toLowerCase();
-			const isBasemap = basemapPatterns.some(
-				(pattern) =>
-					filenameLower.includes(pattern) ||
-					(!filenameLower.includes('poi') &&
-						!filenameLower.includes('building') &&
-						!filenameLower.includes('place') &&
-						!filenameLower.includes('transport') &&
-						!filenameLower.includes('amenity'))
-			);
-
-			if (isBasemap) {
-				matchingDbs.push(db);
-			}
-		}
-		return matchingDbs;
-	}
-
-	// For non-basemap sources, use exact/simple matching
+	// Universal matching - check ALL databases for any source
 	for (const [filename, db] of openDatabases) {
 		const filenameLower = filename.toLowerCase();
+
+		// Simple substring matching - works for any source
 		if (filenameLower.includes(sourceLower)) {
 			matchingDbs.push(db);
 		}
@@ -362,16 +319,57 @@ async function processRawTileData(tileData: Uint8Array): Promise<ArrayBuffer> {
 	}
 }
 
-// Merge multiple vector tiles into a single tile
+// Merge multiple vector tiles
 async function mergeVectorTiles(
 	sourceDbs: OpfsDatabase[],
 	z: number,
 	x: number,
 	tmsY: number
 ): Promise<ArrayBuffer | null> {
-	const tilesToMerge: { filename: string; data: ArrayBuffer }[] = [];
+	// Phase 1: Fast boundary check - only query tile existence first
+	const availableDbs: { db: OpfsDatabase; filename: string }[] = [];
 
 	for (const db of sourceDbs) {
+		try {
+			// Get the filename for this database
+			let filename = 'unknown';
+			for (const [name, dbRef] of openDatabases) {
+				if (dbRef === db) {
+					filename = name;
+					break;
+				}
+			}
+
+			// Check if this database has tiles at this zoom level
+			const stmt = db.prepare(
+				'SELECT COUNT(*) FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?'
+			);
+			stmt.bind([z, x, tmsY]);
+
+			if (stmt.step()) {
+				const count = stmt.get(0) as number;
+				stmt.finalize();
+
+				if (count > 0) {
+					availableDbs.push({ db, filename });
+				}
+			} else {
+				stmt.finalize();
+			}
+		} catch (dbError) {
+			console.warn(`Error checking tile existence:`, dbError);
+			continue;
+		}
+	}
+
+	// Early exit if no tiles exist at this zoom level
+	if (availableDbs.length === 0) {
+		return null;
+	}
+
+	// Phase 2: Fetch actual tile data only from databases that have tiles
+	const tilesToMerge: { filename: string; data: ArrayBuffer }[] = [];
+	for (const { db, filename } of availableDbs) {
 		try {
 			const stmt = db.prepare(
 				'SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?'
@@ -382,30 +380,37 @@ async function mergeVectorTiles(
 				const rawTileData = stmt.get(0) as Uint8Array;
 				stmt.finalize();
 
+				// Additional safety check for empty/corrupt tiles
 				if (rawTileData && rawTileData.length > 0) {
 					const processedData = await processRawTileData(rawTileData);
-					tilesToMerge.push({
-						filename: 'unknown',
-						data: processedData
-					});
+					// Only add tiles with actual content
+					if (processedData.byteLength > 0) {
+						tilesToMerge.push({
+							filename,
+							data: processedData
+						});
+					}
 				}
 			} else {
 				stmt.finalize();
 			}
 		} catch (dbError) {
-			console.warn(`Error getting tile for merge:`, dbError);
+			console.warn(`Error getting tile from ${filename}:`, dbError);
 			continue;
 		}
 	}
 
+	// Final safety checks
 	if (tilesToMerge.length === 0) {
 		return null;
 	}
 
+	// Avoid expensive merge for single tile
 	if (tilesToMerge.length === 1) {
 		return tilesToMerge[0].data;
 	}
 
+	// Merge multiple tiles
 	try {
 		const tileArrays: Uint8Array[] = tilesToMerge.map(({ data }) => new Uint8Array(data));
 		const mergedTile = await mergeTiles(tileArrays);
@@ -423,6 +428,7 @@ async function mergeVectorTiles(
 		return resultBuffer.slice(mergedTile.byteOffset, mergedTile.byteOffset + mergedTile.byteLength);
 	} catch (error) {
 		console.error(`Vector tile merge failed:`, error);
+		// Fallback to first available tile on merge failure
 		return tilesToMerge[0].data;
 	}
 }

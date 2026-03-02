@@ -16,6 +16,8 @@ export class ServiceWorkerManager {
 	private showUpdateNotifications = $state(true);
 	private postponeUntilRefresh = $state(false);
 	private lastUpdateCheck: Date | null = null;
+	private currentVersion: string | null = null;
+	private isCheckingForUpdates = $state(false);
 
 	static getInstance(): ServiceWorkerManager {
 		if (!ServiceWorkerManager.instance) {
@@ -52,6 +54,11 @@ export class ServiceWorkerManager {
 			navigator.serviceWorker.addEventListener('message', (event) => {
 				if (event.data?.type === 'SW_SKIP_WAITING') {
 					window.location.reload();
+				} else if (event.data?.type === 'SW_ACTIVATED') {
+					console.log('New service worker activated:', event.data.version);
+					this.currentVersion = event.data.version;
+					this.updateAvailable = false;
+					this.installing = false;
 				}
 			});
 
@@ -62,13 +69,72 @@ export class ServiceWorkerManager {
 				}
 			}
 
-			// Start periodic update checks
-			this.startPeriodicUpdateCheck();
+			// Get current version from service worker
+			await this.getCurrentVersion();
+
+			// Check for updates only on app startup
+			await this.checkForUpdates();
 
 			return true;
 		} catch (error) {
 			console.error('Service Worker registration failed:', error);
 			return false;
+		}
+	}
+
+	/**
+	 * Get current version from service worker
+	 */
+	private async getCurrentVersion(): Promise<void> {
+		if (!this.registration) return;
+
+		try {
+			const messageChannel = new MessageChannel();
+			const promise = new Promise<string>((resolve) => {
+				messageChannel.port1.onmessage = (event) => {
+					if (event.data.type === 'VERSION_INFO') {
+						resolve(event.data.version);
+					}
+				};
+				setTimeout(() => resolve('unknown'), 5000);
+			});
+
+			const activeWorker = this.registration.active || navigator.serviceWorker.controller;
+			if (activeWorker) {
+				activeWorker.postMessage({ type: 'GET_VERSION' }, [messageChannel.port2]);
+				this.currentVersion = await promise;
+				console.log('Current SW version:', this.currentVersion);
+			}
+		} catch (error) {
+			console.error('Failed to get current version:', error);
+		}
+	}
+
+	/**
+	 * Check if there's a version difference between active and waiting SW
+	 */
+	private async checkVersionDifference(): Promise<boolean> {
+		if (!this.registration || !this.waitingWorker) return false;
+
+		try {
+			const messageChannel = new MessageChannel();
+			const promise = new Promise<any>((resolve) => {
+				messageChannel.port1.onmessage = (event) => {
+					if (event.data.type === 'VERSION_COMPARE') {
+						resolve(event.data);
+					}
+				};
+				setTimeout(() => resolve({ isNewVersion: true }), 5000);
+			});
+
+			this.waitingWorker.postMessage({ type: 'CHECK_VERSION' }, [messageChannel.port2]);
+			const result = await promise;
+
+			console.log('Version comparison:', result);
+			return result.isNewVersion;
+		} catch (error) {
+			console.error('Version check failed:', error);
+			return true; // Assume update available on error
 		}
 	}
 
@@ -92,30 +158,25 @@ export class ServiceWorkerManager {
 	/**
 	 * Handle when a service worker is waiting to activate
 	 */
-	private handleWaitingServiceWorker(worker: ServiceWorker) {
+	private async handleWaitingServiceWorker(worker: ServiceWorker) {
 		this.waitingWorker = worker;
-		this.updateAvailable = true;
 		this.lastUpdateCheck = new Date();
 
-		// Auto-update if enabled and not postponed
-		if (this.autoUpdate && !this.postponeUntilRefresh) {
-			setTimeout(() => this.applyUpdate(), 1000);
+		// Check if this is actually a new version
+		const isNewVersion = await this.checkVersionDifference();
+
+		if (isNewVersion) {
+			this.updateAvailable = true;
+
+			// Auto-update if enabled and not postponed
+			if (this.autoUpdate && !this.postponeUntilRefresh) {
+				setTimeout(() => this.applyUpdate(), 1000);
+			}
+
+			console.log('New service worker version available');
+		} else {
+			console.log('Service worker updated but no version change detected');
 		}
-
-		console.log('Service worker update available');
-	}
-
-	/**
-	 * Start periodic update checks
-	 */
-	private startPeriodicUpdateCheck() {
-		// Check for updates every 30 minutes
-		setInterval(
-			() => {
-				this.registration?.update().catch(console.error);
-			},
-			30 * 60 * 1000
-		);
 	}
 
 	async applyUpdate() {
@@ -147,15 +208,32 @@ export class ServiceWorkerManager {
 	/**
 	 * Manually check for updates
 	 */
-	async checkForUpdates() {
-		if (!this.registration) return false;
+	async checkForUpdates(): Promise<boolean> {
+		if (!this.registration || this.isCheckingForUpdates) return false;
+
+		this.isCheckingForUpdates = true;
+		console.log('Checking for service worker updates...');
+
 		try {
+			// Force check for new service worker
 			await this.registration.update();
 			this.lastUpdateCheck = new Date();
+
+			// Wait a bit for the update process to complete
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+
+			// Check if there's now a waiting worker
+			if (this.registration.waiting && !this.updateAvailable) {
+				await this.handleWaitingServiceWorker(this.registration.waiting);
+			}
+
+			console.log('Update check completed');
 			return true;
 		} catch (error) {
 			console.error('Failed to check for updates:', error);
 			return false;
+		} finally {
+			this.isCheckingForUpdates = false;
 		}
 	}
 
@@ -182,6 +260,14 @@ export class ServiceWorkerManager {
 
 	get lastCheck() {
 		return this.lastUpdateCheck;
+	}
+
+	get isChecking() {
+		return this.isCheckingForUpdates;
+	}
+
+	get version() {
+		return this.currentVersion;
 	}
 
 	/**
@@ -231,6 +317,28 @@ export class ServiceWorkerManager {
 		} catch (error) {
 			console.error('Failed to save SW update preferences:', error);
 		}
+	}
+
+	/**
+	 * Check if the app is installed and has cached resources
+	 */
+	private async checkInstallationStatus(): Promise<boolean> {
+		if (!browser) return false;
+
+		try {
+			const cacheNames = await caches.keys();
+			return cacheNames.length > 0;
+		} catch (error) {
+			console.warn('Failed to check cache status:', error);
+			return false;
+		}
+	}
+
+	/**
+	 * Get installation status
+	 */
+	async getInstallationStatus(): Promise<boolean> {
+		return this.checkInstallationStatus();
 	}
 
 	/**

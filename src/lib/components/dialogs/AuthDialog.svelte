@@ -17,6 +17,12 @@
 	let activeTab = $state('auth');
 	let showNotifications = $state(false);
 
+	// Online/offline status for icon color
+	let isOnline = $state(navigator?.onLine ?? true);
+
+	// Determine icon color based on online status
+	let authIconColor = $derived(isOnline ? '#10b981' : '#ef4444'); // green-500 : red-500
+
 	function toggleNotifications() {
 		showNotifications = !showNotifications;
 	}
@@ -27,19 +33,51 @@
 			activeTab = 'auth';
 		}
 	});
+
+	// Listen for online/offline events
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+
+		// Initialize status
+		isOnline = navigator.onLine;
+
+		function handleOnline() {
+			isOnline = true;
+		}
+
+		function handleOffline() {
+			isOnline = false;
+		}
+
+		window.addEventListener('online', handleOnline);
+		window.addEventListener('offline', handleOffline);
+
+		return () => {
+			window.removeEventListener('online', handleOnline);
+			window.removeEventListener('offline', handleOffline);
+		};
+	});
 </script>
 
 <Dialog.Root>
 	<Dialog.Trigger
 		class="bg-dark text-background shadow-mini hover:bg-dark/95 focus-visible:ring-foreground focus-visible:ring-offset-background fixed top-4 left-4 inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden active:scale-[0.98]"
 		style="z-index: {Z_INDEX.DIALOG_TRIGGER}"
-		aria-label="Open account and social features"
+		aria-label="{isOnline ? 'Online' : 'Offline'} - Open account and social features"
 	>
 		<div class="relative">
-			<PropertyIcon key={'description'} value={'authentication'} size={20} />
+			<PropertyIcon
+				key={'description'}
+				value={'authentication'}
+				size={20}
+				color={authIconColor}
+				class="transition-colors duration-300"
+			/>
+
+			<!-- Notification Badge -->
 			{#if currentUser && userStore.unreadNotificationCount > 0}
 				<span
-					class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white"
+					class="border-background absolute -right-1 -bottom-1 flex h-5 w-5 items-center justify-center rounded-full border-2 bg-red-500 text-xs text-white"
 				>
 					{userStore.unreadNotificationCount > 9 ? '9+' : userStore.unreadNotificationCount}
 				</span>

@@ -14,7 +14,7 @@
 <VectorTileSource
 	id="transportation"
 	tiles={['mbtiles://./transportation/{z}/{x}/{y}']}
-	minzoom={8}
+	minzoom={0}
 	maxzoom={14}
 	promoteId={'id'}
 >

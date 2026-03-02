@@ -315,7 +315,10 @@ class AppState {
 				}
 
 				this._colorMappings = cleanColorMappings;
-				console.log('🎨 Loaded and cleaned color mappings:', this._colorMappings);
+				console.log(
+					'[snapshot] 🎨 Loaded and cleaned color mappings:',
+					$state.snapshot(this._colorMappings)
+				);
 				this._language = result.value.language || DEFAULT_CONFIG.language;
 
 				// Load relation settings
@@ -592,7 +595,7 @@ class AppState {
 			[categoryKey]: colorName
 		};
 
-		console.log(`✅ Color mapping updated. New mappings:`, this._colorMappings);
+		console.log(`✅ Color mapping updated. New mappings:`, $state.snapshot(this._colorMappings));
 		this.saveConfig(); // Auto-save changes
 	}
 

@@ -26,23 +26,41 @@ class AuthState {
 	constructor() {
 		// Initialize auth state listener (only in browser)
 		if (browser) {
-			onAuthStateChanged(auth, async (firebaseUser) => {
-				// Only set user if they exist and are email verified
-				if (firebaseUser && !firebaseUser.emailVerified) {
-					// Sign out unverified users
-					try {
-						await firebaseSignOut(auth);
-						this._authError =
-							'Account not verified. Please contact administrator to verify your account.';
-					} catch (error) {
-						console.error('Error signing out unverified user:', error);
+			try {
+				// Set a timeout for initial auth determination
+				const authTimeout = setTimeout(() => {
+					if (this._loading) {
+						console.warn('⚠️ Auth state determination timeout - assuming anonymous');
+						this._user = null;
+						this._loading = false;
 					}
-					this._user = null;
-				} else {
-					this._user = firebaseUser;
-				}
+				}, 5000); // 5 second timeout
+
+				onAuthStateChanged(auth, async (firebaseUser) => {
+					clearTimeout(authTimeout);
+
+					// Only set user if they exist and are email verified
+					if (firebaseUser && !firebaseUser.emailVerified) {
+						// Sign out unverified users
+						try {
+							await firebaseSignOut(auth);
+							this._authError =
+								'Account not verified. Please contact administrator to verify your account.';
+						} catch (error) {
+							console.error('Error signing out unverified user:', error);
+						}
+						this._user = null;
+					} else {
+						this._user = firebaseUser;
+					}
+					this._loading = false;
+				});
+			} catch (error) {
+				console.error('Failed to initialize auth listener:', error);
+				// Fallback to anonymous state
+				this._user = null;
 				this._loading = false;
-			});
+			}
 		} else {
 			// On server, just set loading to false
 			this._loading = false;

@@ -50,6 +50,7 @@ export const Z_INDEX = {
 
 	// Notifications and alerts (700-800)
 	LOADING: 700,
+	OFFLINE_INSTALL_SCREEN: 750, // Offline installation required screen
 	NOTIFICATION: 700,
 	SW_UPDATE_NOTIFICATION: 750, // Service worker update notifications
 	TOAST: 710,

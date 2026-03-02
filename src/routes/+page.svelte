@@ -10,6 +10,7 @@
 	import SearchBar from '$lib/components/nav/SearchBar.svelte';
 	import SearchResultsDrawer from '$lib/components/drawers/SearchResultsDrawer.svelte';
 	import SelectedFeatureDrawer from '$lib/components/drawers/SelectedFeatureDrawer.svelte';
+	import OfflineInstallationRequired from '$lib/components/OfflineInstallationRequired.svelte';
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { searchControl } from '$lib/stores/SearchControl.svelte';
 	import { appInitializer } from '$lib/utils/app-initialization';
@@ -18,6 +19,7 @@
 	import { featuresDB } from '$lib/stores/FeaturesDB.svelte';
 	import { storiesDB } from '$lib/stores/StoriesDB.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
+	import { swManager } from '$lib/utils/service-worker-manager.svelte.js';
 	import { onMount, onDestroy } from 'svelte';
 	import SearchCategoryDialog from '$lib/components/dialogs/SearchCategoryDialog.svelte';
 
@@ -46,8 +48,14 @@
 	let isAppReady = $derived(initState.status === 'complete');
 	let isMapReady = $derived(isAppReady && !authState.loading && appState.isReady);
 
+	// Check if app is installed (has cached resources)
+	let isAppInstalled = $state(false);
+
 	// Simple offline status tracking
 	let isOnline = $state(navigator?.onLine ?? true);
+
+	// Track if this is first install attempt
+	let isFirstInstallAttempt = $state(false);
 
 	// Simple handlers that delegate to search store
 	async function handleSearch(query: string) {
@@ -88,6 +96,9 @@
 	onMount(() => {
 		console.log('🚀 Main app mounting');
 
+		// Check if app is already installed (has cached resources)
+		checkAppInstallation();
+
 		// Subscribe to initialization state
 		unsubscribe = appInitializer.subscribe((state) => {
 			initState = state;
@@ -118,9 +129,9 @@
 		window.addEventListener('app-cleanup', handleAppCleanup);
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 
-		// Start initialization with proper auth sequence
+		// Start initialization with proper sequence
 		try {
-			initializeAppWithAuth().then((result) => {
+			initializeAppSafely().then((result) => {
 				if (!result.success) {
 					console.error('App initialization failed:', result.error);
 				}
@@ -184,43 +195,128 @@
 	});
 
 	/**
+	 * Check if the app is properly installed (has cached resources)
+	 */
+	async function checkAppInstallation() {
+		try {
+			// Check if service worker is registered and has caches
+			const registration = await navigator.serviceWorker?.ready;
+			if (registration) {
+				isAppInstalled = await swManager.getInstallationStatus();
+				console.log(`App installation check: ${isAppInstalled ? 'Installed' : 'Not installed'}`);
+			} else {
+				isAppInstalled = false;
+				console.log('Service worker not available');
+			}
+		} catch (error) {
+			console.warn('Failed to check app installation:', error);
+			isAppInstalled = false;
+		}
+	}
+
+	/**
+	 * Safe initialization that handles offline scenarios
+	 */
+	async function initializeAppSafely() {
+		// If offline and not installed, show installation required screen
+		if (!isOnline && !isAppInstalled) {
+			isFirstInstallAttempt = true;
+			return { success: false, error: 'Installation required - please connect to internet' };
+		}
+
+		// If poor connection, try fast mode initialization
+		const connectionQuality = await checkConnectionSpeed();
+		const useFastMode = connectionQuality === 'poor' || !isOnline;
+
+		if (useFastMode) {
+			console.log('🗡️ Using fast offline-first initialization mode');
+		}
+
+		return initializeAppWithAuth(useFastMode);
+	}
+
+	/**
+	 * Quick connection speed check
+	 */
+	async function checkConnectionSpeed(): Promise<'poor' | 'good'> {
+		if (!navigator.onLine) return 'poor';
+
+		try {
+			const start = performance.now();
+			await Promise.race([
+				fetch('/favicon.ico', { cache: 'no-cache' }),
+				new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500))
+			]);
+			const responseTime = performance.now() - start;
+			return responseTime < 500 ? 'good' : 'poor';
+		} catch {
+			return 'poor';
+		}
+	}
+	/**
 	 * Initialize app with proper auth -> AppState -> worker sequence
 	 */
-	async function initializeAppWithAuth() {
+	async function initializeAppWithAuth(fastMode = false) {
 		try {
-			// Step 1: Wait for auth state to be determined
+			// Step 1: Quick auth state check with timeout
 			initState.status = 'auth-waiting';
-			console.log('🔐 Waiting for authentication to be determined...');
+			console.log('🔐 Checking authentication state...');
 
-			// Wait for auth loading to complete
-			while (authState.loading) {
-				await new Promise((resolve) => setTimeout(resolve, 50)); // Poll every 50ms
+			// Set a reasonable timeout for auth loading
+			const authTimeout = fastMode ? 3000 : 8000;
+			const startTime = Date.now();
+
+			// Wait for auth with timeout
+			while (authState.loading && Date.now() - startTime < authTimeout) {
+				await new Promise((resolve) => setTimeout(resolve, 100)); // Poll every 100ms
+			}
+
+			// If still loading after timeout, continue anyway
+			if (authState.loading) {
+				console.warn('⚠️ Auth loading timeout - continuing with unauthenticated state');
 			}
 
 			const currentUser = authState.user;
-			console.log(`✅ Auth determined: ${currentUser ? `User ${currentUser.uid}` : 'Anonymous'}`);
-
-			// Step 2: Load AppState for the authenticated user
-			initState.status = 'appstate-loading';
-			console.log('🔧 Loading AppState for user...');
-
-			await appState.handleUserChange(currentUser);
 			console.log(
-				`✅ AppState loaded! Map view: [${appState.mapView.center.join(', ')}] @ z${appState.mapView.zoom}`
+				`✅ Auth determined: ${currentUser ? `User ${currentUser.uid}` : 'Anonymous'} (${Date.now() - startTime}ms)`
 			);
 
-			// Step 2.5: Initialize databases with the authenticated user
-			console.log('💾 Initializing databases for user...');
-			featuresDB.handleUserChange(currentUser);
-			storiesDB.handleUserChange(currentUser);
+			// Step 2: Load AppState with timeout
+			initState.status = 'appstate-loading';
+			console.log('🔧 Loading AppState...');
 
-			// Step 3: Now initialize the worker and rest of the app
-			console.log('🚀 Starting worker initialization...');
-			const result = await appInitializer.initialize();
+			try {
+				const appStateTimeout = fastMode ? 2000 : 5000;
+				await Promise.race([
+					appState.handleUserChange(currentUser),
+					new Promise((_, reject) =>
+						setTimeout(() => reject(new Error('AppState timeout')), appStateTimeout)
+					)
+				]);
+				console.log(
+					`✅ AppState loaded! Map view: [${appState.mapView.center.join(', ')}] @ z${appState.mapView.zoom}`
+				);
+			} catch (error) {
+				console.warn('⚠️ AppState timeout - using defaults:', error);
+				// Continue with defaults - not critical
+			}
+
+			// Step 2.5: Initialize databases quickly
+			console.log('💾 Initializing databases...');
+			try {
+				featuresDB.handleUserChange(currentUser);
+				storiesDB.handleUserChange(currentUser);
+			} catch (error) {
+				console.warn('Database initialization warning:', error);
+			}
+
+			// Step 3: Initialize worker and core functionality
+			console.log('🚀 Starting core initialization...');
+			const result = await appInitializer.initialize(fastMode);
 
 			return result;
 		} catch (error) {
-			console.error('❌ Auth-based initialization failed:', error);
+			console.error('❌ Initialization failed:', error);
 			initState.status = 'error';
 			initState.error = error instanceof Error ? error.message : 'Unknown error';
 			return { success: false, error: initState.error };
@@ -249,7 +345,9 @@
 </script>
 
 <main class="app-container">
-	{#if !isAppReady}
+	{#if !isOnline && !isAppInstalled && isFirstInstallAttempt}
+		<OfflineInstallationRequired />
+	{:else if !isAppReady}
 		<LoadingScreen state={initState} showLogs={import.meta.env.DEV} />
 	{:else}
 		<AuthDialog />
