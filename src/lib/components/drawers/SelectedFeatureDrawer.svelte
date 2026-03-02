@@ -141,13 +141,13 @@
 		};
 
 		// Add timeout fallback - if loading takes too long, assume ready
-		let loadingTimeout: number;
+		let loadingTimeout: number | undefined;
 		const startLoadingTimeout = () => {
 			if (loadingTimeout) clearTimeout(loadingTimeout);
 			loadingTimeout = setTimeout(() => {
 				console.log('⏰ Tile loading timeout - assuming ready');
 				tileLoadingState.isLoading = false;
-			}, 5000); // 5 second timeout
+			}, 5000) as unknown as number; // 5 second timeout
 		};
 
 		// Add event listeners
