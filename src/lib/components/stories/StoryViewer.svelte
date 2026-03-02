@@ -90,7 +90,7 @@
 	<!-- Fixed Story Header -->
 	<header class="story-header bg-gray-100">
 		{#if story.description}
-			<p class="mb-4 text-gray-600">{story.description}</p>
+			<p class="mb-2 text-gray-600">{story.description}</p>
 		{/if}
 
 		<!-- Categories -->
@@ -147,7 +147,7 @@
 	<!-- Fixed Story Footer (if metadata is shown) -->
 	{#if showMetadata}
 		<footer class="story-footer bg-gray-100">
-			<div class="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+			<div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 sm:gap-4 sm:text-sm">
 				<!-- Date - Clickable to show/hide full date -->
 				<button
 					class="flex items-center gap-1 rounded hover:text-gray-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none"
@@ -236,7 +236,7 @@
 		position: relative;
 		z-index: 1;
 		flex-shrink: 0;
-		padding: 1rem;
+		padding: 0.5rem;
 		border-bottom: 1px solid #e5e7eb;
 		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 	}
@@ -251,7 +251,7 @@
 	}
 
 	.story-content {
-		padding: 1rem;
+		padding: 0.5rem;
 		line-height: 1.7;
 		min-height: 100%;
 	}
@@ -261,7 +261,7 @@
 		position: relative;
 		z-index: 1;
 		flex-shrink: 0;
-		padding: 1rem;
+		padding: 0.5rem;
 		border-top: 1px solid #e5e7eb;
 		box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
 	}

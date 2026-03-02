@@ -650,7 +650,7 @@
 				})}
 			>
 				<div class="mb-2 flex items-center justify-between">
-					<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
+					<Drawer.Title class="flex items-center gap-2 text-lg font-medium sm:text-2xl">
 						<PropertyIcon key={'category'} value={feature?.properties.category} size={20} />
 						{#if hasFeature}
 							{getDisplayName(feature)}

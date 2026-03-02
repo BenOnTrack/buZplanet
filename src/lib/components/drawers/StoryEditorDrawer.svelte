@@ -311,23 +311,23 @@
 		>
 			<div class="mx-auto flex h-full w-full max-w-full flex-col overflow-hidden">
 				<!-- Header -->
-				<div class="flex-shrink-0 border-b border-gray-200 bg-red-100 px-4 py-3">
+				<div class="flex-shrink-0 border-b border-gray-200 bg-red-100 px-2 py-2">
 					<div class="flex items-center justify-between">
-						<Drawer.Title class="flex items-center gap-2 text-xl font-semibold">
+						<Drawer.Title class="flex items-center gap-2 text-lg font-semibold sm:text-xl">
 							<PropertyIcon key="description" value="edit" size={24} />
 							{isEditing ? 'Edit Story' : 'New Story'}
 						</Drawer.Title>
 
-						<div class="flex items-center gap-3">
+						<div class="flex items-center gap-1">
 							{#if hasUnsavedChanges}
 								<span class="flex items-center gap-1 text-xs text-orange-600">
 									<PropertyIcon key="description" value="unsaved" size={12} />
-									Unsaved
+									<span class="hidden sm:inline">Unsaved</span>
 								</span>
 							{/if}
 
 							<button
-								class="rounded bg-gray-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-600 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
+								class="mobile-responsive-button rounded bg-gray-500 px-1.5 py-1.5 text-xs font-medium text-white hover:bg-gray-600 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-sm"
 								onclick={cancel}
 								onkeydown={(e) => {
 									if (e.key === 'Enter' || e.key === ' ') {
@@ -337,12 +337,17 @@
 								}}
 								disabled={saving}
 							>
-								CANCEL
+								<!-- Mobile: Show only icon -->
+								<span class="sm:hidden">
+									<PropertyIcon key="description" value="cancel" size={16} />
+								</span>
+								<!-- Desktop: Show text -->
+								<span class="hidden sm:inline">CANCEL</span>
 							</button>
 
 							<button
 								class={clsx(
-									'rounded px-3 py-1.5 text-sm font-medium text-white transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none',
+									'mobile-responsive-button rounded px-1.5 py-1.5 text-xs font-medium text-white transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-sm',
 									{
 										'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500': !saving && title.trim(),
 										'cursor-not-allowed bg-gray-400': saving || !title.trim()
@@ -357,11 +362,22 @@
 								}}
 								disabled={saving || !title.trim()}
 							>
-								{#if saving}
-									SAVING...
-								{:else}
-									{isEditing ? 'UPDATE' : 'CREATE'}
-								{/if}
+								<!-- Mobile: Show only icon -->
+								<span class="sm:hidden">
+									{#if saving}
+										<PropertyIcon key="description" value="loading" size={16} />
+									{:else}
+										<PropertyIcon key="description" value={isEditing ? 'save' : 'plus'} size={16} />
+									{/if}
+								</span>
+								<!-- Desktop: Show text -->
+								<span class="hidden sm:inline">
+									{#if saving}
+										SAVING...
+									{:else}
+										{isEditing ? 'UPDATE' : 'CREATE'}
+									{/if}
+								</span>
 							</button>
 
 							<Drawer.Close
@@ -386,13 +402,10 @@
 				</div>
 
 				<!-- Tab Navigation and Content using bits-ui Tabs -->
-				<div class="flex-1 overflow-hidden px-3 pb-3">
-					<Tabs.Root
-						bind:value={activeTab}
-						class="rounded-card shadow-card flex h-full w-full flex-col border border-gray-200 bg-red-100 p-3"
-					>
+				<div class="flex-1 overflow-hidden px-2 pb-2">
+					<Tabs.Root bind:value={activeTab} class="flex h-full w-full flex-col">
 						<Tabs.List
-							class="rounded-9px shadow-mini-inset mb-3 grid w-full grid-cols-2 gap-1 border border-red-400 bg-red-300 p-1 text-sm leading-[0.01em] font-semibold"
+							class="mb-2 grid w-full grid-cols-2 gap-1 rounded-lg border border-gray-300 bg-gray-200 p-1 text-sm font-semibold"
 						>
 							<Tabs.Trigger
 								value="content"
@@ -433,9 +446,9 @@
 								/>
 							</Tabs.Content>
 
-							<Tabs.Content value="metadata" class="flex-1 overflow-auto">
+							<Tabs.Content value="metadata" class="flex-1 overflow-auto px-1 py-1">
 								<!-- Metadata Tab -->
-								<div class="space-y-6 px-1 py-3">
+								<div class="space-y-4 py-2">
 									<!-- Title Input -->
 									<div>
 										<label for="story-title" class="mb-2 block text-sm font-medium text-gray-700">
@@ -520,6 +533,28 @@
 />
 
 <style>
+	/* Mobile responsive buttons optimization */
+	.mobile-responsive-button {
+		/* Compact buttons for mobile */
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		/* Smaller, more compact sizing */
+		min-height: 28px;
+		min-width: 28px;
+	}
+
+	/* Mobile-specific compact styling */
+	@media screen and (max-width: 640px) {
+		.mobile-responsive-button {
+			/* Very compact on mobile */
+			padding: 0.25rem !important;
+			min-height: 32px;
+			min-width: 32px;
+			font-size: 0.75rem;
+		}
+	}
+
 	/* Mobile keyboard handling - industry standard approach */
 	.story-editor-drawer {
 		/* Fixed positioning that resists keyboard displacement */

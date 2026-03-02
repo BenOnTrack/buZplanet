@@ -8,7 +8,9 @@ export const descriptionIcons = {
 	features: 'lucide:map-pinned',
 
 	// Story-related icons
-	edit: 'lucide:edit',
+	edit: 'lucide:pencil',
+	cancel: 'lucide:ban',
+	trash: 'lucide:trash',
 	save: 'lucide:save',
 	plus: 'lucide:plus',
 	loading: 'lucide:loader-2',

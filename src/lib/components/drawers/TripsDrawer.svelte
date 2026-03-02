@@ -26,7 +26,7 @@
 				})}
 			>
 				<div class="mb-4 flex items-center justify-between">
-					<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
+					<Drawer.Title class="flex items-center gap-2 text-lg font-medium sm:text-2xl">
 						<span>🗺️</span>
 						Trips
 					</Drawer.Title>

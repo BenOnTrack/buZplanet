@@ -380,7 +380,7 @@
 				<div class="flex-shrink-0 border-b border-gray-200 bg-white px-4 py-4">
 					<!-- Header -->
 					<div class="mb-4 flex items-center justify-between">
-						<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
+						<Drawer.Title class="flex items-center gap-2 text-lg font-medium sm:text-2xl">
 							<span>📍</span>
 							Saved Features
 						</Drawer.Title>

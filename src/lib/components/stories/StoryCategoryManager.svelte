@@ -264,7 +264,7 @@
 	<!-- Categories Selection/Display -->
 	{#if availableCategories.length > 0}
 		<fieldset class="mb-6">
-			<legend class="mb-3 block text-sm font-medium text-gray-700">
+			<legend class="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm">
 				{showSelection ? 'Select Categories' : 'Available Categories'}
 			</legend>
 			<div class="flex flex-wrap gap-2">
@@ -273,7 +273,7 @@
 						<button
 							type="button"
 							class={clsx(
-								'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none',
+								'inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-xs',
 								{
 									'cursor-pointer text-white':
 										showSelection && selectedCategories.includes(category.id),
@@ -340,12 +340,14 @@
 
 	<!-- Create New Category -->
 	<fieldset>
-		<legend class="mb-3 block text-sm font-medium text-gray-700">Create New Category</legend>
+		<legend class="mb-2 block text-xs font-medium text-gray-700 sm:mb-3 sm:text-sm"
+			>Create New Category</legend
+		>
 
 		{#if !showCreateCategory}
 			<button
 				type="button"
-				class="inline-flex items-center gap-2 rounded-md border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+				class="inline-flex items-center gap-1 rounded-md border border-dashed border-gray-300 px-2 py-1.5 text-xs text-gray-600 transition-colors hover:border-gray-400 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none sm:gap-2 sm:px-3 sm:py-2 sm:text-sm"
 				onclick={() => (showCreateCategory = true)}
 			>
 				<PropertyIcon key="description" value="plus" size={16} />
@@ -355,7 +357,10 @@
 			<div class="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
 				<!-- Category Name -->
 				<div>
-					<label for="category-name" class="mb-1 block text-sm font-medium text-gray-700">
+					<label
+						for="category-name"
+						class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm"
+					>
 						Category Name *
 					</label>
 					<input
@@ -363,7 +368,7 @@
 						type="text"
 						bind:value={newCategoryName}
 						placeholder="e.g., Photography, Work, Family"
-						class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+						class="block w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none sm:px-3 sm:py-2 sm:text-sm"
 						required
 					/>
 				</div>
@@ -371,7 +376,10 @@
 				<!-- Category Color and Icon -->
 				<div class="grid grid-cols-2 gap-4">
 					<div>
-						<label for="category-color" class="mb-1 block text-sm font-medium text-gray-700">
+						<label
+							for="category-color"
+							class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm"
+						>
 							Color
 						</label>
 						<input
@@ -382,7 +390,10 @@
 						/>
 					</div>
 					<div>
-						<label for="category-icon" class="mb-1 block text-sm font-medium text-gray-700">
+						<label
+							for="category-icon"
+							class="mb-1 block text-xs font-medium text-gray-700 sm:text-sm"
+						>
 							Icon (optional)
 						</label>
 						<input
@@ -391,7 +402,7 @@
 							bind:value={newCategoryIcon}
 							placeholder="📸 💼 👨‍👩‍👧‍👦"
 							maxlength="2"
-							class="block w-full rounded-md border border-gray-300 px-3 py-2 text-center text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+							class="block w-full rounded-md border border-gray-300 px-2 py-1.5 text-center text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none sm:px-3 sm:py-2 sm:text-sm"
 						/>
 					</div>
 				</div>
@@ -399,7 +410,7 @@
 				<!-- Preview -->
 				{#if newCategoryName}
 					<div>
-						<p class="mb-2 text-sm text-gray-700">Preview:</p>
+						<p class="mb-1 text-xs text-gray-700 sm:mb-2 sm:text-sm">Preview:</p>
 						<span
 							class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-white"
 							style="background-color: {newCategoryColor}"
@@ -414,7 +425,7 @@
 				<div class="flex gap-2">
 					<button
 						type="button"
-						class="flex-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-400"
+						class="flex-1 rounded-md bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-400 sm:px-3 sm:py-2 sm:text-sm"
 						onclick={createCategory}
 						disabled={!newCategoryName.trim() || creating}
 					>
@@ -426,7 +437,7 @@
 					</button>
 					<button
 						type="button"
-						class="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+						class="rounded-md border border-gray-300 px-2 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none sm:px-3 sm:py-2 sm:text-sm"
 						onclick={cancelCreateCategory}
 						disabled={creating}
 					>

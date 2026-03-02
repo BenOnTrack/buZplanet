@@ -345,10 +345,10 @@
 		>
 			<div class="mx-auto flex h-full w-full max-w-full flex-col overflow-hidden">
 				<!-- Sticky Header Section -->
-				<div class="flex-shrink-0 border-b border-gray-200 bg-gray-100 px-4 py-2">
+				<div class="flex-shrink-0 border-b border-gray-200 bg-gray-100 px-2 py-2">
 					<!-- Header -->
 					<div class="mb-2 flex items-center justify-between">
-						<Drawer.Title class="flex items-center gap-2 text-2xl font-medium">
+						<Drawer.Title class="flex items-center gap-2 text-lg font-medium sm:text-2xl">
 							<PropertyIcon key="description" value="stories" size={24} />
 							{#if viewMode === 'view' && currentStory}
 								{currentStory.title}
@@ -366,10 +366,10 @@
 							{/if}
 						</Drawer.Title>
 
-						<div class="flex items-center gap-2">
+						<div class="flex items-center gap-1">
 							{#if viewMode === 'list' && activeTab === 'stories'}
 								<button
-									class="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+									class="mobile-responsive-button rounded bg-blue-600 px-1.5 py-1 text-xs font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-sm"
 									onclick={handleNewStory}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
@@ -380,12 +380,17 @@
 									title="Create new story"
 									aria-label="Create new story"
 								>
-									NEW
+									<!-- Mobile: Show only icon -->
+									<span class="sm:hidden">
+										<PropertyIcon key="description" value="plus" size={16} />
+									</span>
+									<!-- Desktop: Show text -->
+									<span class="hidden sm:inline">NEW</span>
 								</button>
 							{:else if currentStory}
 								<!-- View connections button for any story view -->
 								<button
-									class="rounded px-3 py-1 text-sm font-medium text-white transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none {storyConnectionVisible
+									class="mobile-responsive-button rounded px-1.5 py-1 text-xs font-medium text-white transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-sm {storyConnectionVisible
 										? 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
 										: 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'}"
 									onclick={handleToggleStoryConnection}
@@ -402,13 +407,24 @@
 										? 'Hide feature connections'
 										: 'View feature connections'}
 								>
-									{storyConnectionVisible ? 'HIDE' : 'VIEW'}
+									<!-- Mobile: Show only icon -->
+									<span class="sm:hidden">
+										<PropertyIcon
+											key="description"
+											value={storyConnectionVisible ? 'eye' : 'route'}
+											size={16}
+										/>
+									</span>
+									<!-- Desktop: Show text -->
+									<span class="hidden sm:inline">
+										{storyConnectionVisible ? 'HIDE' : 'VIEW'}
+									</span>
 								</button>
 
 								{#if !isCurrentStoryReadOnly}
 									<!-- Edit button for user's own stories -->
 									<button
-										class="rounded bg-blue-500 px-3 py-1 text-sm font-medium text-white hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+										class="mobile-responsive-button rounded bg-blue-500 px-1.5 py-1 text-xs font-medium text-white hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-sm"
 										onclick={() => currentStory && handleEditStory(currentStory)}
 										onkeydown={(e) => {
 											if (e.key === 'Enter' || e.key === ' ') {
@@ -419,12 +435,17 @@
 										title="Edit story"
 										aria-label="Edit story"
 									>
-										EDIT
+										<!-- Mobile: Show only icon -->
+										<span class="sm:hidden">
+											<PropertyIcon key="description" value="edit" size={16} />
+										</span>
+										<!-- Desktop: Show text -->
+										<span class="hidden sm:inline">EDIT</span>
 									</button>
 
 									<!-- Delete button for user's own stories -->
 									<button
-										class="rounded bg-red-500 px-3 py-1 text-sm font-medium text-white hover:bg-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none"
+										class="mobile-responsive-button rounded bg-red-500 px-1.5 py-1 text-xs font-medium text-white hover:bg-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-sm"
 										onclick={() => currentStory && handleDeleteStory(currentStory)}
 										onkeydown={(e) => {
 											if (e.key === 'Enter' || e.key === ' ') {
@@ -435,12 +456,17 @@
 										title="Delete story"
 										aria-label="Delete story"
 									>
-										DELETE
+										<!-- Mobile: Show only icon -->
+										<span class="sm:hidden">
+											<PropertyIcon key="description" value="trash" size={16} />
+										</span>
+										<!-- Desktop: Show text -->
+										<span class="hidden sm:inline">DELETE</span>
 									</button>
 								{:else}
 									<!-- Edit categories button for followed stories -->
 									<button
-										class="rounded bg-orange-500 px-3 py-1 text-sm font-medium text-white hover:bg-orange-600 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:outline-none"
+										class="mobile-responsive-button rounded bg-orange-500 px-1.5 py-1 text-xs font-medium text-white hover:bg-orange-600 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-sm"
 										onclick={() => currentStory && handleEditFollowedStoryCategories(currentStory)}
 										onkeydown={(e) => {
 											if (e.key === 'Enter' || e.key === ' ') {
@@ -451,7 +477,12 @@
 										title="Edit categories for this story"
 										aria-label="Edit categories for this story"
 									>
-										EDIT
+										<!-- Mobile: Show only icon -->
+										<span class="sm:hidden">
+											<PropertyIcon key="description" value="category" size={16} />
+										</span>
+										<!-- Desktop: Show text -->
+										<span class="hidden sm:inline">EDIT</span>
 									</button>
 								{/if}
 							{/if}
@@ -459,7 +490,7 @@
 							{#if currentStory}
 								<!-- Back button for any story view -->
 								<button
-									class="rounded bg-gray-500 px-3 py-1 text-sm font-medium text-white hover:bg-gray-600 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none"
+									class="mobile-responsive-button rounded bg-gray-500 px-1.5 py-1 text-xs font-medium text-white hover:bg-gray-600 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-sm"
 									onclick={backToList}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
@@ -470,7 +501,12 @@
 									title="Back to stories list"
 									aria-label="Back to stories list"
 								>
-									BACK
+									<!-- Mobile: Show only icon -->
+									<span class="sm:hidden">
+										<PropertyIcon key="description" value="pagination_previous" size={16} />
+									</span>
+									<!-- Desktop: Show text -->
+									<span class="hidden sm:inline">BACK</span>
 								</button>
 							{/if}
 
@@ -485,13 +521,10 @@
 
 					<!-- Tabs -->
 					{#if viewMode === 'list'}
-						<div class="pb-2">
-							<Tabs.Root
-								bind:value={activeTab}
-								class="rounded-card shadow-card w-full border border-gray-200 bg-gray-100 p-3"
-							>
+						<div class="pb-1">
+							<Tabs.Root bind:value={activeTab} class="w-full">
 								<Tabs.List
-									class="rounded-9px shadow-mini-inset grid w-full grid-cols-2 gap-1 border border-blue-400 bg-gray-300 p-1 text-sm leading-[0.01em] font-semibold"
+									class="grid w-full grid-cols-2 gap-1 rounded-lg border border-gray-300 bg-gray-200 p-1 text-sm font-semibold"
 								>
 									<Tabs.Trigger
 										value="stories"
@@ -528,25 +561,25 @@
 
 					<!-- Search and Filters (only in stories tab) -->
 					{#if viewMode === 'list' && activeTab === 'stories'}
-						<div class="space-y-2">
+						<div class="space-y-1">
 							<!-- Search -->
-							<div class="relative">
+							<div class="relative px-2">
 								<PropertyIcon
 									key="description"
 									value="search"
 									size={16}
-									class="absolute top-1/2 left-3 -translate-y-1/2 transform text-gray-400"
+									class="absolute top-1/2 left-5 -translate-y-1/2 transform text-gray-400"
 								/>
 								<input
 									bind:value={searchQuery}
 									placeholder="Search stories and authors..."
-									class="w-full rounded-md border border-gray-300 py-2 pr-4 pl-10 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+									class="w-full rounded-md border border-gray-300 py-1.5 pr-3 pl-9 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
 								/>
 							</div>
 
 							<!-- Category filters -->
 							{#if availableCategories.length > 0}
-								<div class="category-filters-container">
+								<div class="category-filters-container px-2">
 									<div class="category-filters-scroll">
 										{#each availableCategories as category}
 											<button
@@ -591,21 +624,10 @@
 						<Tabs.Root bind:value={activeTab} class="flex h-full flex-col">
 							<Tabs.Content
 								value="stories"
-								class="flex h-full flex-col pt-3 data-[state=inactive]:hidden"
+								class="flex h-full flex-col data-[state=inactive]:hidden"
 							>
-								<!-- Fixed Stories Header -->
-								<div class="flex-shrink-0 border-b border-gray-200 bg-gray-100 px-4 py-2">
-									<p class="text-sm text-gray-600">
-										{filteredStoriesCount !== null ? filteredStoriesCount : '...'} stor{filteredStoriesCount !==
-										1
-											? 'ies'
-											: 'y'}
-										{selectedCategories.length > 0 || searchQuery ? ' (filtered)' : ''}
-									</p>
-								</div>
-
 								<!-- Scrollable Stories Content -->
-								<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">
+								<div class="stories-drawer-scrollable flex-1 overflow-auto px-2">
 									<StoriesList
 										onStorySelect={handleStorySelect}
 										onNewStory={handleNewStory}
@@ -619,10 +641,10 @@
 
 							<Tabs.Content
 								value="categories"
-								class="flex h-full flex-col pt-3 data-[state=inactive]:hidden"
+								class="flex h-full flex-col data-[state=inactive]:hidden"
 							>
 								<!-- Categories Management Content -->
-								<div class="stories-drawer-scrollable flex-1 overflow-auto px-4 py-4">
+								<div class="stories-drawer-scrollable flex-1 overflow-auto px-2">
 									<StoryCategoryManager
 										bind:availableCategories
 										bind:error={categoryManagerError}
@@ -764,6 +786,28 @@
 		}
 	}
 
+	/* Mobile responsive buttons optimization */
+	.mobile-responsive-button {
+		/* Compact buttons for mobile */
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		/* Smaller, more compact sizing */
+		min-height: 28px;
+		min-width: 28px;
+	}
+
+	/* Mobile-specific compact styling */
+	@media screen and (max-width: 640px) {
+		.mobile-responsive-button {
+			/* Very compact on mobile */
+			padding: 0.25rem !important;
+			min-height: 32px;
+			min-width: 32px;
+			font-size: 0.75rem;
+		}
+	}
+
 	/* Category filters horizontal scrolling - specific to category sections only */
 	.category-filters-container {
 		overflow: hidden;
@@ -776,27 +820,15 @@
 		overflow-x: auto;
 		overflow-y: hidden;
 		padding-bottom: 0.25rem;
-		scrollbar-width: thin;
-		scrollbar-color: #d1d5db transparent;
+		/* Hide scrollbar for all browsers */
+		scrollbar-width: none; /* Firefox */
+		-ms-overflow-style: none; /* IE and Edge */
 		/* Ensure this only affects this specific container */
 		max-width: 100%;
 	}
 
+	/* Hide scrollbar for WebKit browsers (Chrome, Safari, etc.) */
 	.category-filters-scroll::-webkit-scrollbar {
-		height: 4px;
-		width: auto; /* Reset any inherited width */
-	}
-
-	.category-filters-scroll::-webkit-scrollbar-track {
-		background: transparent;
-	}
-
-	.category-filters-scroll::-webkit-scrollbar-thumb {
-		background: #d1d5db;
-		border-radius: 2px;
-	}
-
-	.category-filters-scroll::-webkit-scrollbar-thumb:hover {
-		background: #9ca3af;
+		display: none;
 	}
 </style>

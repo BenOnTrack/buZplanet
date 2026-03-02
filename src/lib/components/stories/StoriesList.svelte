@@ -303,7 +303,7 @@
 		</div>
 	{:else}
 		<!-- Stories list -->
-		<div class="space-y-4">
+		<div class="space-y-2">
 			{#each filteredStories as story (story.id)}
 				{@const authorName = getAuthorDisplayName(story)}
 				{@const authorUsername = getAuthorUsername(story)}
