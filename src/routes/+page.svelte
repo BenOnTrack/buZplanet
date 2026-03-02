@@ -96,9 +96,6 @@
 	onMount(() => {
 		console.log('🚀 Main app mounting');
 
-		// Check if app is already installed (has cached resources)
-		checkAppInstallation();
-
 		// Subscribe to initialization state
 		unsubscribe = appInitializer.subscribe((state) => {
 			initState = state;
@@ -129,13 +126,21 @@
 		window.addEventListener('app-cleanup', handleAppCleanup);
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 
-		// Start initialization with proper sequence
+		// Start initialization with proper sequence - check installation first
 		try {
-			initializeAppSafely().then((result) => {
-				if (!result.success) {
-					console.error('App initialization failed:', result.error);
-				}
-			});
+			// Check installation status first, then initialize
+			checkAppInstallation()
+				.then(() => {
+					return initializeAppSafely();
+				})
+				.then((result) => {
+					if (!result.success) {
+						console.error('App initialization failed:', result.error);
+					}
+				})
+				.catch((error) => {
+					console.error('Unexpected initialization error:', error);
+				});
 		} catch (error) {
 			console.error('Unexpected initialization error:', error);
 		}
@@ -202,8 +207,27 @@
 			// Check if service worker is registered and has caches
 			const registration = await navigator.serviceWorker?.ready;
 			if (registration) {
-				isAppInstalled = await swManager.getInstallationStatus();
-				console.log(`App installation check: ${isAppInstalled ? 'Installed' : 'Not installed'}`);
+				// Check for cached resources, not PWA installation status
+				const cacheNames = await caches.keys();
+				const hasCachedResources = cacheNames.some((name) => name.startsWith('cache-'));
+
+				if (hasCachedResources) {
+					// Verify at least some assets are cached
+					try {
+						const cache = await caches.open(cacheNames.find((name) => name.startsWith('cache-'))!);
+						const keys = await cache.keys();
+						isAppInstalled = keys.length > 0;
+						console.log(
+							`App installation check: ${isAppInstalled ? 'Installed' : 'Not installed'} (${keys.length} cached resources)`
+						);
+					} catch (error) {
+						console.warn('Error checking cache contents:', error);
+						isAppInstalled = hasCachedResources; // Fall back to just checking cache existence
+					}
+				} else {
+					isAppInstalled = false;
+					console.log('App installation check: Not installed (no caches found)');
+				}
 			} else {
 				isAppInstalled = false;
 				console.log('Service worker not available');

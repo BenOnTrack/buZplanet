@@ -326,14 +326,30 @@ export class ServiceWorkerManager {
 	}
 
 	/**
-	 * Check if the app is installed and has cached resources
+	 * Check if the app has cached resources (for offline functionality)
+	 * This is different from PWA installation status
 	 */
 	private async checkInstallationStatus(): Promise<boolean> {
 		if (!browser) return false;
 
 		try {
 			const cacheNames = await caches.keys();
-			return cacheNames.length > 0;
+			// Look for our cache- prefixed caches
+			const appCaches = cacheNames.filter((name) => name.startsWith('cache-'));
+
+			if (appCaches.length === 0) {
+				return false; // No app caches found
+			}
+
+			// Check if the most recent cache has content
+			try {
+				const cache = await caches.open(appCaches[0]);
+				const keys = await cache.keys();
+				return keys.length > 10; // Require at least 10 cached resources for "installation"
+			} catch (error) {
+				console.warn('Failed to check cache contents:', error);
+				return appCaches.length > 0; // Fall back to cache existence
+			}
 		} catch (error) {
 			console.warn('Failed to check cache status:', error);
 			return false;
@@ -399,14 +415,15 @@ export class ServiceWorkerManager {
 	}
 
 	/**
-	 * Get installation status
+	 * Get cached resource status (for offline functionality)
 	 */
 	async getInstallationStatus(): Promise<boolean> {
 		return this.checkInstallationStatus();
 	}
 
 	/**
-	 * Check if the app is running as PWA
+	 * Check if the app is running as PWA (actually installed on device)
+	 * This is different from having cached resources
 	 */
 	get isPWA(): boolean {
 		if (!browser) return false;
@@ -416,18 +433,21 @@ export class ServiceWorkerManager {
 		const isIOSStandalone = (window.navigator as any).standalone;
 		const isAndroidApp = document.referrer.includes('android-app://');
 		const isInstalledOnDesktop = window.matchMedia('(display-mode: minimal-ui)').matches;
-		const hasInstallDate = localStorage.getItem('pwa-installed') !== null;
+
+		// Check localStorage flag (fallback for manual marking)
+		const hasManualInstallFlag = localStorage.getItem('pwa-installed') !== null;
 
 		// Check if launched from home screen or app launcher
 		const isLaunchedFromHomeScreen =
 			isStandalone || isIOSStandalone || isAndroidApp || isInstalledOnDesktop;
 
-		// Store install state for persistence
-		if (isLaunchedFromHomeScreen && !hasInstallDate) {
+		// Store install state for persistence (but don't just rely on localStorage)
+		if (isLaunchedFromHomeScreen && !hasManualInstallFlag) {
 			localStorage.setItem('pwa-installed', Date.now().toString());
 		}
 
-		return isLaunchedFromHomeScreen || hasInstallDate;
+		// Only consider it installed if actually launched as PWA, not just marked manually
+		return isLaunchedFromHomeScreen;
 	}
 
 	/**
