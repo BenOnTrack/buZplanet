@@ -1,12 +1,82 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { browser } from '$app/environment';
 	import { Z_INDEX } from '$lib/styles/z-index';
 
 	interface Props {
-		state: InitializationState;
+		initState: InitializationState;
 		showLogs?: boolean;
 	}
 
-	let { state, showLogs = false }: Props = $props();
+	let { initState, showLogs = false }: Props = $props();
+
+	// Service Worker installation progress
+	let swInstallProgress = $state({
+		isInstalling: false,
+		version: '',
+		currentBatch: 0,
+		totalBatches: 0,
+		totalAssets: 0,
+		progress: 0,
+		hasErrors: false,
+		isComplete: false
+	});
+
+	onMount(() => {
+		if (!browser) return;
+
+		// Listen for service worker installation messages
+		const handleMessage = (event: MessageEvent) => {
+			const { data } = event;
+
+			switch (data?.type) {
+				case 'SW_INSTALL_START':
+					swInstallProgress = {
+						isInstalling: true,
+						version: data.version,
+						currentBatch: 0,
+						totalBatches: data.totalBatches,
+						totalAssets: data.totalAssets,
+						progress: 0,
+						hasErrors: false,
+						isComplete: false
+					};
+					break;
+
+				case 'SW_INSTALL_PROGRESS':
+					if (swInstallProgress.isInstalling) {
+						swInstallProgress = {
+							...swInstallProgress,
+							currentBatch: data.currentBatch,
+							progress: data.progress,
+							hasErrors: data.hasErrors || swInstallProgress.hasErrors
+						};
+					}
+					break;
+
+				case 'SW_INSTALL_COMPLETE':
+					if (swInstallProgress.isInstalling) {
+						swInstallProgress = {
+							...swInstallProgress,
+							progress: 100,
+							isComplete: true
+						};
+
+						// Hide SW progress after 2 seconds
+						setTimeout(() => {
+							swInstallProgress.isInstalling = false;
+						}, 2000);
+					}
+					break;
+			}
+		};
+
+		navigator.serviceWorker?.addEventListener('message', handleMessage);
+
+		return () => {
+			navigator.serviceWorker?.removeEventListener('message', handleMessage);
+		};
+	});
 
 	const statusMessages = {
 		pending: 'Starting up...',
@@ -40,46 +110,89 @@
 		<div class="status-indicator">
 			<span
 				class="status-emoji"
-				class:spinning={state.status === 'initializing' ||
-					state.status === 'auth-waiting' ||
-					state.status === 'appstate-loading' ||
-					state.status === 'worker-ready' ||
-					state.status === 'appstate-ready' ||
-					state.status === 'protocol-ready' ||
-					state.status === 'database-scanning'}
+				class:spinning={initState.status === 'initializing' ||
+					initState.status === 'auth-waiting' ||
+					initState.status === 'appstate-loading' ||
+					initState.status === 'worker-ready' ||
+					initState.status === 'appstate-ready' ||
+					initState.status === 'protocol-ready' ||
+					initState.status === 'database-scanning' ||
+					swInstallProgress.isInstalling}
 			>
-				{statusEmojis[state.status]}
+				{swInstallProgress.isInstalling ? '📦' : statusEmojis[initState.status]}
 			</span>
 			<h2 class="status-message">
-				{statusMessages[state.status]}
+				{#if swInstallProgress.isInstalling}
+					{#if swInstallProgress.isComplete}
+						App Update Installed!
+					{:else}
+						Installing App Update...
+					{/if}
+				{:else}
+					{statusMessages[initState.status]}
+				{/if}
 			</h2>
+
+			<!-- Service Worker Installation Progress -->
+			{#if swInstallProgress.isInstalling}
+				<div class="sw-progress-info">
+					{#if swInstallProgress.isComplete}
+						<p class="sw-progress-text">
+							✅ {swInstallProgress.totalAssets} assets cached successfully!
+							{#if swInstallProgress.hasErrors}
+								<span class="sw-errors">(with some errors)</span>
+							{/if}
+						</p>
+					{:else}
+						<p class="sw-progress-text">
+							Caching batch {swInstallProgress.currentBatch}/{swInstallProgress.totalBatches}
+							<br />({swInstallProgress.totalAssets} total assets)
+							{#if swInstallProgress.hasErrors}
+								<span class="sw-errors">⚠️ Some errors occurred</span>
+							{/if}
+						</p>
+					{/if}
+				</div>
+			{/if}
 		</div>
 
-		{#if state.error}
+		{#if initState.error}
 			<div class="error-message">
 				<strong>Error:</strong>
-				{state.error}
+				{initState.error}
 			</div>
 		{/if}
 
-		{#if state.status === 'initializing' || state.status === 'auth-waiting' || state.status === 'appstate-loading' || state.status === 'worker-ready' || state.status === 'appstate-ready' || state.status === 'protocol-ready' || state.status === 'database-scanning'}
+		{#if initState.status === 'initializing' || initState.status === 'auth-waiting' || initState.status === 'appstate-loading' || initState.status === 'worker-ready' || initState.status === 'appstate-ready' || initState.status === 'protocol-ready' || initState.status === 'database-scanning' || swInstallProgress.isInstalling}
 			<div class="progress-bar">
-				<div
-					class="progress-fill"
-					class:step-1={state.status === 'initializing'}
-					class:step-2={state.status === 'worker-ready'}
-					class:step-3={state.status === 'appstate-ready'}
-					class:step-4={state.status === 'protocol-ready'}
-					class:step-5={state.status === 'database-scanning'}
-				></div>
+				{#if swInstallProgress.isInstalling}
+					<!-- Service Worker Installation Progress -->
+					<div
+						class="progress-fill sw-progress"
+						class:sw-complete={swInstallProgress.isComplete}
+						class:sw-error={swInstallProgress.hasErrors && !swInstallProgress.isComplete}
+						style="width: {swInstallProgress.progress}%"
+					></div>
+					<div class="progress-label">{swInstallProgress.progress}% cached</div>
+				{:else}
+					<!-- App Initialization Progress -->
+					<div
+						class="progress-fill"
+						class:step-1={initState.status === 'initializing'}
+						class:step-2={initState.status === 'worker-ready'}
+						class:step-3={initState.status === 'appstate-ready'}
+						class:step-4={initState.status === 'protocol-ready'}
+						class:step-5={initState.status === 'database-scanning'}
+					></div>
+				{/if}
 			</div>
 		{/if}
 
-		{#if showLogs && state.logs.length > 0}
+		{#if showLogs && initState.logs.length > 0}
 			<details class="logs-section">
 				<summary>Initialization Logs</summary>
 				<div class="logs-container">
-					{#each state.logs as log}
+					{#each initState.logs as log}
 						<div class="log-entry">{log}</div>
 					{/each}
 				</div>
@@ -161,6 +274,7 @@
 		border-radius: 2px;
 		overflow: hidden;
 		margin-bottom: 1.5rem;
+		position: relative;
 	}
 
 	.progress-fill {
@@ -189,6 +303,47 @@
 
 	.progress-fill.step-5 {
 		width: 95%;
+	}
+
+	/* Service Worker Progress Styles */
+	.progress-fill.sw-progress {
+		background: linear-gradient(90deg, #4ade80, #22c55e);
+		transition: width 0.3s ease;
+	}
+
+	.progress-fill.sw-complete {
+		background: linear-gradient(90deg, #10b981, #059669);
+	}
+
+	.progress-fill.sw-error {
+		background: linear-gradient(90deg, #f59e0b, #d97706);
+	}
+
+	.progress-label {
+		position: absolute;
+		top: -20px;
+		right: 0;
+		font-size: 0.75rem;
+		opacity: 0.8;
+		font-weight: 500;
+	}
+
+	.sw-progress-info {
+		margin-top: 1rem;
+	}
+
+	.sw-progress-text {
+		font-size: 0.9rem;
+		opacity: 0.9;
+		margin: 0;
+		line-height: 1.4;
+	}
+
+	.sw-errors {
+		color: #fbbf24;
+		font-size: 0.8rem;
+		display: block;
+		margin-top: 0.25rem;
 	}
 
 	.logs-section {

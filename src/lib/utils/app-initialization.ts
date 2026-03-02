@@ -74,19 +74,42 @@ class AppInitializer {
 			this.updateState({ status: 'initializing' });
 			this.addLog('🚀 Starting app initialization...');
 
-			// Step 1: Initialize Worker (timeout after 3 seconds)
+			// Step 1: Initialize Worker (timeout after checking service worker status)
 			this.addLog('🔄 Initializing worker...');
+
+			// Check if service worker is installing and adjust timeout
+			let swInstalling = false;
+			if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+				try {
+					const registration = await navigator.serviceWorker.ready;
+					swInstalling = !!registration.installing;
+					if (swInstalling) {
+						this.addLog('📦 Service worker is installing assets, extending timeout...');
+					}
+				} catch (e) {
+					// Ignore service worker check errors
+				}
+			}
 
 			// Dynamic import to avoid code splitting issues
 			const { getWorker } = await import('$lib/utils/worker');
 			const worker = getWorker();
 			this.addLog('✅ Worker instance created');
 
+			// Adjust timeout based on service worker status
+			const workerTimeout = swInstalling ? 60000 : 15000; // 60s if SW installing, 15s otherwise
+			this.addLog(
+				`⏱️ Worker timeout set to ${workerTimeout / 1000}s${swInstalling ? ' (waiting for SW installation)' : ''}`
+			);
+
 			// Add timeout for worker ready
 			const workerReadyPromise = Promise.race([
 				worker.waitForReady(),
 				new Promise((_, reject) =>
-					setTimeout(() => reject(new Error('Worker initialization timeout')), 3000)
+					setTimeout(
+						() => reject(new Error(`Worker initialization timeout (${workerTimeout / 1000}s)`)),
+						workerTimeout
+					)
 				)
 			]);
 

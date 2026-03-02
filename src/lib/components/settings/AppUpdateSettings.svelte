@@ -47,7 +47,7 @@
 			cacheActionResult = `Cleaned up ${deletedCount} old caches`;
 		} catch (error) {
 			console.error('Failed to cleanup caches:', error);
-			cacheActionResult = `Error: ${error.message}`;
+			cacheActionResult = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
 		} finally {
 			isCleaningCaches = false;
 		}
@@ -81,7 +81,7 @@
 			}, 1500);
 		} catch (error) {
 			console.error('Failed to delete all caches:', error);
-			cacheActionResult = `Error: ${error.message}`;
+			cacheActionResult = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
 		} finally {
 			isCleaningCaches = false;
 		}
@@ -114,7 +114,7 @@
 			window.location.reload();
 		} catch (error) {
 			console.error('Force reload failed:', error);
-			cacheActionResult = `Error: ${error.message}`;
+			cacheActionResult = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
 			isCleaningCaches = false;
 		}
 	}

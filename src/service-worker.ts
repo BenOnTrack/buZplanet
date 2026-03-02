@@ -25,13 +25,40 @@ self.addEventListener('install', (event) => {
 
 			// Add all assets in smaller batches to avoid quota issues
 			const batchSize = 10;
+			const totalBatches = Math.ceil(ASSETS.length / batchSize);
+
+			// Notify clients about installation start
+			self.clients.matchAll().then((clients) => {
+				clients.forEach((client) => {
+					client.postMessage({
+						type: 'SW_INSTALL_START',
+						version,
+						totalAssets: ASSETS.length,
+						totalBatches
+					});
+				});
+			});
+
 			for (let i = 0; i < ASSETS.length; i += batchSize) {
 				const batch = ASSETS.slice(i, i + batchSize);
+				const currentBatch = Math.floor(i / batchSize) + 1;
+
 				try {
 					await cache.addAll(batch);
-					console.log(
-						`Cached batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(ASSETS.length / batchSize)}`
-					);
+					console.log(`Cached batch ${currentBatch}/${totalBatches}`);
+
+					// Notify clients about progress
+					self.clients.matchAll().then((clients) => {
+						clients.forEach((client) => {
+							client.postMessage({
+								type: 'SW_INSTALL_PROGRESS',
+								version,
+								currentBatch,
+								totalBatches,
+								progress: Math.round((currentBatch / totalBatches) * 100)
+							});
+						});
+					});
 				} catch (error) {
 					console.error('Failed to cache batch:', batch, error);
 					// Try to cache individual files from failed batch
@@ -42,6 +69,20 @@ self.addEventListener('install', (event) => {
 							console.error('Failed to cache individual asset:', asset, individualError);
 						}
 					}
+
+					// Still notify progress even if batch failed
+					self.clients.matchAll().then((clients) => {
+						clients.forEach((client) => {
+							client.postMessage({
+								type: 'SW_INSTALL_PROGRESS',
+								version,
+								currentBatch,
+								totalBatches,
+								progress: Math.round((currentBatch / totalBatches) * 100),
+								hasErrors: true
+							});
+						});
+					});
 				}
 			}
 
@@ -63,6 +104,17 @@ self.addEventListener('install', (event) => {
 			);
 
 			console.log('Service Worker: Successfully installed version', version);
+
+			// Notify clients about successful installation
+			self.clients.matchAll().then((clients) => {
+				clients.forEach((client) => {
+					client.postMessage({
+						type: 'SW_INSTALL_COMPLETE',
+						version,
+						totalAssets: ASSETS.length
+					});
+				});
+			});
 
 			// Check if this is an update
 			const isUpdate = Boolean(self.registration?.active);

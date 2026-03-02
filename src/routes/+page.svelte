@@ -372,7 +372,7 @@
 	{#if !isOnline && !isAppInstalled && isFirstInstallAttempt}
 		<OfflineInstallationRequired />
 	{:else if !isAppReady}
-		<LoadingScreen state={initState} showLogs={import.meta.env.DEV} />
+		<LoadingScreen {initState} showLogs={import.meta.env.DEV} />
 	{:else}
 		<AuthDialog />
 		<UserStoreManager />
