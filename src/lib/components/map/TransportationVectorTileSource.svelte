@@ -296,6 +296,27 @@
 			'line-width': ['interpolate', ['linear'], ['zoom'], 14.5, 1.4, 15, 2, 20, 4]
 		}}
 	></LineLayer>
+	<SymbolLayer
+		id="transportation-transportation_rail-symbol-rail-name"
+		sourceLayer={'transportation_rail'}
+		minzoom={14}
+		filter={['all', ['==', '$type', 'LineString']]}
+		layout={{
+			'symbol-placement': 'line',
+			'symbol-spacing': 300,
+			'text-field': nameExpression,
+			'text-font': ['Noto Sans Regular'],
+			'text-letter-spacing': 0.1,
+			'text-max-width': 5,
+			'text-rotation-alignment': 'map',
+			'text-size': 12
+		}}
+		paint={{
+			'text-color': '#555',
+			'text-halo-color': 'rgba(255,255,255,0.8)',
+			'text-halo-width': 1.5
+		}}
+	></SymbolLayer>
 	<!-- // RAIL // -->
 
 	<!-- -- HIGHWAY -- -->
@@ -1650,6 +1671,27 @@
 			}
 		}}
 	></LineLayer>
+	<SymbolLayer
+		id="transportation-transportation_air-symbol-aeroway-name"
+		sourceLayer={'transportation_air'}
+		minzoom={12}
+		filter={['all', ['==', '$type', 'LineString'], ['in', 'category', 'runway', 'taxiway']]}
+		layout={{
+			'symbol-placement': 'line',
+			'symbol-spacing': 400,
+			'text-field': nameExpression,
+			'text-font': ['Noto Sans Regular'],
+			'text-letter-spacing': 0.15,
+			'text-max-width': 5,
+			'text-rotation-alignment': 'map',
+			'text-size': 11
+		}}
+		paint={{
+			'text-color': '#666',
+			'text-halo-color': 'rgba(255,255,255,0.9)',
+			'text-halo-width': 2
+		}}
+	></SymbolLayer>
 	<!-- // AIR // -->
 	<!-- -- AERIAL -- -->
 	<LineLayer
@@ -1710,5 +1752,26 @@
 			}
 		}}
 	></LineLayer>
+	<SymbolLayer
+		id="transportation-transportation_aerial-symbol-aerial-name"
+		sourceLayer={'transportation_aerial'}
+		minzoom={12}
+		filter={['all', ['==', '$type', 'LineString']]}
+		layout={{
+			'symbol-placement': 'line',
+			'symbol-spacing': 350,
+			'text-field': nameExpression,
+			'text-font': ['Noto Sans Italic'],
+			'text-letter-spacing': 0.1,
+			'text-max-width': 5,
+			'text-rotation-alignment': 'map',
+			'text-size': 10
+		}}
+		paint={{
+			'text-color': '#777',
+			'text-halo-color': 'rgba(255,255,255,0.7)',
+			'text-halo-width': 1.5
+		}}
+	></SymbolLayer>
 	<!-- // AERIAL // -->
 </VectorTileSource>

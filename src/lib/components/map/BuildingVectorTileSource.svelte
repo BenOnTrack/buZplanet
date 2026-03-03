@@ -1,7 +1,7 @@
 <!-- BuildingVectorTileSource.svelte -->
 <script lang="ts">
 	// @ts-nocheck
-	import { VectorTileSource, FillExtrusionLayer } from 'svelte-maplibre';
+	import { VectorTileSource, FillExtrusionLayer, SymbolLayer } from 'svelte-maplibre';
 	let { nameExpression }: { nameExpression: any } = $props();
 </script>
 
@@ -50,6 +50,26 @@
 		}}
 		beforeLayerType="symbol"
 	></FillExtrusionLayer>
+
+	<SymbolLayer
+		id="building-labels"
+		sourceLayer={'building'}
+		minzoom={17}
+		paint={{
+			'text-color': '#333333',
+			'text-halo-color': '#ffffff',
+			'text-halo-width': 1
+		}}
+		layout={{
+			'text-field': nameExpression,
+			'text-font': ['Noto Sans Regular'],
+			'text-size': 12,
+			'text-anchor': 'center',
+			'text-allow-overlap': false,
+			'text-ignore-placement': false,
+			'symbol-placement': 'point'
+		}}
+	></SymbolLayer>
 	<!-- <FillLayer
     id="building-building-fill"
     sourceLayer={"building"}
