@@ -564,7 +564,73 @@ declare global {
 		deleted?: boolean; // Soft delete flag for sync
 	}
 
-	// ==================== USER FOLLOWING INTERFACES ====================
+	// ==================== ROUTING INTERFACES ====================
+
+	/**
+	 * Route graph node for walking route calculations
+	 */
+	interface RouteNode {
+		id: string;
+		coordinates: [number, number]; // [lng, lat]
+		connections: Map<string, RouteEdge>; // nodeId -> edge
+	}
+
+	/**
+	 * Route graph edge connecting two nodes
+	 */
+	interface RouteEdge {
+		targetNodeId: string;
+		distance: number; // in meters
+		cost: number; // walking cost (includes distance + road type preferences)
+		roadCategory: string; // highway category (footway, residential, etc.)
+		roadId?: string; // original road segment ID
+		geometry?: [number, number][]; // intermediate points along the edge
+	}
+
+	/**
+	 * Complete route graph for walking calculations
+	 */
+	interface RouteGraph {
+		nodes: Map<string, RouteNode>;
+		spatialIndex: SpatialIndex; // For fast nearest node lookup
+	}
+
+	/**
+	 * Spatial index interface for efficient nearest-neighbor searches
+	 */
+	interface SpatialIndex {
+		insert(nodeId: string, coordinates: [number, number]): void;
+		findNearest(coordinates: [number, number], maxDistance?: number): string | null;
+		findWithinRadius(coordinates: [number, number], radius: number): string[];
+	}
+
+	/**
+	 * Route calculation result from A* algorithm
+	 */
+	interface RouteResult {
+		success: boolean;
+		path: [number, number][];
+		distance: number; // in meters
+		estimatedWalkingTime: number; // in minutes
+		roadTypes: string[];
+		fallbackToStraightLine: boolean;
+	}
+
+	/**
+	 * Story route generation result
+	 */
+	interface StoryRouteResult {
+		success: boolean;
+		geoJson: GeoJSON.FeatureCollection;
+		totalDistance: number;
+		totalWalkingTime: number;
+		routeInfo: {
+			segmentCount: number;
+			roadTypesUsed: string[];
+			fallbackSegments: number;
+			visitOrder: number[];
+		};
+	}
 
 	/**
 	 * User profile for public display and following

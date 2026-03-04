@@ -9,7 +9,7 @@
 	import Square from 'phosphor-svelte/lib/Square';
 	import MinusSquare from 'phosphor-svelte/lib/MinusSquare';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
-	import FileHierarchyNode from './FileHierarchyNode.svelte';
+	import FileHierarchyNode from '$lib/components/dialogs/FileHierarchyNode.svelte';
 	import { Z_INDEX } from '$lib/styles/z-index';
 
 	// Dynamic import to avoid code splitting issues

@@ -4,7 +4,7 @@
 	import CheckSquare from 'phosphor-svelte/lib/CheckSquare';
 	import Square from 'phosphor-svelte/lib/Square';
 	import MinusSquare from 'phosphor-svelte/lib/MinusSquare';
-	import FileHierarchyNode from './FileHierarchyNode.svelte';
+	import FileHierarchyNode from '$lib/components/dialogs/FileHierarchyNode.svelte';
 
 	interface Props {
 		node: any; // Can be continent, country, region, or type node

@@ -1,11 +1,45 @@
 import { distance } from '@turf/distance';
 import { point } from '@turf/helpers';
+import { StoryRouter } from './routing/StoryRouter';
 
 /**
- * Generate a connection path between story features using the shortest route
+ * Generate a connection path between story features using walking routes
+ * Uses real roads/paths from transportation MBTILES when possible, falls back to straight lines
+ * This replaces the old straight-line connection system
+ */
+export async function generateStoryConnectionPath(
+	story: Story
+): Promise<GeoJSON.FeatureCollection> {
+	// Try to use walking routes via worker system
+	try {
+		const router = new StoryRouter();
+		const result = await router.generateStoryRoutes(story);
+
+		if (result.success) {
+			console.log(`✅ Generated walking routes for story "${story.title}":`);
+			console.log(`   📏 Total distance: ${(result.totalDistance / 1000).toFixed(2)} km`);
+			console.log(`   ⏱️ Walking time: ${result.totalWalkingTime.toFixed(0)} minutes`);
+			console.log(`   🛣️ Road types: ${result.routeInfo.roadTypesUsed.join(', ')}`);
+			console.log(
+				`   📏 Fallback segments: ${result.routeInfo.fallbackSegments}/${result.routeInfo.segmentCount}`
+			);
+
+			return result.geoJson;
+		}
+	} catch (error) {
+		console.warn('⚠️ Walking route generation failed, falling back to straight lines:', error);
+	}
+
+	// Fallback to straight-line connections
+	console.log('📏 Using straight-line connections for story:', story.title);
+	return generateStraightLineConnectionPath(story);
+}
+
+/**
+ * Generate straight-line connection path (legacy method, kept for compatibility)
  * This creates a LineString that connects all feature coordinates in an optimized order
  */
-export function generateStoryConnectionPath(story: Story): GeoJSON.FeatureCollection {
+export function generateStraightLineConnectionPath(story: Story): GeoJSON.FeatureCollection {
 	// Extract feature coordinates from story content
 	const featureCoordinates: [number, number][] = [];
 	const featureInfo: Array<{ id: string; displayText: string; coordinates: [number, number] }> = [];

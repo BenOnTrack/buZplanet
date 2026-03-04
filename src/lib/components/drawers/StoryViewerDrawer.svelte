@@ -73,6 +73,7 @@
 
 	// Story connection state
 	let storyConnectionVisible = $state(false);
+	let storyConnectionLoading = $state(false);
 
 	// Reset view when drawer closes - VALID SIDE EFFECT (external store mutation + state reset)
 	$effect(() => {
@@ -83,6 +84,7 @@
 			selectedCategories = [];
 			activeTab = 'stories';
 			storyConnectionVisible = false;
+			storyConnectionLoading = false;
 			// Clear any story connections when closing
 			mapControl.clearStoryConnection();
 			// Make sure to disable story insertion mode when closing stories drawer
@@ -189,7 +191,7 @@
 	}
 
 	// Handle story connection toggle
-	function handleToggleStoryConnection() {
+	async function handleToggleStoryConnection() {
 		if (!currentStory) return;
 
 		if (storyConnectionVisible) {
@@ -199,17 +201,26 @@
 			console.log('🔗 Story connections hidden');
 		} else {
 			// Show connections
-			const connectionGeoJSON = generateStoryConnectionPath(currentStory);
+			storyConnectionLoading = true;
+			try {
+				console.log('🔗 Generating walking routes for story...');
+				const connectionGeoJSON = await generateStoryConnectionPath(currentStory);
 
-			if (connectionGeoJSON.features.length > 0) {
-				storyConnectionVisible = true;
-				mapControl.setStoryConnection(connectionGeoJSON, true);
-				console.log('🔗 Story connections displayed:', connectionGeoJSON);
+				if (connectionGeoJSON.features.length > 0) {
+					storyConnectionVisible = true;
+					mapControl.setStoryConnection(connectionGeoJSON, true);
+					console.log('🔗 Story connections displayed:', connectionGeoJSON);
 
-				// Optionally zoom to fit all connections
-				zoomToStoryConnections(connectionGeoJSON);
-			} else {
-				console.log('⚠️ No connections to display - story needs at least 2 features');
+					// Optionally zoom to fit all connections
+					zoomToStoryConnections(connectionGeoJSON);
+				} else {
+					console.log('⚠️ No connections to display - story needs at least 2 features');
+				}
+			} catch (error) {
+				console.error('⚠️ Failed to generate story connections:', error);
+				// Could show a user-friendly error message here
+			} finally {
+				storyConnectionLoading = false;
 			}
 		}
 	}
@@ -262,6 +273,7 @@
 		});
 		// Clear any story connections when going back to list
 		storyConnectionVisible = false;
+		storyConnectionLoading = false;
 		mapControl.clearStoryConnection();
 
 		viewMode = 'list';
@@ -392,7 +404,9 @@
 								<button
 									class="mobile-responsive-button rounded px-1.5 py-1 text-xs font-medium text-white transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none sm:px-3 sm:text-sm {storyConnectionVisible
 										? 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
-										: 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'}"
+										: 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500'} {storyConnectionLoading
+										? 'cursor-wait opacity-75'
+										: ''}"
 									onclick={handleToggleStoryConnection}
 									onkeydown={(e) => {
 										if (e.key === 'Enter' || e.key === ' ') {
@@ -400,24 +414,37 @@
 											handleToggleStoryConnection();
 										}
 									}}
-									title={storyConnectionVisible
-										? 'Hide feature connections'
-										: 'View feature connections'}
-									aria-label={storyConnectionVisible
-										? 'Hide feature connections'
-										: 'View feature connections'}
+									disabled={storyConnectionLoading}
+									title={storyConnectionLoading
+										? 'Generating walking routes...'
+										: storyConnectionVisible
+											? 'Hide feature connections'
+											: 'View walking routes between features'}
+									aria-label={storyConnectionLoading
+										? 'Generating walking routes...'
+										: storyConnectionVisible
+											? 'Hide feature connections'
+											: 'View walking routes between features'}
 								>
 									<!-- Mobile: Show only icon -->
 									<span class="sm:hidden">
-										<PropertyIcon
-											key="description"
-											value={storyConnectionVisible ? 'eye' : 'route'}
-											size={16}
-										/>
+										{#if storyConnectionLoading}
+											<PropertyIcon key="description" value="loading" size={16} />
+										{:else}
+											<PropertyIcon
+												key="description"
+												value={storyConnectionVisible ? 'eye' : 'route'}
+												size={16}
+											/>
+										{/if}
 									</span>
 									<!-- Desktop: Show text -->
 									<span class="hidden sm:inline">
-										{storyConnectionVisible ? 'HIDE' : 'VIEW'}
+										{#if storyConnectionLoading}
+											LOADING...
+										{:else}
+											{storyConnectionVisible ? 'HIDE' : 'ROUTES'}
+										{/if}
 									</span>
 								</button>
 

@@ -7,7 +7,7 @@
 	import { mapControl } from '$lib/stores/MapControl.svelte';
 	import { userStore } from '$lib/stores/UserStore.svelte';
 	import PropertyIcon from '$lib/components/ui/PropertyIcon.svelte';
-	import StoryEditor from '../stories/StoryEditor.svelte';
+	import StoryEditor from '$lib/components/stories/StoryEditor.svelte';
 	import StoryCategoryManager from '$lib/components/stories/StoryCategoryManager.svelte';
 	import ConfirmDialog from '$lib/components/dialogs/ConfirmDialog.svelte';
 

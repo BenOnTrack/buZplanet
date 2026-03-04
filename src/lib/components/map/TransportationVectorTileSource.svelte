@@ -737,6 +737,24 @@
 			}
 		}}
 	></LineLayer>
+	<LineLayer
+		id="transportation-transportation_highway-line-highway-pedestrian-footway"
+		sourceLayer={'transportation_highway'}
+		filter={[
+			'all',
+			['in', 'category', 'pedestrian', 'footway'],
+			['==', '$type', 'LineString'],
+			['!in', 'brunnel', 'bridge', 'tunnel']
+		]}
+		layout={{
+			visibility: 'visible'
+		}}
+		paint={{
+			'line-color': '#c7c3b8',
+			'line-dasharray': [2, 1],
+			'line-width': ['interpolate', ['exponential', 1.2], ['zoom'], 15, 1, 20, 3]
+		}}
+	></LineLayer>
 	<!-- <LineLayer
     id="transportation-transportation_highway-line-highway-cycleway-casing"
     sourceLayer={"transportation_highway"}
