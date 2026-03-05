@@ -119,6 +119,7 @@ declare global {
 		zoom: number;
 		tileX: number;
 		tileY: number;
+		matchType?: 'name' | 'property'; // How this result was matched (for debugging)
 	}
 
 	/**

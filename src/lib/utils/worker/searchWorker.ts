@@ -3,6 +3,7 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import type { OpfsDatabase, Sqlite3Static } from '@sqlite.org/sqlite-wasm';
 import { VectorTile } from '@mapbox/vector-tile';
 import Protobuf from 'pbf';
+import * as YAML from 'yaml';
 
 // Global state for search worker
 let sqlite3: Sqlite3Static | null = null;
@@ -10,6 +11,25 @@ let opfsRoot: FileSystemDirectoryHandle | null = null;
 const openDatabases = new Map<string, OpfsDatabase>();
 const dbIndex = new Map<string, DatabaseEntry[]>(); // Add the indexing system
 let currentSearchController: AbortController | null = null;
+
+// Tag-based search system
+interface TagDefinition {
+	key: string;
+	value: string;
+	keywords: string[];
+	osm: {
+		key: string;
+		value: string | string[]; // Support both single values and arrays
+	};
+}
+
+interface TagsData {
+	[category: string]: TagDefinition[];
+}
+
+// Store parsed tags for semantic search
+let parsedTags: TagsData | null = null;
+let tagSearchIndex: Map<string, { osmKey: string; osmValue: string }> = new Map();
 
 // Listen for messages from the main thread
 self.addEventListener('message', async (event: MessageEvent) => {
@@ -20,6 +40,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
 			case 'init':
 				await initializeSqlite();
 				await initializeOPFS();
+				await loadAndParseTags(); // Load semantic tags
 				await scanDatabases();
 				postMessage({
 					type: 'initialized',
@@ -244,6 +265,57 @@ async function initializeOPFS(): Promise<void> {
 	opfsRoot = await navigator.storage.getDirectory();
 }
 
+// Load and parse tags.yml for semantic search
+async function loadAndParseTags(): Promise<void> {
+	try {
+		// Fetch the tags.yml file from the static directory
+		const response = await fetch('/tags.yml');
+		if (!response.ok) {
+			throw new Error(`Failed to load tags.yml: ${response.statusText}`);
+		}
+
+		const yamlText = await response.text();
+		parsedTags = YAML.parse(yamlText) as TagsData;
+
+		// Build search index for quick lookups
+		tagSearchIndex.clear();
+
+		for (const [category, tags] of Object.entries(parsedTags)) {
+			for (const tag of tags) {
+				// Handle both single values and arrays in OSM values
+				const osmValues = Array.isArray(tag.osm.value) ? tag.osm.value : [tag.osm.value];
+
+				// Index by main value
+				for (const osmValue of osmValues) {
+					tagSearchIndex.set(tag.value.toLowerCase(), {
+						osmKey: tag.osm.key,
+						osmValue: osmValue
+					});
+				}
+
+				// Index by keywords
+				for (const keyword of tag.keywords) {
+					for (const osmValue of osmValues) {
+						tagSearchIndex.set(keyword.toLowerCase(), {
+							osmKey: tag.osm.key,
+							osmValue: osmValue
+						});
+					}
+				}
+			}
+		}
+
+		console.log(
+			`🏷️ Loaded ${tagSearchIndex.size} semantic search tags from ${Object.keys(parsedTags).length} categories`
+		);
+	} catch (error) {
+		console.warn('Failed to load semantic tags, continuing with name-only search:', error);
+		// Don't fail initialization if tags can't be loaded
+		parsedTags = null;
+		tagSearchIndex.clear();
+	}
+}
+
 // Scan and open databases
 async function scanDatabases(): Promise<void> {
 	if (!sqlite3 || !opfsRoot) return;
@@ -287,7 +359,7 @@ async function yieldControl(): Promise<void> {
 	await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-// Search features implementation (copied from your existing worker)
+// Search features implementation with enhanced semantic tag support
 async function searchFeatures(
 	query: string,
 	limit: number = 1000,
@@ -309,9 +381,20 @@ async function searchFeatures(
 	const results: SearchResult[] = [];
 	const seenIds = new Set<string>();
 
+	// 🏷️ SEMANTIC TAG DETECTION
+	const semanticMatches = detectSemanticTags(query.toLowerCase().trim());
+	const hasSemanticTags = semanticMatches.length > 0;
+
 	console.log(
-		`🔍 Starting search for: "${query}" (normalized: "${normalizedQuery}"), limit: ${limit}`
+		`🔍 Starting enhanced search for: "${query}" (normalized: "${normalizedQuery}"), limit: ${limit}`
 	);
+
+	if (hasSemanticTags) {
+		console.log(
+			`🏷️ Detected semantic tags:`,
+			semanticMatches.map((m) => `${m.osmKey}:${m.osmValue}`).join(', ')
+		);
+	}
 
 	if (options.userLocation) {
 		console.log(`📍 User location: [${options.userLocation.lng}, ${options.userLocation.lat}]`);
@@ -395,6 +478,7 @@ async function searchFeatures(
 					ZOOM_LEVEL,
 					POI_SOURCE_LAYERS,
 					normalizedQuery,
+					semanticMatches, // Add semantic matches
 					results,
 					seenIds,
 					MAX_RESULTS,
@@ -430,6 +514,40 @@ async function searchFeatures(
 
 	console.log(`🎉 Search completed: found ${results.length} total results`);
 	return results.slice(0, limit);
+}
+
+// 🏷️ Detect semantic tags in the query
+function detectSemanticTags(query: string): Array<{ osmKey: string; osmValue: string }> {
+	const matches: Array<{ osmKey: string; osmValue: string }> = [];
+	const queryLower = query.toLowerCase();
+
+	// Check for exact matches first
+	if (tagSearchIndex.has(queryLower)) {
+		const match = tagSearchIndex.get(queryLower)!;
+		matches.push(match);
+		return matches;
+	}
+
+	// Check if query starts with any tag value/keyword
+	for (const [tag, osmInfo] of tagSearchIndex.entries()) {
+		if (queryLower.startsWith(tag)) {
+			matches.push(osmInfo);
+			break; // Take first match to avoid duplicates
+		}
+	}
+
+	// Check if any tag is contained within the query
+	if (matches.length === 0) {
+		for (const [tag, osmInfo] of tagSearchIndex.entries()) {
+			if (queryLower.includes(tag) && tag.length >= 3) {
+				// Only longer tags to avoid false positives
+				matches.push(osmInfo);
+				break; // Take first match
+			}
+		}
+	}
+
+	return matches;
 }
 
 // Helper functions (copied from your existing implementation)
@@ -573,6 +691,7 @@ async function processDatabaseForSearch(
 	zoomLevel: number,
 	wantedLayers: string[],
 	normalizedQuery: string,
+	semanticMatches: Array<{ osmKey: string; osmValue: string }>, // Add semantic matches parameter
 	results: SearchResult[],
 	seenIds: Set<string>,
 	maxResults: number,
@@ -583,7 +702,9 @@ async function processDatabaseForSearch(
 ): Promise<void> {
 	let lastProgressUpdate = Date.now();
 
-	console.log(`[DB ${filename}] Starting viewport-centered search processing...`);
+	console.log(
+		`[DB ${filename}] Starting enhanced search processing (${semanticMatches.length} semantic tags)...`
+	);
 
 	// Get all tiles at zoom level first
 	const allTilesStmt = db.prepare(`
@@ -636,6 +757,7 @@ async function processDatabaseForSearch(
 				filename,
 				wantedLayers,
 				normalizedQuery,
+				semanticMatches, // Pass semantic matches
 				results,
 				seenIds,
 				maxResults,
@@ -673,6 +795,7 @@ async function processSingleTile(
 	filename: string,
 	wantedLayers: string[],
 	normalizedQuery: string,
+	semanticMatches: Array<{ osmKey: string; osmValue: string }>, // Add semantic matches parameter
 	results: SearchResult[],
 	seenIds: Set<string>,
 	maxResults: number,
@@ -704,34 +827,18 @@ async function processSingleTile(
 				const vectorTileFeature = layer.feature(i);
 				const props = vectorTileFeature.properties as Record<string, any>;
 
-				// Extract name properties
-				const names: { [key: string]: string } = {};
-				let hasAnyName = false;
+				// 🏷️ ENHANCED MATCHING: Check both name-based AND property-based matching
+				const nameMatches = checkNameBasedMatch(props, normalizedQuery, preferredLanguage);
+				const propertyMatches =
+					semanticMatches.length > 0 ? checkPropertyBasedMatch(props, semanticMatches) : false;
 
-				for (const [key, value] of Object.entries(props)) {
-					if (key === 'name' || key.startsWith('name:')) {
-						if (value && typeof value === 'string') {
-							names[key] = value;
-							hasAnyName = true;
-						}
-					}
+				// Feature must match either name-based OR property-based criteria
+				// If there are no semantic matches, only use name-based matching
+				const isMatch = nameMatches || propertyMatches;
+
+				if (!isMatch) {
+					continue;
 				}
-
-				if (!hasAnyName) continue;
-
-				// Check for matches
-				let isMatch = false;
-				const searchOrder = createLanguageAwareSearchOrder(preferredLanguage, Object.keys(names));
-
-				for (const nameKey of searchOrder) {
-					const nameValue = names[nameKey];
-					if (nameValue && fastMatchesQuery(nameValue, normalizedQuery)) {
-						isMatch = true;
-						break;
-					}
-				}
-
-				if (!isMatch) continue;
 
 				// Convert to GeoJSON to get coordinates
 				const n = 1 << zoomLevel;
@@ -767,6 +874,16 @@ async function processSingleTile(
 						? sourceLayer.replace('poi_', '')
 						: 'poi';
 
+					// Extract name properties for the result
+					const names: { [key: string]: string } = {};
+					for (const [key, value] of Object.entries(props)) {
+						if (key === 'name' || key.startsWith('name:')) {
+							if (value && typeof value === 'string') {
+								names[key] = value;
+							}
+						}
+					}
+
 					results.push({
 						id: fid,
 						names: names,
@@ -779,7 +896,9 @@ async function processSingleTile(
 						layer: sourceLayer,
 						zoom: zoomLevel,
 						tileX: x,
-						tileY: y
+						tileY: y,
+						// Add match type info for debugging
+						matchType: propertyMatches ? 'property' : 'name'
 					});
 				}
 			}
@@ -787,6 +906,82 @@ async function processSingleTile(
 	} catch (tileError) {
 		// Skip problematic tiles
 	}
+}
+
+// 🏷️ Check if feature matches based on name properties (original logic)
+function checkNameBasedMatch(
+	props: Record<string, any>,
+	normalizedQuery: string,
+	preferredLanguage: string
+): boolean {
+	// Extract name properties
+	const names: { [key: string]: string } = {};
+	let hasAnyName = false;
+
+	for (const [key, value] of Object.entries(props)) {
+		if (key === 'name' || key.startsWith('name:')) {
+			if (value && typeof value === 'string') {
+				names[key] = value;
+				hasAnyName = true;
+			}
+		}
+	}
+
+	if (!hasAnyName) return false;
+
+	// Check for matches using original logic
+	const searchOrder = createLanguageAwareSearchOrder(preferredLanguage, Object.keys(names));
+
+	for (const nameKey of searchOrder) {
+		const nameValue = names[nameKey];
+		if (nameValue && fastMatchesQuery(nameValue, normalizedQuery)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// 🏷️ Check if feature matches based on OSM properties (new semantic logic)
+function checkPropertyBasedMatch(
+	props: Record<string, any>,
+	semanticMatches: Array<{ osmKey: string; osmValue: string }>
+): boolean {
+	if (semanticMatches.length === 0) return false;
+
+	// Check if any semantic match is found in the feature properties
+	for (const { osmKey, osmValue } of semanticMatches) {
+		const propValue = props[osmKey];
+
+		// Skip if property doesn't exist
+		if (propValue === undefined || propValue === null) {
+			continue;
+		}
+
+		// Exact match
+		if (propValue === osmValue) {
+			return true;
+		}
+
+		// Handle string values (split by common separators)
+		if (typeof propValue === 'string') {
+			// Split by semicolon, comma, or pipe - common OSM separators
+			const values = propValue.split(/[;,|]/).map((v) => v.trim().toLowerCase());
+			const targetValue = osmValue.toLowerCase();
+
+			// Check if any of the split values matches our target
+			if (values.includes(targetValue)) {
+				return true;
+			}
+
+			// Also check if the entire string contains our target (fallback)
+			if (propValue.toLowerCase().includes(targetValue)) {
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 // Helper functions

@@ -1,0 +1,1161 @@
+cuisine:
+  - key: ethnicity
+    value: afghan
+    keywords: []
+    osm: 
+      key: cuisine
+      value: afghan
+  - key: ethnicity
+    value: african
+    keywords: []
+    osm: 
+      key: cuisine
+      value: african
+  - key: ethnicity
+    value: american
+    keywords: []
+    osm: 
+      key: cuisine
+      value: american
+  - key: ethnicity
+    value: arab
+    keywords: []
+    osm: 
+      key: cuisine
+      value: arab
+  - key: ethnicity
+    value: argentine
+    keywords: []
+    osm: 
+      key: cuisine
+      value: argentine
+  - key: ethnicity
+    value: armenian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: armenian
+  - key: ethnicity
+    value: asian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: asian
+  - key: ethnicity
+    value: australian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: australian
+  - key: ethnicity
+    value: austrian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: austrian
+  - key: ethnicity
+    value: balkan
+    keywords: []
+    osm: 
+      key: cuisine
+      value: balkan
+  - key: ethnicity
+    value: bangladeshi
+    keywords: []
+    osm: 
+      key: cuisine
+      value: bangladeshi
+  - key: ethnicity
+    value: basque
+    keywords: []
+    osm: 
+      key: cuisine
+      value: basque
+  - key: ethnicity
+    value: bavarian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: bavarian
+  - key: ethnicity
+    value: belgian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: belgian
+  - key: ethnicity
+    value: bolivian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: bolivian
+  - key: ethnicity
+    value: bosnian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: bosnian
+  - key: ethnicity
+    value: brazilian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: brazilian
+  - key: ethnicity
+    value: british
+    keywords: []
+    osm: 
+      key: cuisine
+      value: british
+  - key: ethnicity
+    value: bulgarian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: bulgarian
+  - key: ethnicity
+    value: burmese
+    keywords: []
+    osm: 
+      key: cuisine
+      value: burmese
+  - key: ethnicity
+    value: cajun
+    keywords: []
+    osm: 
+      key: cuisine
+      value: cajun
+  - key: ethnicity
+    value: cambodian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: cambodian
+  - key: ethnicity
+    value: cantonese
+    keywords: []
+    osm: 
+      key: cuisine
+      value: cantonese
+  - key: ethnicity
+    value: caribbean
+    keywords: []
+    osm: 
+      key: cuisine
+      value: caribbean
+  - key: ethnicity
+    value: catalan
+    keywords: []
+    osm: 
+      key: cuisine
+      value: catalan
+  - key: ethnicity
+    value: caucasian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: caucasian
+  - key: ethnicity
+    value: chilean
+    keywords: []
+    osm: 
+      key: cuisine
+      value: chilean
+  - key: ethnicity
+    value: chinese
+    keywords: []
+    osm: 
+      key: cuisine
+      value: chinese
+  - key: ethnicity
+    value: colombian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: colombian
+  - key: ethnicity
+    value: croatian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: croatian
+  - key: ethnicity
+    value: cuban
+    keywords: []
+    osm: 
+      key: cuisine
+      value: cuban
+  - key: ethnicity
+    value: czech
+    keywords: []
+    osm: 
+      key: cuisine
+      value: czech
+  - key: ethnicity
+    value: danish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: danish
+  - key: ethnicity
+    value: dutch
+    keywords: []
+    osm: 
+      key: cuisine
+      value: dutch
+  - key: ethnicity
+    value: eastern_european
+    keywords: []
+    osm: 
+      key: cuisine
+      value: eastern_european
+  - key: ethnicity
+    value: ecuadorian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: ecuadorian
+  - key: ethnicity
+    value: egyptian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: egyptian
+  - key: ethnicity
+    value: english
+    keywords: []
+    osm: 
+      key: cuisine
+      value: english
+  - key: ethnicity
+    value: ethiopian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: ethiopian
+  - key: ethnicity
+    value: european
+    keywords: []
+    osm: 
+      key: cuisine
+      value: european
+  - key: ethnicity
+    value: filipino
+    keywords: []
+    osm: 
+      key: cuisine
+      value: filipino
+  - key: ethnicity
+    value: finnish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: finnish
+  - key: ethnicity
+    value: french
+    keywords: []
+    osm: 
+      key: cuisine
+      value: french
+  - key: ethnicity
+    value: georgian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: georgian
+  - key: ethnicity
+    value: german
+    keywords: []
+    osm: 
+      key: cuisine
+      value: german
+  - key: ethnicity
+    value: greek
+    keywords: []
+    osm: 
+      key: cuisine
+      value: greek
+  - key: ethnicity
+    value: guatemalan
+    keywords: []
+    osm: 
+      key: cuisine
+      value: guatemalan
+  - key: ethnicity
+    value: haitian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: haitian
+  - key: ethnicity
+    value: hawaiian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: hawaiian
+  - key: ethnicity
+    value: hungarian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: hungarian
+  - key: ethnicity
+    value: icelandic
+    keywords: []
+    osm: 
+      key: cuisine
+      value: icelandic
+  - key: ethnicity
+    value: indian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: indian
+  - key: ethnicity
+    value: indonesian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: indonesian
+  - key: ethnicity
+    value: international
+    keywords: []
+    osm: 
+      key: cuisine
+      value: international
+  - key: ethnicity
+    value: iranian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: iranian
+  - key: ethnicity
+    value: irish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: irish
+  - key: ethnicity
+    value: israeli
+    keywords: []
+    osm: 
+      key: cuisine
+      value: israeli
+  - key: ethnicity
+    value: italian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: italian
+  - key: ethnicity
+    value: jamaican
+    keywords: []
+    osm: 
+      key: cuisine
+      value: jamaican
+  - key: ethnicity
+    value: japanese
+    keywords: []
+    osm: 
+      key: cuisine
+      value: japanese
+  - key: ethnicity
+    value: jewish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: jewish
+  - key: ethnicity
+    value: korean
+    keywords: []
+    osm: 
+      key: cuisine
+      value: korean
+  - key: ethnicity
+    value: kurdish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: kurdish
+  - key: ethnicity
+    value: lao
+    keywords: []
+    osm: 
+      key: cuisine
+      value: lao
+  - key: ethnicity
+    value: latin_american
+    keywords: []
+    osm: 
+      key: cuisine
+      value: latin_american
+  - key: ethnicity
+    value: latvian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: latvian
+  - key: ethnicity
+    value: lebanese
+    keywords: []
+    osm: 
+      key: cuisine
+      value: lebanese
+  - key: ethnicity
+    value: lithuanian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: lithuanian
+  - key: ethnicity
+    value: malagasy
+    keywords: []
+    osm: 
+      key: cuisine
+      value: malagasy
+  - key: ethnicity
+    value: malaysian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: malaysian
+  - key: ethnicity
+    value: mediterranean
+    keywords: []
+    osm: 
+      key: cuisine
+      value: mediterranean
+  - key: ethnicity
+    value: mexican
+    keywords: []
+    osm: 
+      key: cuisine
+      value: mexican
+  - key: ethnicity
+    value: middle_eastern
+    keywords: []
+    osm: 
+      key: cuisine
+      value: middle_eastern
+  - key: ethnicity
+    value: mongolian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: mongolian
+  - key: ethnicity
+    value: moroccan
+    keywords: []
+    osm: 
+      key: cuisine
+      value: moroccan
+  - key: ethnicity
+    value: nepalese
+    keywords: []
+    osm: 
+      key: cuisine
+      value: nepalese
+  - key: ethnicity
+    value: nicaraguan
+    keywords: []
+    osm: 
+      key: cuisine
+      value: nicaraguan
+  - key: ethnicity
+    value: norwegian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: norwegian
+  - key: ethnicity
+    value: oriental
+    keywords: []
+    osm: 
+      key: cuisine
+      value: oriental
+  - key: ethnicity
+    value: pakistani
+    keywords: []
+    osm: 
+      key: cuisine
+      value: pakistani
+  - key: ethnicity
+    value: peruvian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: peruvian
+  - key: ethnicity
+    value: polish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: polish
+  - key: ethnicity
+    value: portuguese
+    keywords: []
+    osm: 
+      key: cuisine
+      value: portuguese
+  - key: ethnicity
+    value: regional
+    keywords: []
+    osm: 
+      key: cuisine
+      value: regional
+  - key: ethnicity
+    value: romanian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: romanian
+  - key: ethnicity
+    value: russian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: russian
+  - key: ethnicity
+    value: salvadoran
+    keywords: []
+    osm: 
+      key: cuisine
+      value: salvadoran
+  - key: ethnicity
+    value: scandinavian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: scandinavian
+  - key: ethnicity
+    value: scottish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: scottish
+  - key: ethnicity
+    value: serbian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: serbian
+  - key: ethnicity
+    value: slovenian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: slovenian
+  - key: ethnicity
+    value: south_american
+    keywords: []
+    osm: 
+      key: cuisine
+      value: south_american
+  - key: ethnicity
+    value: southern
+    keywords: []
+    osm: 
+      key: cuisine
+      value: southern
+  - key: ethnicity
+    value: spanish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: spanish
+  - key: ethnicity
+    value: sri_lankan
+    keywords: []
+    osm: 
+      key: cuisine
+      value: sri_lankan
+  - key: ethnicity
+    value: swedish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: swedish
+  - key: ethnicity
+    value: swiss
+    keywords: []
+    osm: 
+      key: cuisine
+      value: swiss
+  - key: ethnicity
+    value: syrian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: syrian
+  - key: ethnicity
+    value: taiwanese
+    keywords: []
+    osm: 
+      key: cuisine
+      value: taiwanese
+  - key: ethnicity
+    value: tex-mex
+    keywords: []
+    osm: 
+      key: cuisine
+      value: tex-mex
+  - key: ethnicity
+    value: thai
+    keywords: []
+    osm: 
+      key: cuisine
+      value: thai
+  - key: ethnicity
+    value: tibetan
+    keywords: []
+    osm: 
+      key: cuisine
+      value: tibetan
+  - key: ethnicity
+    value: tunisian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: tunisian
+  - key: ethnicity
+    value: turkish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: turkish
+  - key: ethnicity
+    value: ukrainian
+    keywords: []
+    osm: 
+      key: cuisine
+      value: ukrainian
+  - key: ethnicity
+    value: uzbek
+    keywords: []
+    osm: 
+      key: cuisine
+      value: uzbek
+  - key: ethnicity
+    value: venezuelan
+    keywords: []
+    osm: 
+      key: cuisine
+      value: venezuelan
+  - key: ethnicity
+    value: vietnamese
+    keywords: []
+    osm: 
+      key: cuisine
+      value: vietnamese
+  - key: ethnicity
+    value: welsh
+    keywords: []
+    osm: 
+      key: cuisine
+      value: welsh
+food:
+  - key: appetizer
+    value: empanada
+    keywords: []
+    osm: 
+      key: cuisine
+      value: empanada
+  - key: appetizer
+    value: falafel
+    keywords: []
+    osm: 
+      key: cuisine
+      value: falafel
+  - key: appetizer
+    value: gyoza
+    keywords: []
+    osm: 
+      key: cuisine
+      value: gyoza
+  - key: appetizer
+    value: samosa
+    keywords: []
+    osm: 
+      key: cuisine
+      value: samosa
+  - key: appetizer
+    value: tapas
+    keywords: []
+    osm: 
+      key: cuisine
+      value: tapas
+  - key: appetizer
+    value: takoyaki
+    keywords: []
+    osm: 
+      key: cuisine
+      value: takoyaki
+  - key: bread
+    value: bagel
+    keywords: []
+    osm: 
+      key: cuisine
+      value: bagel
+  - key: bread
+    value: cachapa
+    keywords: []
+    osm: 
+      key: cuisine
+      value: cachapa
+  - key: bread
+    value: crepe
+    keywords: []
+    osm: 
+      key: cuisine
+      value: crepe
+  - key: bread
+    value: kürtőskalács
+    keywords: []
+    osm: 
+      key: cuisine
+      value: kürtőskalács
+  - key: bread
+    value: lángos
+    keywords: []
+    osm: 
+      key: cuisine
+      value: lángos
+  - key: bread
+    value: pancake
+    keywords: []
+    osm: 
+      key: cuisine
+      value: pancake
+  - key: bread
+    value: piadina
+    keywords: []
+    osm: 
+      key: cuisine
+      value: piadina
+  - key: bread
+    value: pretzel
+    keywords: []
+    osm: 
+      key: cuisine
+      value: pretzel
+  - key: bread
+    value: savory_pancakes
+    keywords: []
+    osm: 
+      key: cuisine
+      value: savory_pancakes
+  - key: bread
+    value: smørrebrød
+    keywords: []
+    osm: 
+      key: cuisine
+      value: smørrebrød
+  - key: bread
+    value: waffle
+    keywords: []
+    osm: 
+      key: cuisine
+      value: waffle
+  - key: dessert
+    value: açaí
+    keywords: []
+    osm: 
+      key: cuisine
+      value: açaí
+  - key: dessert
+    value: cake
+    keywords: []
+    osm: 
+      key: cuisine
+      value: cake
+  - key: dessert
+    value: chocolate
+    keywords: []
+    osm: 
+      key: cuisine
+      value: chocolate
+  - key: dessert
+    value: churro
+    keywords: []
+    osm: 
+      key: cuisine
+      value: churro
+  - key: dessert
+    value: cookie
+    keywords: []
+    osm: 
+      key: cuisine
+      value: cookie
+  - key: dessert
+    value: cupcake
+    keywords: []
+    osm: 
+      key: cuisine
+      value: cupcake
+  - key: dessert
+    value: donut
+    keywords: []
+    osm: 
+      key: cuisine
+      value: donut
+  - key: dessert
+    value: frozen_yogurt
+    keywords: []
+    osm: 
+      key: cuisine
+      value: frozen_yogurt
+  - key: dessert
+    value: ice_cream
+    keywords: []
+    osm: 
+      key: cuisine
+      value: ice_cream
+  - key: dessert
+    value: pastry
+    keywords: []
+    osm: 
+      key: cuisine
+      value: pastry
+  - key: dessert
+    value: pie
+    keywords: []
+    osm: 
+      key: cuisine
+      value: pie
+  - key: dish
+    value: arepa
+    keywords: []
+    osm: 
+      key: cuisine
+      value: arepa
+  - key: dish
+    value: barbecue
+    keywords: []
+    osm: 
+      key: cuisine
+      value: barbecue
+  - key: dish
+    value: beef
+    keywords: []
+    osm: 
+      key: cuisine
+      value: beef
+  - key: dish
+    value: beef_bowl
+    keywords: []
+    osm: 
+      key: cuisine
+      value: beef_bowl
+  - key: dish
+    value: burger
+    keywords: []
+    osm: 
+      key: cuisine
+      value: burger
+  - key: dish
+    value: chicken
+    keywords: []
+    osm: 
+      key: cuisine
+      value: chicken
+  - key: dish
+    value: chili
+    keywords: []
+    osm: 
+      key: cuisine
+      value: chili
+  - key: dish
+    value: couscous
+    keywords: []
+    osm: 
+      key: cuisine
+      value: couscous
+  - key: dish
+    value: curry
+    keywords: []
+    osm: 
+      key: cuisine
+      value: curry
+  - key: dish
+    value: dumplings
+    keywords: []
+    osm: 
+      key: cuisine
+      value: dumplings
+  - key: dish
+    value: fish
+    keywords: []
+    osm: 
+      key: cuisine
+      value: fish
+  - key: dish
+    value: fish_and_chips
+    keywords: []
+    osm: 
+      key: cuisine
+      value: fish_and_chips
+  - key: dish
+    value: fondue
+    keywords: []
+    osm: 
+      key: cuisine
+      value: fondue
+  - key: dish
+    value: fried_chicken
+    keywords: []
+    osm: 
+      key: cuisine
+      value: fried_chicken
+  - key: dish
+    value: friture
+    keywords: []
+    osm: 
+      key: cuisine
+      value: friture
+  - key: dish
+    value: grill
+    keywords: []
+    osm: 
+      key: cuisine
+      value: grill
+  - key: dish
+    value: gyros
+    keywords: []
+    osm: 
+      key: cuisine
+      value: gyros
+  - key: dish
+    value: hot_dog
+    keywords: []
+    osm: 
+      key: cuisine
+      value: hot_dog
+  - key: dish
+    value: kebab
+    keywords: []
+    osm: 
+      key: cuisine
+      value: kebab
+  - key: dish
+    value: meat
+    keywords: []
+    osm: 
+      key: cuisine
+      value: meat
+  - key: dish
+    value: noodle
+    keywords: []
+    osm: 
+      key: cuisine
+      value: noodle
+  - key: dish
+    value: pasta
+    keywords: []
+    osm: 
+      key: cuisine
+      value: pasta
+  - key: dish
+    value: pie_and_mash
+    keywords: []
+    osm: 
+      key: cuisine
+      value: pie_and_mash
+  - key: dish
+    value: pita
+    keywords: []
+    osm: 
+      key: cuisine
+      value: pita
+  - key: dish
+    value: pizza
+    keywords: []
+    osm: 
+      key: cuisine
+      value: pizza
+  - key: dish
+    value: poke
+    keywords: []
+    osm: 
+      key: cuisine
+      value: poke
+  - key: dish
+    value: salad
+    keywords: []
+    osm: 
+      key: cuisine
+      value: salad
+  - key: dish
+    value: sandwich
+    keywords: []
+    osm: 
+      key: cuisine
+      value: sandwich
+  - key: dish
+    value: sausage
+    keywords: []
+    osm: 
+      key: cuisine
+      value: sausage
+  - key: dish
+    value: seafood
+    keywords: []
+    osm: 
+      key: cuisine
+      value: seafood
+  - key: dish
+    value: shawarma
+    keywords: []
+    osm: 
+      key: cuisine
+      value: shawarma
+  - key: dish
+    value: souvlaki
+    keywords: []
+    osm: 
+      key: cuisine
+      value: souvlaki
+  - key: dish
+    value: steak
+    keywords: []
+    osm: 
+      key: cuisine
+      value: steak
+  - key: dish
+    value: steak_house
+    keywords: []
+    osm: 
+      key: cuisine
+      value: steak_house
+  - key: dish
+    value: sushi
+    keywords: []
+    osm: 
+      key: cuisine
+      value: sushi
+  - key: dish
+    value: tacos
+    keywords: []
+    osm: 
+      key: cuisine
+      value: tacos
+  - key: dish
+    value: wings
+    keywords: []
+    osm: 
+      key: cuisine
+      value: wings
+  - key: dish
+    value: yakitori
+    keywords: []
+    osm: 
+      key: cuisine
+      value: yakitori
+  - key: snack
+    value: chips
+    keywords: []
+    osm: 
+      key: cuisine
+      value: chips
+  - key: snack
+    value: fries
+    keywords: []
+    osm: 
+      key: cuisine
+      value: fries
+  - key: snack
+    value: popcorn
+    keywords: []
+    osm: 
+      key: cuisine
+      value: popcorn
+  - key: snack
+    value: potato
+    keywords: []
+    osm: 
+      key: cuisine
+      value: potato
+  - key: soup
+    value: beef_noodle
+    keywords: []
+    osm: 
+      key: cuisine
+      value: beef_noodle
+  - key: soup
+    value: ramen
+    keywords: []
+    osm: 
+      key: cuisine
+      value: ramen
+  - key: soup
+    value: rice_noodle
+    keywords: []
+    osm: 
+      key: cuisine
+      value: rice_noodle
+  - key: dish
+    value: soba
+    keywords: []
+    osm: 
+      key: cuisine
+      value: soba
+  - key: soup
+    value: soup
+    keywords: []
+    osm: 
+      key: cuisine
+      value: soup
+  - key: dish
+    value: udon
+    keywords: []
+    osm: 
+      key: cuisine
+      value: udon
+drink:
+  - key: alcohol
+    value: beer
+    keywords: []
+    osm: 
+      key: cuisine
+      value: beer
+  - key: alcohol
+    value: cocktails
+    keywords: []
+    osm: 
+      key: cuisine
+      value: cocktails
+  - key: alcohol
+    value: wine
+    keywords: []
+    osm: 
+      key: cuisine
+      value: wine
+  - key: coffee_tea
+    value: bubble_tea
+    keywords: []
+    osm: 
+      key: cuisine
+      value: bubble_tea
+  - key: coffee_tea
+    value: coffee
+    keywords: []
+    osm: 
+      key: cuisine
+      value: [coffee, coffee_shop]
+  - key: coffee_tea
+    value: tea
+    keywords: []
+    osm: 
+      key: cuisine
+      value: tea
+  - key: soft
+    value: juice
+    keywords: []
+    osm: 
+      key: cuisine
+      value: juice
+  - key: soft
+    value: smoothie
+    keywords: []
+    osm: 
+      key: cuisine
+      value: smoothie
